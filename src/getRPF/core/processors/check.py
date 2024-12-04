@@ -100,7 +100,6 @@ class CleanlinessChecker:
         self.format = format
         self.min_quality = min_quality
         self.threads = threads
-        self.count_pattern = count_pattern
         self.max_reads = max_reads
 
     def analyze_file(

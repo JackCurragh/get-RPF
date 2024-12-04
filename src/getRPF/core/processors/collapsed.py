@@ -99,7 +99,9 @@ class CollapsedHeaderParser:
 
 
 def parse_collapsed_fasta(
-    file_path: Union[str, Path], count_pattern: str = "read_{count}"
+    file_path: Union[str, Path],
+    count_pattern: str = "read_{count}",
+    max_reads: Optional[int] = None,
 ) -> Tuple[dict, dict]:
     """Parse collapsed FASTA file with flexible header format.
 
@@ -108,6 +110,8 @@ def parse_collapsed_fasta(
     Args:
         file_path: Path to collapsed FASTA file
         count_pattern: Pattern for extracting count from headers
+        max_reads: Maximum number of FASTA entries to process. None means process all entries.
+                  Note: Each entry may represent multiple reads in collapsed format.
 
     Returns:
         Tuple of (sequences dict, counts dict)
@@ -123,6 +127,7 @@ def parse_collapsed_fasta(
     parser = CollapsedHeaderParser(count_pattern)
     sequences = {}
     counts = {}
+    entries_processed = 0
 
     with fasta_opener(file_path) as f:
         current_header = None
@@ -130,6 +135,10 @@ def parse_collapsed_fasta(
         partial_line = ""
 
         for line in f:
+            # Check if we've hit the max entries
+            if max_reads is not None and entries_processed >= max_reads:
+                break
+
             # Handle any partial line from previous iteration
             if partial_line:
                 line = partial_line + line
@@ -148,6 +157,7 @@ def parse_collapsed_fasta(
                 # Start new sequence
                 current_header = line[1:]  # Remove '>'
                 current_seq = []
+                entries_processed += 1
 
                 # Extract count
                 count = parser.extract_count(current_header)
@@ -158,8 +168,10 @@ def parse_collapsed_fasta(
             else:
                 current_seq.append(line)
 
-        # Process last sequence
-        if current_header is not None:
+        # Process last sequence if we haven't hit max entries
+        if current_header is not None and (
+            max_reads is None or entries_processed < max_reads
+        ):
             seq = "".join(current_seq)
             sequences[current_header] = seq
 

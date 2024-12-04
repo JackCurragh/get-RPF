@@ -73,6 +73,7 @@ class AdapterDetector:
         max_mismatches: int = 1,
         threads: int = 1,
         count_pattern: Optional[str] = None,
+        max_reads: Optional[int] = None,
     ):
         """Initialize the AdapterDetector.
 
@@ -90,6 +91,7 @@ class AdapterDetector:
         self.max_mismatches = max_mismatches
         self.threads = threads
         self.count_pattern = count_pattern
+        self.max_reads = max_reads
 
     def _count_mismatches(self, seq1: str, seq2: str) -> int:
         """Count mismatches between two sequences.
@@ -160,7 +162,9 @@ class AdapterDetector:
             if self.count_pattern is None:
                 self.count_pattern = "read_{prefix}_{count}"
 
-            sequences, counts = parse_collapsed_fasta(input_path, self.count_pattern)
+            sequences, counts = parse_collapsed_fasta(
+                input_path, self.count_pattern, self.max_reads
+            )
 
             for header, sequence in sequences.items():
                 count = counts.get(header, 1)

@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import numpy as np
 from Bio import SeqIO
 
+from ...utils.file_utils import get_file_opener
 from ..processors.collapsed import parse_collapsed_fasta
 
 
@@ -87,6 +88,7 @@ class CleanlinessChecker:
         min_quality: int = 20,
         threads: int = 1,
         count_pattern: Optional[str] = None,
+        max_reads: Optional[int] = None,
     ):
         """Initialize the CleanlinessChecker.
 
@@ -99,6 +101,7 @@ class CleanlinessChecker:
         self.min_quality = min_quality
         self.threads = threads
         self.count_pattern = count_pattern
+        self.max_reads = max_reads
 
     def analyze_file(
         self, input_path: Path, count_pattern: Optional[str] = None
@@ -122,7 +125,10 @@ class CleanlinessChecker:
         if self.format == "collapsed":
             if count_pattern is None:
                 count_pattern = "read_{prefix}_{count}"
-            sequences, counts = parse_collapsed_fasta(input_path, count_pattern)
+
+            sequences, counts = parse_collapsed_fasta(
+                input_path, count_pattern, self.max_reads
+            )
 
             for header, seq in sequences.items():
                 count = counts.get(header, 1)
@@ -144,28 +150,41 @@ class CleanlinessChecker:
 
         else:
             # Existing code for FASTQ/FASTA processing
-            for record in SeqIO.parse(str(input_path), self.format):
-                length = len(record.seq)
-                length_dist[length] = length_dist.get(length, 0) + 1
+            file_opener = get_file_opener(input_path)
+            with file_opener(
+                str(input_path), "rt"
+            ) as handle:  # 'rt' mode for text reading
+                record_count = 0
+                for record in SeqIO.parse(handle, self.format):
+                    # Check if we've hit the max_reads limit
+                    if self.max_reads is not None and record_count >= self.max_reads:
+                        break
 
-                seq_str = str(record.seq).upper()
-                while max(len(nuc_freqs[nt]) for nt in "ACGT") < length:
-                    for nt in "ACGT":
-                        nuc_freqs[nt].append(0)
+                    length = len(record.seq)
+                    length_dist[length] = length_dist.get(length, 0) + 1
 
-                for pos, nt in enumerate(seq_str):
-                    if nt in nuc_freqs:
-                        nuc_freqs[nt][pos] += 1
-                        if nt in "GC":
-                            gc_count += 1
-                total_bases += length
+                    seq_str = str(record.seq).upper()
+                    while max(len(nuc_freqs[nt]) for nt in "ACGT") < length:
+                        for nt in "ACGT":
+                            nuc_freqs[nt].append(0)
 
-                if self.format == "fastq" and hasattr(record, "letter_annotations"):
-                    phred_scores = record.letter_annotations.get("phred_quality", [])
-                    for pos, score in enumerate(phred_scores):
-                        if pos not in quality_scores:
-                            quality_scores[pos] = []
-                        quality_scores[pos].append(score)
+                    for pos, nt in enumerate(seq_str):
+                        if nt in nuc_freqs:
+                            nuc_freqs[nt][pos] += 1
+                            if nt in "GC":
+                                gc_count += 1
+                    total_bases += length
+
+                    if self.format == "fastq" and hasattr(record, "letter_annotations"):
+                        phred_scores = record.letter_annotations.get(
+                            "phred_quality", []
+                        )
+                        for pos, score in enumerate(phred_scores):
+                            if pos not in quality_scores:
+                                quality_scores[pos] = []
+                            quality_scores[pos].append(score)
+
+                    record_count += 1
 
         # Normalize nucleotide frequencies
         total_reads = sum(length_dist.values())

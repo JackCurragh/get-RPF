@@ -99,19 +99,15 @@ class CollapsedHeaderParser:
 
 
 def parse_collapsed_fasta(
-    file_path: Union[str, Path],
-    count_pattern: str = "read_{count}",
-    buffer_size: int = 1024 * 1024,
+    file_path: Union[str, Path], count_pattern: str = "read_{count}"
 ) -> Tuple[dict, dict]:
     """Parse collapsed FASTA file with flexible header format.
 
     Supports both compressed (.gz, .bz2) and uncompressed FASTA files.
-    Uses buffered reading for memory-efficient processing of large files.
 
     Args:
         file_path: Path to collapsed FASTA file
         count_pattern: Pattern for extracting count from headers
-        buffer_size: Size of read buffer in bytes for processing large files
 
     Returns:
         Tuple of (sequences dict, counts dict)
@@ -131,42 +127,36 @@ def parse_collapsed_fasta(
     with fasta_opener(file_path) as f:
         current_header = None
         current_seq = []
+        partial_line = ""
 
-        while True:
-            chunk = f.read(buffer_size)
-            if not chunk:
-                break
+        for line in f:
+            # Handle any partial line from previous iteration
+            if partial_line:
+                line = partial_line + line
+                partial_line = ""
 
-            lines = chunk.splitlines()
+            line = line.strip()
+            if not line:
+                continue
 
-            # Handle potential partial line at chunk boundary
-            if chunk[-1] not in "\n\r":
-                partial = lines.pop()
-                f.seek(-len(partial.encode()), 1)
+            if line.startswith(">"):
+                # Process previous sequence if exists
+                if current_header is not None:
+                    seq = "".join(current_seq)
+                    sequences[current_header] = seq
 
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
+                # Start new sequence
+                current_header = line[1:]  # Remove '>'
+                current_seq = []
 
-                if line.startswith(">"):
-                    # Process previous sequence if exists
-                    if current_header is not None:
-                        seq = "".join(current_seq)
-                        sequences[current_header] = seq
-
-                    # Start new sequence
-                    current_header = line[1:]  # Remove '>'
-                    current_seq = []
-
-                    # Extract count
-                    count = parser.extract_count(current_header)
-                    if count is not None:
-                        counts[current_header] = count
-                    else:
-                        counts[current_header] = 1  # Default to 1 if no count found
+                # Extract count
+                count = parser.extract_count(current_header)
+                if count is not None:
+                    counts[current_header] = count
                 else:
-                    current_seq.append(line)
+                    counts[current_header] = 1  # Default to 1 if no count found
+            else:
+                current_seq.append(line)
 
         # Process last sequence
         if current_header is not None:

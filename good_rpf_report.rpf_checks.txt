@@ -13,8 +13,8 @@ Message: Read length distribution matches RPF expectations
 Details:
   fraction_in_range: 1.0
   mode_length: 32
-  mode_fraction: 0.3
-  total_reads: 10
+  mode_fraction: 0.3333333333333333
+  total_reads: 9
   min_length: 26
   max_length: 35
 
@@ -31,4 +31,4 @@ GC Content:
 Status: PASS
 Message: GC content within expected range
 Details:
-  gc_content: 0.5032679738562091
+  gc_content: 0.5054545454545455

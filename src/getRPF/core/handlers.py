@@ -51,19 +51,20 @@ def handle_cleanliness_check(
         rpf_checks: Whether to run RPF-specific checks
     """
     logger.info(f"Starting cleanliness check for {input_file}")
-
     try:
         # Initialize checker with parameters
         checker = CleanlinessChecker(
             format=format,
             min_quality=min_quality,
             threads=threads,
-            count_pattern=count_pattern if format == "collapsed" else None,
             max_reads=max_reads,
         )
 
         # Process file and get basic results
-        results = checker.analyze_file(input_file)
+        results = checker.analyze_file(
+            input_file,
+            count_pattern=count_pattern if format == "collapsed" else None,
+        )
 
         # Write basic report
         results.write_report(output)

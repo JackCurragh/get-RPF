@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "getRPF"
+version = "0.1.0"
+description = "A tool for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["bioinformatics", "ribo-seq", "RPF", "sequence-analysis"]
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "click>=8.0.0",
+    "biopython>=1.79",
+    "numpy>=1.21.0",
+    "pandas>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "mypy>=0.900",
+    "ruff>=0.0.270",
+]
+docs = [
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+
+[project.scripts]
+getRPF = "getRPF.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/getRPF"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=getRPF"
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.ruff]
+# Select rules to enable
+select = ["E", "F", "I", "W"]  # Add the rules you want to enforce
+line-length = 88
+extend-ignore = ["E501"]  # Ignore line length violations
+
+# Target Python version
+target-version = "py310"
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+]
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

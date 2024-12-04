@@ -37,6 +37,7 @@ def handle_cleanliness_check(
     min_quality: Optional[int] = 20,
     threads: Optional[int] = 1,
     rpf_checks: bool = True,
+    max_reads: Optional[int] = None,
 ) -> None:
     """Handle the quality check command workflow.
 
@@ -58,6 +59,7 @@ def handle_cleanliness_check(
             min_quality=min_quality,
             threads=threads,
             count_pattern=count_pattern if format == "collapsed" else None,
+            max_reads=max_reads,
         )
 
         # Process file and get basic results
@@ -100,6 +102,7 @@ def handle_adapter_detection(
     max_mismatches: Optional[int] = 1,
     threads: Optional[int] = 1,
     count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
 ) -> None:
     """Handle the adapter detection command workflow.
 
@@ -127,6 +130,7 @@ def handle_adapter_detection(
             max_mismatches=max_mismatches,
             threads=threads,
             count_pattern=count_pattern,
+            max_reads=max_reads,
         )
 
         # Process file and get results

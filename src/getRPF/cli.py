@@ -128,8 +128,19 @@ def cli():
     'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
     default="read_{count}",
 )
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process. Default is all reads.",
+    default=None,
+)
 def check(
-    input_file: Path, format: str, output: Path, count_pattern: Optional[str] = None
+    input_file: Path,
+    format: str,
+    output: Path,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
 ):
     """Check read quality and composition.
 
@@ -144,13 +155,18 @@ def check(
 
         # Header format: >read1_x100 (count is 100)
         getRPF check input.fasta --format collapsed \
-        --count-pattern "read_{prefix}_{count}"
+            --count-pattern "read_{prefix}_{count}"
+
+        # Process only first 1000 reads
+        getRPF check input.fastq --format fastq \
+            --output report.txt --max-reads 1000
     """
     handle_cleanliness_check(
         input_file=input_file,
         format=format,
         output=output,
         count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
     )
 
 
@@ -189,6 +205,13 @@ def check(
     'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
     default="read_{count}",
 )
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process. Default is all reads.",
+    default=None,
+)
 def detect_adapter(
     input_file: Path,
     format: str,
@@ -197,6 +220,7 @@ def detect_adapter(
     min_overlap: int = 10,
     max_mismatches: int = 1,
     count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
 ):
     """Detect adapter sequences in reads.
 
@@ -216,6 +240,10 @@ def detect_adapter(
         # Collapsed FASTA with format >read1_x100
         getRPF detect-adapter input.fasta -f collapsed -a AGATCGGAAGAG \
             -o report.txt -p "read\\d+_x{count}"
+
+        # Process only first 1000 reads
+        getRPF detect-adapter input.fastq -f fastq -a AGATCGGAAGAG \
+            -o report.txt --max-reads 1000
     """
     handle_adapter_detection(
         input_file=input_file,
@@ -225,6 +253,7 @@ def detect_adapter(
         min_overlap=min_overlap,
         max_mismatches=max_mismatches,
         count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
     )
 
 

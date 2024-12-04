@@ -6,6 +6,8 @@ This module provides utilities for:
     - Common file operations
 """
 
+import bz2
+import gzip
 import os
 from pathlib import Path
 from typing import Union
@@ -41,3 +43,13 @@ def check_file_readability(file_path: Union[str, Path]) -> bool:
     if not os.access(file_path, os.R_OK):
         raise PermissionError(f"Cannot read file: {file_path}")
     return True
+
+
+def get_file_opener(filepath: Path):
+    """Determine the appropriate file opener based on file extension."""
+    suffix = filepath.suffix.lower()
+    if suffix == ".gz":
+        return gzip.open
+    elif suffix == ".bz2":
+        return bz2.open
+    return open

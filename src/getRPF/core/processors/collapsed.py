@@ -1,10 +1,45 @@
 """Handler for collapsed FASTA format processing."""
 
+import bz2
+import gzip
 import logging
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, TextIO, Tuple, Union
+
+from getRPF.utils.file_utils import check_file_readability
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def fasta_opener(file_path: Path) -> TextIO:
+    """Context manager for reading FASTA files (compressed or uncompressed).
+
+    Args:
+        file_path: Path to FASTA file (can be .gz or .bz2)
+
+    Yields:
+        File handle for reading
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        PermissionError: If file cannot be read
+    """
+    check_file_readability(file_path)
+
+    suffix = file_path.suffix.lower()
+    if suffix == ".gz":
+        handle = gzip.open(file_path, "rt", encoding="utf-8")
+    elif suffix == ".bz2":
+        handle = bz2.open(file_path, "rt", encoding="utf-8")
+    else:
+        handle = open(file_path, "r", encoding="utf-8")
+
+    try:
+        yield handle
+    finally:
+        handle.close()
 
 
 class CollapsedHeaderParser:
@@ -64,48 +99,74 @@ class CollapsedHeaderParser:
 
 
 def parse_collapsed_fasta(
-    file_path: Path, count_pattern: str = "read_{count}"
+    file_path: Union[str, Path],
+    count_pattern: str = "read_{count}",
+    buffer_size: int = 1024 * 1024,
 ) -> Tuple[dict, dict]:
     """Parse collapsed FASTA file with flexible header format.
+
+    Supports both compressed (.gz, .bz2) and uncompressed FASTA files.
+    Uses buffered reading for memory-efficient processing of large files.
 
     Args:
         file_path: Path to collapsed FASTA file
         count_pattern: Pattern for extracting count from headers
+        buffer_size: Size of read buffer in bytes for processing large files
 
     Returns:
         Tuple of (sequences dict, counts dict)
+
+    Example:
+        >>> seqs, counts = parse_collapsed_fasta('reads.fa.gz')
+        >>> all(isinstance(count, int) for count in counts.values())
+        True
     """
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+
     parser = CollapsedHeaderParser(count_pattern)
     sequences = {}
     counts = {}
 
-    with open(file_path) as f:
+    with fasta_opener(file_path) as f:
         current_header = None
         current_seq = []
 
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
+        while True:
+            chunk = f.read(buffer_size)
+            if not chunk:
+                break
 
-            if line.startswith(">"):
-                # Process previous sequence if exists
-                if current_header is not None:
-                    seq = "".join(current_seq)
-                    sequences[current_header] = seq
+            lines = chunk.splitlines()
 
-                # Start new sequence
-                current_header = line[1:]  # Remove '>'
-                current_seq = []
+            # Handle potential partial line at chunk boundary
+            if chunk[-1] not in "\n\r":
+                partial = lines.pop()
+                f.seek(-len(partial.encode()), 1)
 
-                # Extract count
-                count = parser.extract_count(current_header)
-                if count is not None:
-                    counts[current_header] = count
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                if line.startswith(">"):
+                    # Process previous sequence if exists
+                    if current_header is not None:
+                        seq = "".join(current_seq)
+                        sequences[current_header] = seq
+
+                    # Start new sequence
+                    current_header = line[1:]  # Remove '>'
+                    current_seq = []
+
+                    # Extract count
+                    count = parser.extract_count(current_header)
+                    if count is not None:
+                        counts[current_header] = count
+                    else:
+                        counts[current_header] = 1  # Default to 1 if no count found
                 else:
-                    counts[current_header] = 1  # Default to 1 if no count found
-            else:
-                current_seq.append(line)
+                    current_seq.append(line)
 
         # Process last sequence
         if current_header is not None:

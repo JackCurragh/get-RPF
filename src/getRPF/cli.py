@@ -151,11 +151,11 @@ def check(
     Examples:
         # Header format: >read_123_500 (count is 500)
         getRPF check input.fasta --format collapsed\
-              --count-pattern "read_{prefix}_{count}"
+              --count-pattern "read_{id}_{count}"
 
         # Header format: >read1_x100 (count is 100)
         getRPF check input.fasta --format collapsed \
-            --count-pattern "read_{prefix}_{count}"
+            --count-pattern "read_{id}_{count}"
 
         # Process only first 1000 reads
         getRPF check input.fastq --format fastq \

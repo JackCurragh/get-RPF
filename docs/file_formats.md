@@ -113,7 +113,7 @@ getRPF check input.fasta --format fasta --output report.txt
 
 #### For Collapsed FASTA Format:
 ```bash
-getRPF check input.collapsed --format collapsed --output report.txt --count-pattern "read{prefix}_x{count}
+getRPF check input.collapsed --format collapsed --output report.txt --count-pattern "read{id}_x{count}
 ```
 
 ---

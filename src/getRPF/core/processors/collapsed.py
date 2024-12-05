@@ -45,20 +45,28 @@ def fasta_opener(file_path: Path) -> TextIO:
 class CollapsedHeaderParser:
     """Parser for extracting counts from collapsed FASTA headers based on custom formatting."""
 
-    def __init__(self, format: str = "read_{prefix}_{count}"):
+    def __init__(self, format: str = "read_{id}_{count}"):
         """
         Initialize the parser with a custom header format.
 
         Args:
             format: A string indicating the layout of the header.
-                    Use '{prefix}' for non-count parts and '{count}' for the numeric count.
+                    Use '{id}' for non-count parts and '{count}' for the numeric count.
         """
         if "{count}" not in format:
-            raise ValueError("Format must contain '{count}' placeholder.")
+            raise ValueError("Format must contain '{count}' placeholder")
 
-        self.format = format
-        self.prefix_placeholder = "{prefix}"
-        self.count_placeholder = "{count}"
+        # Split on {count} to get left and right delimiters
+        self.left_part, *right_parts = format.split("{count}")
+        self.right_delim = right_parts[0] if right_parts else ""
+
+        # Get the delimiter before the count
+        if "{id}" in self.left_part:
+            # If there's an {id}, split on that and take what's after it
+            *_, self.left_delim = self.left_part.split("{id}")
+        else:
+            # Otherwise use the whole left part
+            self.left_delim = self.left_part
 
     def extract_count(self, header: str) -> Optional[int]:
         """
@@ -69,32 +77,22 @@ class CollapsedHeaderParser:
 
         Returns:
             The extracted read count or None if the format doesn't match.
-
-        Raises:
-            ValueError: If the count cannot be parsed as an integer.
         """
         try:
-            # Split the format into parts
-            if self.prefix_placeholder in self.format:
-                prefix_part, count_part = self.format.split(self.prefix_placeholder)
+            # Split based on left delimiter if it exists
+            if self.left_delim:
+                _, count_part = header.rsplit(self.left_delim, 1)
             else:
-                prefix_part, count_part = self.format.split(self.count_placeholder)
+                count_part = header
 
-            # Remove placeholders and match parts
-            prefix = prefix_part.strip("_")
-            count_delimiter = count_part.strip("_")
+            # Split based on right delimiter if it exists
+            if self.right_delim:
+                count_str, _ = count_part.split(self.right_delim, 1)
+            else:
+                count_str = count_part
 
-            # Extract the count from the header
-            if prefix:
-                header = header.replace(prefix, "", 1).strip("_")
-            if count_delimiter:
-                header = header.rsplit(count_delimiter, 1)[-1]
-
-            return int(header)
-        except (IndexError, ValueError) as e:
-            logger.warning(
-                f"Failed to parse header '{header}' with format '{self.format}': {e}"
-            )
+            return int(count_str.strip("_"))
+        except (ValueError, IndexError):
             return None
 
 

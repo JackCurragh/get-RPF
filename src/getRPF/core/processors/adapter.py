@@ -160,7 +160,7 @@ class AdapterDetector:
         if self.format == "collapsed":
             # Handle collapsed format
             if self.count_pattern is None:
-                self.count_pattern = "read_{prefix}_{count}"
+                self.count_pattern = "read_{id}_{count}"
 
             sequences, counts = parse_collapsed_fasta(
                 input_path, self.count_pattern, self.max_reads

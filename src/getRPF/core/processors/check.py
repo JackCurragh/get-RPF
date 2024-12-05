@@ -123,7 +123,7 @@ class CleanlinessChecker:
 
         if self.format == "collapsed":
             if count_pattern is None:
-                count_pattern = "read_{prefix}_{count}"
+                count_pattern = "read_{id}_{count}"
 
             sequences, counts = parse_collapsed_fasta(
                 input_path, count_pattern, self.max_reads

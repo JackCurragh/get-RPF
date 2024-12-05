@@ -2,7 +2,7 @@
 
 Summary:
 Length Distribution            [PASS]
-Base Composition               [PASS]
+Base Composition               [FAIL]
 GC Content                     [PASS]
 
 Detailed Results:
@@ -11,24 +11,31 @@ Length Distribution:
 Status: PASS
 Message: Read length distribution matches RPF expectations
 Details:
-  fraction_in_range: 1.0
-  mode_length: 32
-  mode_fraction: 0.3333333333333333
-  total_reads: 9
+  fraction_in_range: 0.693069306930693
+  mode_length: 35
+  mode_fraction: 0.6658415841584159
+  total_reads: 404
   min_length: 26
   max_length: 35
 
 Base Composition:
-Status: PASS
-Message: Base composition looks normal
+Status: FAIL
+Message: Found 7 positions with extreme base bias (>85.0%)
 Details:
   problem_positions:
-  max_frequency: 0.0
-  worst_position: None
-  worst_base: None
+    - Position 0: A=88.6%
+    - Position 5: T=94.3%
+    - Position 12: G=99.0%
+    - Position 22: T=96.8%
+    - Position 23: C=94.1%
+    - Position 28: C=93.8%
+    - Position 29: G=96.3%
+  max_frequency: 0.9900990099009901
+  worst_position: 12
+  worst_base: G
 
 GC Content:
 Status: PASS
 Message: GC content within expected range
 Details:
-  gc_content: 0.5054545454545455
+  gc_content: 0.6008089394666484

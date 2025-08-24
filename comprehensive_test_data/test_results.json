@@ -1,0 +1,161 @@
+{
+  "timestamp": 1756043432.3481128,
+  "total_tests": 8,
+  "total_time": 0.587670087814331,
+  "results": [
+    {
+      "test_case": "clean_rpfs",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 1.0,
+      "extraction_method": "de_novo",
+      "expected_method": "de_novo",
+      "method_match": true,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.07323503494262695,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    },
+    {
+      "test_case": "mcglincy_protocol",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 1.0,
+      "extraction_method": "de_novo",
+      "expected_method": "pattern_match",
+      "method_match": false,
+      "architecture_match": null,
+      "expected_architecture": "mcglincy_ingolia_2017",
+      "arch_match": false,
+      "processing_time": 0.12111496925354004,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    },
+    {
+      "test_case": "adapter_contaminated",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 1.0,
+      "extraction_method": "de_novo",
+      "expected_method": "mixed_strategy",
+      "method_match": false,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.08669781684875488,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    },
+    {
+      "test_case": "multi_adapter_types",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 0.9,
+      "extraction_method": "de_novo",
+      "expected_method": "mixed_strategy",
+      "method_match": false,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.10558915138244629,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    },
+    {
+      "test_case": "length_variants",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 0.85,
+      "extraction_method": "de_novo",
+      "expected_method": "de_novo",
+      "method_match": true,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.07451081275939941,
+      "quality_metrics": {
+        "detection_confidence": 0.95
+      },
+      "error": null
+    },
+    {
+      "test_case": "low_quality",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 0.95,
+      "extraction_method": "de_novo",
+      "expected_method": "de_novo",
+      "method_match": true,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.07433795928955078,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    },
+    {
+      "test_case": "extreme_contamination",
+      "status": "PASS",
+      "input_reads": 1000,
+      "extracted_rpfs": 1000,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 0.7,
+      "extraction_method": "mixed_strategy",
+      "expected_method": "de_novo",
+      "method_match": false,
+      "architecture_match": "mcglincy_ingolia_2017",
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.033370018005371094,
+      "quality_metrics": {
+        "success_rate": 1.0,
+        "clean_fraction": 0.797,
+        "processed_fraction": 0.203
+      },
+      "error": null
+    },
+    {
+      "test_case": "collapsed_format",
+      "status": "PASS",
+      "input_reads": 250,
+      "extracted_rpfs": 250,
+      "actual_success_rate": 1.0,
+      "expected_success_rate": 1.0,
+      "extraction_method": "de_novo",
+      "expected_method": "de_novo",
+      "method_match": true,
+      "architecture_match": null,
+      "expected_architecture": "N/A",
+      "arch_match": true,
+      "processing_time": 0.01866602897644043,
+      "quality_metrics": {
+        "detection_confidence": 0.0
+      },
+      "error": null
+    }
+  ]
+}

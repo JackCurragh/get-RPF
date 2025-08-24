@@ -632,7 +632,16 @@ class RPFExtractor:
         # Load sample reads for architecture detection
         sample_reads = self._load_sample_reads(input_file, format, sample_size=10000)
         
-        # Try pattern matching first
+        # Check for mixed data (clean + contaminated reads)
+        mixed_strategy = self._detect_mixed_data(sample_reads)
+        
+        if mixed_strategy:
+            logger.info("Detected mixed data (clean + contaminated reads)")
+            return self._extract_with_mixed_strategy(
+                input_file, output_file, mixed_strategy, format, max_reads
+            )
+        
+        # Try pattern matching on homogeneous data
         matched_arch, match_confidence = self.architecture_db.match_architecture(sample_reads)
         
         if matched_arch and match_confidence > 0.7:
@@ -860,3 +869,209 @@ class RPFExtractor:
         
         logger.info(f"Extracted {extracted_count} RPF sequences")
         return extracted_count
+    
+    def _detect_mixed_data(self, sample_reads: List[str]) -> Optional[Dict[str, Any]]:
+        """Detect if data contains mix of clean and contaminated reads.
+        
+        Returns strategy info if mixed data detected, None otherwise.
+        """
+        if len(sample_reads) < 50:
+            return None
+        
+        # Look for adapter contamination patterns
+        adapter_patterns = ['AGATCGG', 'CTGTAGG', 'TGGAATT', 'TGACT', 'GATCG']
+        
+        contaminated_reads = []
+        clean_reads = []
+        
+        for read in sample_reads:
+            has_adapter = any(pattern in read for pattern in adapter_patterns)
+            if has_adapter:
+                contaminated_reads.append(read)
+            else:
+                clean_reads.append(read)
+        
+        # Mixed data criteria
+        total_reads = len(sample_reads)
+        contaminated_fraction = len(contaminated_reads) / total_reads
+        clean_fraction = len(clean_reads) / total_reads
+        
+        # Consider it mixed if both populations are significant
+        if contaminated_fraction > 0.1 and clean_fraction > 0.1:
+            # Test if contaminated subset matches an architecture well
+            if len(contaminated_reads) > 10:
+                best_arch, score = self.architecture_db.match_architecture(contaminated_reads)
+                
+                if best_arch and score > 0.7:
+                    logger.info(f"Mixed data detected: {contaminated_fraction*100:.1f}% contaminated, {clean_fraction*100:.1f}% clean")
+                    logger.info(f"Contaminated reads match {best_arch.protocol_name} (score: {score:.3f})")
+                    
+                    return {
+                        'strategy': 'mixed',
+                        'clean_fraction': clean_fraction,
+                        'contaminated_fraction': contaminated_fraction,
+                        'architecture': best_arch,
+                        'architecture_score': score
+                    }
+        
+        return None
+    
+    def _extract_with_mixed_strategy(
+        self,
+        input_file: Path,
+        output_file: Path,
+        mixed_info: Dict[str, Any],
+        format: str,
+        max_reads: Optional[int]
+    ) -> RPFExtractionResult:
+        """Extract RPFs from mixed clean/contaminated data."""
+        
+        architecture = mixed_info['architecture']
+        adapter_patterns = architecture.adapter_sequences
+        
+        clean_count = 0
+        processed_count = 0
+        total_count = 0
+        
+        opener = get_file_opener(input_file)
+        
+        with opener(input_file, 'rt' if input_file.suffix in ['.gz', '.bz2'] else 'r') as fin:
+            with open(output_file, 'w') as fout:
+                if format == "fastq":
+                    # Process FASTQ
+                    while max_reads is None or total_count < max_reads:
+                        header = fin.readline().strip()
+                        if not header:
+                            break
+                        sequence = fin.readline().strip()
+                        plus = fin.readline().strip() 
+                        quality = fin.readline().strip()
+                        
+                        if header and sequence:
+                            total_count += 1
+                            
+                            # Check if read has adapter contamination
+                            has_adapter = any(adapter in sequence for adapter in adapter_patterns)
+                            
+                            if has_adapter:
+                                # Process contaminated read - remove adapter
+                                processed_seq = sequence
+                                processed_qual = quality
+                                
+                                # Find and remove adapter
+                                for adapter in adapter_patterns:
+                                    if adapter in sequence:
+                                        adapter_pos = sequence.find(adapter)
+                                        if adapter_pos > 20:  # Keep at least 20nt before adapter
+                                            processed_seq = sequence[:adapter_pos]
+                                            processed_qual = quality[:adapter_pos]
+                                            break
+                                
+                                # Write processed read
+                                if len(processed_seq) >= 20:
+                                    fout.write(f"{header}_processed_RPF\n")
+                                    fout.write(f"{processed_seq}\n")
+                                    fout.write("+\n")
+                                    fout.write(f"{processed_qual}\n")
+                                    processed_count += 1
+                            
+                            else:
+                                # Clean read - use as is
+                                if len(sequence) >= 20:
+                                    fout.write(f"{header}_clean_RPF\n")
+                                    fout.write(f"{sequence}\n")
+                                    fout.write("+\n")
+                                    fout.write(f"{quality}\n")
+                                    clean_count += 1
+                
+                elif format in ["fasta", "collapsed"]:
+                    # Process FASTA (similar logic)
+                    current_header = None
+                    current_seq = []
+                    
+                    for line in fin:
+                        line = line.strip()
+                        if line.startswith('>'):
+                            # Process previous sequence
+                            if current_header and current_seq:
+                                sequence = ''.join(current_seq)
+                                total_count += 1
+                                
+                                has_adapter = any(adapter in sequence for adapter in adapter_patterns)
+                                
+                                if has_adapter:
+                                    # Remove adapter
+                                    processed_seq = sequence
+                                    for adapter in adapter_patterns:
+                                        if adapter in sequence:
+                                            adapter_pos = sequence.find(adapter)
+                                            if adapter_pos > 20:
+                                                processed_seq = sequence[:adapter_pos]
+                                                break
+                                    
+                                    if len(processed_seq) >= 20:
+                                        fout.write(f"{current_header}_processed_RPF\n")
+                                        fout.write(f"{processed_seq}\n")
+                                        processed_count += 1
+                                
+                                else:
+                                    # Clean read
+                                    if len(sequence) >= 20:
+                                        fout.write(f"{current_header}_clean_RPF\n")
+                                        fout.write(f"{sequence}\n")
+                                        clean_count += 1
+                                
+                                if max_reads and total_count >= max_reads:
+                                    break
+                            
+                            current_header = line
+                            current_seq = []
+                        else:
+                            current_seq.append(line)
+                    
+                    # Process last sequence
+                    if current_header and current_seq and (max_reads is None or total_count < max_reads):
+                        sequence = ''.join(current_seq)
+                        total_count += 1
+                        
+                        has_adapter = any(adapter in sequence for adapter in adapter_patterns)
+                        
+                        if has_adapter:
+                            processed_seq = sequence
+                            for adapter in adapter_patterns:
+                                if adapter in sequence:
+                                    adapter_pos = sequence.find(adapter)
+                                    if adapter_pos > 20:
+                                        processed_seq = sequence[:adapter_pos]
+                                        break
+                            
+                            if len(processed_seq) >= 20:
+                                fout.write(f"{current_header}_processed_RPF\n")
+                                fout.write(f"{processed_seq}\n")
+                                processed_count += 1
+                        else:
+                            if len(sequence) >= 20:
+                                fout.write(f"{current_header}_clean_RPF\n")
+                                fout.write(f"{sequence}\n")
+                                clean_count += 1
+        
+        total_extracted = clean_count + processed_count
+        success_rate = total_extracted / total_count if total_count > 0 else 0
+        
+        logger.info(f"Mixed strategy results: {clean_count} clean + {processed_count} processed = {total_extracted} total RPFs")
+        logger.info(f"Success rate: {success_rate*100:.1f}% ({total_extracted}/{total_count})")
+        
+        return RPFExtractionResult(
+            input_reads=total_count,
+            processed_reads=total_count,
+            extracted_rpfs=total_extracted,
+            failed_extractions=total_count - total_extracted,
+            architecture_match=architecture.protocol_name,
+            extraction_method="mixed_strategy",
+            segments={"clean_reads": clean_count, "processed_reads": processed_count},
+            quality_metrics={
+                "success_rate": success_rate,
+                "clean_fraction": clean_count / total_extracted if total_extracted > 0 else 0,
+                "processed_fraction": processed_count / total_extracted if total_extracted > 0 else 0
+            }
+        )

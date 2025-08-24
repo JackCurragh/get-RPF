@@ -291,6 +291,18 @@ class ArchitectureDatabase:
     
     def _fuzzy_match(self, text: str, pattern: str, max_mismatches: int = 2) -> bool:
         """Check if pattern matches text with up to max_mismatches differences."""
+        # Try exact pattern match first
+        if pattern in text:
+            return True
+        
+        # Try partial pattern matches (at least 8 characters)
+        min_match_len = min(8, len(pattern))
+        for start in range(len(pattern) - min_match_len + 1):
+            partial_pattern = pattern[start:start + min_match_len]
+            if partial_pattern in text:
+                return True
+        
+        # Try fuzzy matching with mismatches
         for i in range(len(text) - len(pattern) + 1):
             substring = text[i:i+len(pattern)]
             mismatches = sum(c1 != c2 for c1, c2 in zip(substring, pattern))
@@ -447,22 +459,33 @@ class DeNovoDetector:
         
         boundaries = []
         
-        # Look for sharp transitions in k-mer complexity
-        for i in range(1, len(kmer_complexity)):
-            complexity_change = abs(kmer_complexity[i] - kmer_complexity[i-1])
-            if complexity_change > 0.3:  # Significant change
+        # Look for sharp transitions in k-mer complexity (use moving window)
+        window_size = 3
+        for i in range(window_size, len(kmer_complexity) - window_size):
+            # Calculate average complexity before and after this position
+            before_avg = sum(kmer_complexity[i-window_size:i]) / window_size
+            after_avg = sum(kmer_complexity[i:i+window_size]) / window_size
+            complexity_change = abs(after_avg - before_avg)
+            
+            if complexity_change > 0.4:  # Strong transition
                 boundaries.append(i)
         
-        # Look for composition changes
-        for i in range(1, len(composition)):
-            if i < len(composition):
-                gc_change = abs(composition[i]["gc_content"] - composition[i-1]["gc_content"])
-                if gc_change > 0.2:  # Significant GC change
-                    boundaries.append(i)
+        # Look for composition changes (also use moving window)
+        for i in range(window_size, len(composition) - window_size):
+            before_gc = sum(comp["gc_content"] for comp in composition[i-window_size:i]) / window_size
+            after_gc = sum(comp["gc_content"] for comp in composition[i:i+window_size]) / window_size
+            gc_change = abs(after_gc - before_gc)
+            
+            if gc_change > 0.3:  # Significant GC change
+                boundaries.append(i)
         
-        # Remove duplicate boundaries and sort
-        boundaries = sorted(set(boundaries))
-        return boundaries
+        # Remove boundaries that are too close together (minimum 5nt segments)
+        filtered_boundaries = []
+        for boundary in sorted(set(boundaries)):
+            if not filtered_boundaries or boundary - filtered_boundaries[-1] >= 5:
+                filtered_boundaries.append(boundary)
+        
+        return filtered_boundaries
     
     def _classify_segments(self, boundaries: List[int], reads: List[str]) -> List[SegmentInfo]:
         """Classify segments between boundaries."""
@@ -497,22 +520,27 @@ class DeNovoDetector:
         
         avg_length = sum(len(seq) for seq in sequences) / len(sequences)
         unique_fraction = len(set(sequences)) / len(sequences)
+        segment_length = end_pos - start_pos
         
-        # UMI: short, high complexity
-        if avg_length <= 8 and unique_fraction > 0.8 and start_pos < 15:
+        # UMI: short (4-12nt), high complexity, at start
+        if segment_length <= 12 and unique_fraction > 0.7 and start_pos < 20:
             return "umi", 0.9
         
-        # Barcode: short-medium, medium complexity
-        elif avg_length <= 12 and 0.4 < unique_fraction < 0.8 and start_pos < 20:
+        # Barcode: short-medium (4-12nt), medium complexity, early position
+        elif segment_length <= 12 and 0.3 < unique_fraction < 0.8 and start_pos < 25:
             return "barcode", 0.7
         
-        # Adapter: low complexity, consensus sequence
-        elif unique_fraction < 0.3:
+        # Adapter: low complexity (consensus), any position
+        elif unique_fraction < 0.4:
             return "adapter", 0.8
         
-        # RPF: medium-high length, biological complexity
-        elif avg_length >= 25 and 0.3 < unique_fraction < 0.9:
-            return "rpf", 0.9
+        # RPF: long segment (20+ nt), biological complexity, not at very start
+        elif segment_length >= 20 and 0.4 < unique_fraction < 0.95:
+            return "rpf", 0.95
+        
+        # Large unknown segment likely RPF if reasonable complexity
+        elif segment_length >= 25 and unique_fraction > 0.3:
+            return "rpf", 0.7
         
         else:
             return "unknown", 0.3

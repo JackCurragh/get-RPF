@@ -15,6 +15,7 @@ from collections import Counter
 import re
 
 from ...utils.file_utils import get_file_opener
+from ..seqspec_generator import SeqSpecGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ class RPFExtractionResult:
     extraction_method: str  # "pattern_match" or "de_novo"
     segments: Dict[str, List[SegmentInfo]]
     quality_metrics: Dict[str, float]
+    seqspec_data: Optional[Dict[str, Any]] = None
     
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write extraction results to file."""
@@ -608,6 +610,7 @@ class RPFExtractor:
         """
         self.architecture_db = ArchitectureDatabase(architecture_db_path)
         self.de_novo_detector = DeNovoDetector()
+        self.seqspec_generator = SeqSpecGenerator()
     
     def extract_rpfs(
         self, 
@@ -722,6 +725,16 @@ class RPFExtractor:
         )
         segments.append(rpf_segment)
         
+        # Generate seqspec for known architecture
+        sample_reads = self._load_sample_reads(input_file, format, 1000)
+        seqspec_output = output_file.with_suffix('.seqspec.yaml')
+        seqspec_data = self.seqspec_generator.generate_from_architecture(
+            architecture=architecture,
+            sample_reads=sample_reads,
+            detected_segments=segments,
+            output_file=seqspec_output
+        )
+        
         # Process reads and extract RPFs
         extracted_count = self._extract_rpfs_from_reads(
             input_file, output_file, segments, format, max_reads
@@ -735,7 +748,8 @@ class RPFExtractor:
             architecture_match=architecture.protocol_name,
             extraction_method="pattern_match",
             segments={"detected": segments},
-            quality_metrics={"extraction_rate": 1.0}
+            quality_metrics={"extraction_rate": 1.0},
+            seqspec_data=seqspec_data
         )
     
     def _extract_with_de_novo(
@@ -753,6 +767,15 @@ class RPFExtractor:
         # Detect architecture
         segments, confidence = self.de_novo_detector.detect_architecture(sample_reads)
         
+        # Generate seqspec for detected segments
+        seqspec_output = output_file.with_suffix('.seqspec.yaml')
+        seqspec_data = self.seqspec_generator.generate_from_architecture(
+            architecture=None,
+            sample_reads=sample_reads,
+            detected_segments=segments,
+            output_file=seqspec_output
+        )
+        
         # Extract RPFs using detected segments
         extracted_count = self._extract_rpfs_from_reads(
             input_file, output_file, segments, format, max_reads
@@ -766,7 +789,8 @@ class RPFExtractor:
             architecture_match=None,
             extraction_method="de_novo",
             segments={"detected": segments},
-            quality_metrics={"detection_confidence": confidence}
+            quality_metrics={"detection_confidence": confidence},
+            seqspec_data=seqspec_data
         )
     
     def _extract_rpfs_from_reads(
@@ -1061,6 +1085,19 @@ class RPFExtractor:
         logger.info(f"Mixed strategy results: {clean_count} clean + {processed_count} processed = {total_extracted} total RPFs")
         logger.info(f"Success rate: {success_rate*100:.1f}% ({total_extracted}/{total_count})")
         
+        # Generate seqspec for mixed data
+        sample_reads = self._load_sample_reads(input_file, format, 1000)
+        clean_sample = [r for r in sample_reads if not any(a in r for a in adapter_patterns)]
+        contam_sample = [r for r in sample_reads if any(a in r for a in adapter_patterns)]
+        
+        seqspec_output = output_file.with_suffix('.seqspec.yaml')
+        seqspec_data = self.seqspec_generator.generate_mixed_seqspec(
+            clean_reads=clean_sample,
+            contaminated_reads=contam_sample,
+            architecture=architecture,
+            output_file=seqspec_output
+        )
+        
         return RPFExtractionResult(
             input_reads=total_count,
             processed_reads=total_count,
@@ -1073,5 +1110,6 @@ class RPFExtractor:
                 "success_rate": success_rate,
                 "clean_fraction": clean_count / total_extracted if total_extracted > 0 else 0,
                 "processed_fraction": processed_count / total_extracted if total_extracted > 0 else 0
-            }
+            },
+            seqspec_data=seqspec_data
         )

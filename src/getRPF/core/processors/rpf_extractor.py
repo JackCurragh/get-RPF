@@ -162,7 +162,23 @@ class ArchitectureDatabase:
             }
         )
         
-        self.architectures = [mcglincy_2017, ingolia_2009, generic_umi]
+        # Partially processed reads (UMI/barcode already trimmed)
+        preprocessed = ReadArchitecture(
+            protocol_name="preprocessed_with_adapter_contamination",
+            lab_source="Partially processed ribosome profiling reads",
+            umi_positions=[],  # Already trimmed
+            barcode_positions=[],  # Already trimmed
+            adapter_sequences=["AGATCGGAAGAGCAC", "AGATCGGAAGAG", "AGATCGG"],  # 3' adapter contamination
+            rpf_start=0,
+            rpf_end=-1,  # Variable, adapter removal needed
+            expected_rpf_length=(25, 40),  # Broader range for contaminated reads
+            quality_markers={
+                "adapter_match_threshold": 0.2,  # Lower threshold for contaminated data
+                "rpf_gc_content_range": (0.25, 0.75)
+            }
+        )
+        
+        self.architectures = [preprocessed, mcglincy_2017, ingolia_2009, generic_umi]
         logger.info(f"Initialized {len(self.architectures)} built-in architectures")
     
     def match_architecture(self, reads: List[str]) -> Tuple[Optional[ReadArchitecture], float]:
@@ -242,7 +258,15 @@ class ArchitectureDatabase:
         """Score how well read lengths match expected RPF lengths."""
         min_len, max_len = architecture.expected_rpf_length
         
-        # Estimate RPF lengths after removing known elements
+        # For preprocessed reads (no UMI/barcode positions), just check raw lengths
+        if not architecture.umi_positions and not architecture.barcode_positions:
+            read_lengths = [len(read) for read in reads[:1000]]
+            if not read_lengths:
+                return 0.0
+            in_range = sum(1 for length in read_lengths if min_len <= length <= max_len)
+            return in_range / len(read_lengths)
+        
+        # For raw reads, estimate RPF lengths after removing known elements
         rpf_lengths = []
         for read in reads[:1000]:
             estimated_rpf_len = len(read)
@@ -252,9 +276,15 @@ class ArchitectureDatabase:
                 estimated_rpf_len -= (end - start)
             for start, end in architecture.barcode_positions:
                 estimated_rpf_len -= (end - start)
+            
+            # For adapter removal, be more conservative - only subtract if we find the adapter
+            adapter_found = False
             for adapter in architecture.adapter_sequences:
-                estimated_rpf_len -= len(adapter)
-                
+                if adapter in read:
+                    estimated_rpf_len -= len(adapter)
+                    adapter_found = True
+                    break
+                    
             if estimated_rpf_len > 0:
                 rpf_lengths.append(estimated_rpf_len)
         

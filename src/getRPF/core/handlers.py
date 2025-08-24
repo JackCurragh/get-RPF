@@ -23,6 +23,7 @@ from ..core.checkers import (
 )
 from ..core.processors.adapter import AdapterDetector
 from ..core.processors.check import CleanlinessChecker
+from ..core.processors.alignment import STARAligner
 from ..utils.validation import validate_adapter_sequence
 
 # Configure logging
@@ -145,3 +146,56 @@ def handle_adapter_detection(
     except Exception as e:
         logger.error(f"Adapter detection failed: {str(e)}")
         raise RuntimeError(f"Adapter detection failed: {str(e)}") from e
+
+
+def handle_align_detect(
+    input_file: Path,
+    star_index: Path,
+    star_threads: int,
+    format: str,
+    output: Path,
+    output_format: str = "json",
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+) -> None:
+    """Handle the align and detect command workflow.
+
+    Performs STAR alignment followed by feature detection on aligned reads.
+    This is the foundation for RPF extraction and analysis.
+
+    Args:
+        input_file: Path to input sequence file
+        star_index: Path to STAR index directory
+        star_threads: Number of threads for STAR alignment
+        format: Format of input file (fastq/fasta/collapsed)
+        output: Path where results will be written
+        output_format: Output format (json/csv)
+        count_pattern: Pattern to extract read counts from collapsed headers
+        max_reads: Maximum number of reads to process
+    """
+    logger.info(f"Starting STAR alignment and feature detection for {input_file}")
+
+    try:
+        # Initialize STAR aligner with parameters
+        aligner = STARAligner(
+            star_index=star_index,
+            threads=star_threads,
+            max_reads=max_reads,
+        )
+
+        # Process input file and perform alignment
+        alignment_results = aligner.align_reads(
+            input_file,
+            format=format,
+            count_pattern=count_pattern if format == "collapsed" else None,
+        )
+
+        # Write results in requested format
+        alignment_results.write_report(output, format=output_format)
+
+        logger.info(f"Alignment and feature detection completed successfully")
+        logger.info(f"Results written to {output}")
+
+    except Exception as e:
+        logger.error(f"Alignment and detection failed: {str(e)}")
+        raise RuntimeError(f"Alignment and detection failed: {str(e)}") from e

@@ -9,8 +9,10 @@ This module provides utilities for:
 import bz2
 import gzip
 import os
+import tempfile
+import shutil
 from pathlib import Path
-from typing import Union
+from typing import Union, List
 
 
 def check_file_readability(file_path: Union[str, Path]) -> bool:
@@ -53,3 +55,38 @@ def get_file_opener(filepath: Path):
     elif suffix == ".bz2":
         return bz2.open
     return open
+
+
+def create_temp_file(suffix: str = "", prefix: str = "getRPF_") -> Path:
+    """Create a temporary file and return its path.
+    
+    Args:
+        suffix: File suffix/extension
+        prefix: Filename prefix
+        
+    Returns:
+        Path to temporary file
+    """
+    fd, temp_path = tempfile.mkstemp(suffix=suffix, prefix=prefix)
+    os.close(fd)  # Close file descriptor, return path only
+    return Path(temp_path)
+
+
+def cleanup_temp_files(file_paths: List[Path]) -> None:
+    """Clean up temporary files and directories.
+    
+    Args:
+        file_paths: List of paths to clean up
+    """
+    for path in file_paths:
+        try:
+            if path.exists():
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+        except Exception as e:
+            # Log but don't fail on cleanup errors
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to clean up {path}: {e}")

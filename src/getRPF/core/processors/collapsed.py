@@ -174,3 +174,59 @@ def parse_collapsed_fasta(
             sequences[current_header] = seq
 
     return sequences, counts
+
+
+class CollapsedFASTAProcessor:
+    """Processor for collapsed FASTA format files."""
+    
+    def __init__(self, count_pattern: Optional[str] = None):
+        """Initialize processor with count pattern.
+        
+        Args:
+            count_pattern: Pattern for extracting counts from headers
+        """
+        self.count_pattern = count_pattern or "read_{count}"
+        self.parser = CollapsedHeaderParser(self.count_pattern)
+    
+    def expand_to_fastq(
+        self, 
+        input_file: Path, 
+        output_file: Path, 
+        max_reads: Optional[int] = None
+    ) -> None:
+        """Expand collapsed FASTA to individual FASTQ entries.
+        
+        Args:
+            input_file: Input collapsed FASTA file
+            output_file: Output FASTQ file
+            max_reads: Maximum reads to process
+        """
+        sequences, counts = parse_collapsed_fasta(
+            input_file, 
+            count_pattern=self.count_pattern, 
+            max_reads=max_reads
+        )
+        
+        total_written = 0
+        with open(output_file, 'w') as fout:
+            for header, sequence in sequences.items():
+                count = counts.get(header, 1)
+                
+                # Write each sequence 'count' times
+                for i in range(count):
+                    if max_reads and total_written >= max_reads:
+                        break
+                        
+                    # Create unique FASTQ header
+                    fastq_header = f"@{header}_copy_{i+1}"
+                    quality = 'I' * len(sequence)  # High quality scores
+                    
+                    fout.write(f"{fastq_header}\n")
+                    fout.write(f"{sequence}\n")
+                    fout.write("+\n")
+                    fout.write(f"{quality}\n")
+                    
+                    total_written += 1
+                
+                if max_reads and total_written >= max_reads:
+                    break

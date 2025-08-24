@@ -47,6 +47,7 @@ import click
 from .core.handlers import (
     handle_adapter_detection,
     handle_cleanliness_check,
+    handle_align_detect,
 )
 
 
@@ -252,6 +253,96 @@ def detect_adapter(
         adapter=adapter,
         min_overlap=min_overlap,
         max_mismatches=max_mismatches,
+        count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
+    )
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--star-index",
+    "-s",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to STAR index directory",
+    required=True,
+)
+@click.option(
+    "--star-threads",
+    "-t",
+    type=int,
+    help="Number of threads for STAR alignment",
+    default=1,
+)
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file path",
+    required=True,
+)
+@click.option(
+    "--output-format",
+    "-of",
+    type=click.Choice(["json", "csv"]),
+    help="Output file format",
+    default="json",
+)
+@click.option(
+    "--count-pattern",
+    "-p",
+    help="Pattern for extracting read count from collapsed FASTA headers. "
+    "Use {count} to mark where the count appears. "
+    'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
+    default="read_{count}",
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process. Default is 100k.",
+    default=100000,
+)
+def align_detect(
+    input_file: Path,
+    star_index: Path,
+    star_threads: int,
+    format: str,
+    output: Path,
+    output_format: str = "json",
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = 100000,
+):
+    """Align reads with STAR and detect features.
+
+    This command performs STAR alignment followed by feature detection
+    on ribosome profiling reads. Essential for RPF extraction pipeline.
+
+    Examples:
+        # Align FASTQ reads and output JSON
+        getRPF align-detect input.fastq -s /path/to/star/index -f fastq -o output.json
+
+        # Align Collapsed FASTA reads with custom count pattern
+        getRPF align-detect input.fasta -s /path/to/star/index -f collapsed -o output.csv \
+            -p "read_{count}"
+
+        # Process only first 5000 reads
+        getRPF align-detect input.fastq -s /path/to/star/index -f fastq -o output.json --max-reads 5000
+    """
+    handle_align_detect(
+        input_file=input_file,
+        star_index=star_index,
+        star_threads=star_threads,
+        format=format,
+        output=output,
+        output_format=output_format,
         count_pattern=count_pattern if format == "collapsed" else None,
         max_reads=max_reads,
     )

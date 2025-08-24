@@ -1,0 +1,3226 @@
+<repo-to-text>
+Directory: get-RPF
+
+Directory Structure:
+<directory_structure>
+.
+├── .gitignore
+├── .pre-commit-config.yaml
+├── adapter_report.txt
+│   ├── docs/api.md
+│   ├── docs/conf.py
+│   ├── docs/file_formats.md
+│   ├── docs/index.md
+│   ├── docs/make.bat
+│   ├── docs/Makefile
+│   ├── docs/rpf_checks.md
+│   └── docs/usage.md
+├── good_rpf_report.rpf_checks.txt
+├── good_rpf_report.txt
+├── LICENSE
+├── pyproject.toml
+├── quality_report.txt
+├── README.md
+│   └── scripts/create_test_data.py
+├── setup.cfg
+├── setup.py
+│       ├── src/getRPF/__init__.py
+│       ├── src/getRPF/cli.py
+│       ├── src/getRPF/core
+│       │   ├── src/getRPF/core/__init__.py
+│       │   ├── src/getRPF/core/checkers.py
+│       │   ├── src/getRPF/core/handlers.py
+│       │   └── src/getRPF/core/processors
+│       │       ├── src/getRPF/core/processors/__init__.py
+│       │       ├── src/getRPF/core/processors/adapter.py
+│       │       ├── src/getRPF/core/processors/check.py
+│       │       └── src/getRPF/core/processors/collapsed.py
+│       └── src/getRPF/utils
+│           ├── src/getRPF/utils/__init__.py
+│           ├── src/getRPF/utils/file_utils.py
+│           ├── src/getRPF/utils/logging.py
+│           └── src/getRPF/utils/validation.py
+├── test_data.fastq
+    ├── tests/__init__.py
+    ├── tests/test_cli.py
+    └── tests/test_core
+        ├── tests/test_core/test_basic.py
+        └── tests/test_core/test_cleanliness.py
+</directory_structure>
+
+<content full_path="LICENSE">
+MIT License
+
+Copyright (c) 2022 Jack Tierney
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+</content>
+
+<content full_path=".pre-commit-config.yaml">
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+
+-   repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+    -   id: black
+
+-   repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.0.261
+    hooks:
+    -   id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+</content>
+
+<content full_path="test_data.fastq">
+@read1
+ATCGATCGATCGATCG
++
+FFFFFFFFFFFFFFFA
+@read2
+ATCGATCGAGATCGGAAGAG
++
+FFFFFFFFFFFFFFFFF###
+@read3
+ATCGATCG
++
+FFFFFFFF
+@read4
+ATCGATCGATCGATCG
++
+FF##FFFFFFFFFF##
+
+</content>
+
+<content full_path="pyproject.toml">
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "getRPF"
+version = "0.1.0"
+description = "A tool for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["bioinformatics", "ribo-seq", "RPF", "sequence-analysis"]
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "click>=8.0.0",
+    "biopython>=1.79",
+    "numpy>=1.21.0",
+    "pandas>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "mypy>=0.900",
+    "ruff>=0.0.270",
+]
+docs = [
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+
+[project.scripts]
+getRPF = "getRPF.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/getRPF"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=getRPF"
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.ruff]
+# Select rules to enable
+select = ["E", "F", "I", "W"]  # Add the rules you want to enforce
+line-length = 88
+extend-ignore = ["E501"]  # Ignore line length violations
+
+# Target Python version
+target-version = "py310"
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+]
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+</content>
+
+<content full_path="README.md">
+# get-RPF
+# getRPF
+
+Get Ribosome Protected Fragment features - a modular toolkit for analyzing Ribo-seq read composition
+
+## Project Structure
+
+```
+getRPF/
+├── src/
+│   └── getRPF/
+│       ├── __init__.py          # Package initialization, version info
+│       ├── core/                # Core functionality and base classes
+│       │   ├── __init__.py
+│       │   └── reader.py        # Abstract base classes for file reading
+│       ├── io/                  # Input/Output handling
+│       │   ├── __init__.py
+│       │   ├── fasta.py         # FASTA format handlers
+│       │   ├── fastq.py         # FASTQ format handlers
+│       │   └── compression.py   # Compression handling (gzip)
+│       ├── quality/             # Quality assessment modules
+│       │   ├── __init__.py
+│       │   └── metrics.py       # Quality metrics calculations
+│       ├── detectors/           # Feature detection modules
+│       │   ├── __init__.py
+│       │   ├── adapter.py       # Adapter detection
+│       │   ├── umi.py          # UMI detection
+│       │   └── barcode.py      # Barcode detection
+│       └── utils/              # Utility functions
+│           ├── __init__.py
+│           └── helpers.py      # Common helper functions
+├── tests/                     # Test directory
+│   ├── __init__.py
+│   ├── test_io/              # IO tests
+│   ├── test_quality/         # Quality module tests
+│   └── test_detectors/       # Detector tests
+├── docs/                     # Documentation
+│   ├── conf.py              # Sphinx configuration
+│   └── index.rst            # Documentation root
+├── examples/                 # Example usage scripts
+├── README.md                # This file
+├── pyproject.toml           # Project metadata and build configuration
+├── setup.cfg               # Package configuration
+└── .gitignore             # Git ignore rules
+```
+
+## Development Environment
+
+### Python Version
+- Python 3.9 or higher required
+- Type hints and f-strings heavily used
+- Async IO support for efficient file handling
+
+### Core Dependencies
+- `biopython`: Biological sequence parsing
+- `numpy`: Numerical operations
+- `pandas`: Data manipulation
+- `pydantic`: Data validation and settings management
+
+### Development Tools
+
+#### Code Quality
+- **Type Checking**: `mypy`
+  - Strict type checking enabled
+  - Custom type stubs for third-party packages
+- **Formatting**: `black`
+  - Line length: 88 characters
+  - Skip string normalization
+- **Linting**: `ruff`
+  - Combines multiple linters
+  - Autofix capability
+  - Strict settings enabled
+- **Import Sorting**: `isort`
+  - Compatible with Black
+  - Separate sections for stdlib, third-party, and local imports
+
+#### Testing
+- **Framework**: `pytest`
+  - Fixture-based testing
+  - Parametrized tests for multiple scenarios
+- **Coverage**: `pytest-cov`
+  - Minimum coverage requirement: 90%
+- **Property Testing**: `hypothesis`
+  - For complex input scenarios
+  - Custom strategies for biological sequences
+
+#### Documentation
+- **Generator**: `sphinx`
+  - Google-style docstrings
+  - Auto-generated API documentation
+- **Format**: `sphinx-rtd-theme`
+  - ReadTheDocs theme
+  - Mobile-friendly layout
+
+### Development Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/getRPF.git
+cd getRPF
+```
+
+2. Create a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+```
+
+3. Install development dependencies:
+```bash
+pip install -e ".[dev]"
+```
+
+4. Install pre-commit hooks:
+```bash
+pre-commit install
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=getRPF
+
+# Run specific test files
+pytest tests/test_io/
+```
+
+### Building Documentation
+
+```bash
+# Generate HTML documentation
+cd docs
+make html
+```
+
+### Code Quality Checks
+
+```bash
+# Run type checking
+mypy src/getRPF
+
+# Run linter
+ruff check src/
+
+# Format code
+black src/
+isort src/
+```
+
+## Contributing
+
+Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+</content>
+
+<content full_path="good_rpf_report.rpf_checks.txt">
+=== RPF Data Check Results ===
+
+Summary:
+Length Distribution            [PASS]
+Base Composition               [FAIL]
+GC Content                     [PASS]
+
+Detailed Results:
+
+Length Distribution:
+Status: PASS
+Message: Read length distribution matches RPF expectations
+Details:
+  fraction_in_range: 0.693069306930693
+  mode_length: 35
+  mode_fraction: 0.6658415841584159
+  total_reads: 404
+  min_length: 26
+  max_length: 35
+
+Base Composition:
+Status: FAIL
+Message: Found 7 positions with extreme base bias (>85.0%)
+Details:
+  problem_positions:
+    - Position 0: A=88.6%
+    - Position 5: T=94.3%
+    - Position 12: G=99.0%
+    - Position 22: T=96.8%
+    - Position 23: C=94.1%
+    - Position 28: C=93.8%
+    - Position 29: G=96.3%
+  max_frequency: 0.9900990099009901
+  worst_position: 12
+  worst_base: G
+
+GC Content:
+Status: PASS
+Message: GC content within expected range
+Details:
+  gc_content: 0.6008089394666484
+
+</content>
+
+<content full_path="good_rpf_report.txt">
+=== Read Length Distribution ===
+34	11
+35	269
+37	3
+38	32
+39	89
+
+=== Nucleotide Frequencies ===
+Position	A	C	G	T
+0	0.886	0.002	0.084	0.027
+1	0.245	0.084	0.027	0.644
+2	0.223	0.079	0.698	0.000
+3	0.220	0.007	0.772	0.000
+4	0.728	0.250	0.022	0.000
+5	0.005	0.050	0.002	0.943
+6	0.000	0.225	0.745	0.030
+7	0.002	0.245	0.032	0.720
+8	0.728	0.218	0.052	0.002
+9	0.000	0.725	0.270	0.005
+10	0.720	0.000	0.245	0.035
+11	0.005	0.723	0.245	0.027
+12	0.007	0.002	0.990	0.000
+13	0.032	0.220	0.748	0.000
+14	0.720	0.030	0.005	0.245
+15	0.220	0.032	0.743	0.005
+16	0.005	0.245	0.002	0.748
+17	0.002	0.755	0.240	0.002
+18	0.002	0.218	0.750	0.030
+19	0.725	0.218	0.052	0.005
+20	0.030	0.030	0.723	0.218
+21	0.022	0.725	0.223	0.030
+22	0.027	0.000	0.005	0.968
+23	0.000	0.941	0.035	0.025
+24	0.725	0.030	0.000	0.245
+25	0.745	0.027	0.220	0.007
+26	0.218	0.725	0.032	0.025
+27	0.002	0.745	0.245	0.007
+28	0.025	0.938	0.007	0.030
+29	0.007	0.030	0.963	0.000
+30	0.022	0.748	0.012	0.218
+31	0.750	0.220	0.025	0.005
+32	0.079	0.644	0.223	0.054
+33	0.002	0.300	0.054	0.644
+34	0.099	0.649	0.007	0.218
+35	0.000	0.077	0.223	0.007
+36	0.002	0.000	0.297	0.007
+37	0.000	0.005	0.295	0.000
+38	0.002	0.000	0.218	0.000
+
+=== GC Content ===
+Overall GC%: 60.08
+
+</content>
+
+<content full_path="setup.py">
+from setuptools import find_packages, setup
+
+setup(name="get_RPF", version="0.1.0", packages=find_packages())
+
+</content>
+
+<content full_path="setup.cfg">
+
+</content>
+
+<content full_path="adapter_report.txt">
+=== Adapter Contamination Summary ===
+Overall contamination rate: 11.70%
+
+=== Adapter Positions ===
+Position	Count
+25	6
+26	13
+27	15
+28	12
+29	10
+30	10
+31	6
+32	11
+33	13
+34	8
+35	13
+
+=== Partial Matches ===
+Match Length	Count
+10	117
+
+=== Common Variants ===
+Variant	Count
+AGATCGGAAG	117
+
+</content>
+
+<content full_path="quality_report.txt">
+=== Read Length Distribution ===
+8	1
+16	2
+20	1
+
+=== Nucleotide Frequencies ===
+Position	A	C	G	T
+0	1.000	0.000	0.000	0.000
+1	0.000	0.000	0.000	1.000
+2	0.000	1.000	0.000	0.000
+3	0.000	0.000	1.000	0.000
+4	1.000	0.000	0.000	0.000
+5	0.000	0.000	0.000	1.000
+6	0.000	1.000	0.000	0.000
+7	0.000	0.000	1.000	0.000
+8	0.750	0.000	0.000	0.000
+9	0.000	0.000	0.250	0.500
+10	0.250	0.500	0.000	0.000
+11	0.000	0.000	0.500	0.250
+12	0.500	0.250	0.000	0.000
+13	0.000	0.000	0.250	0.500
+14	0.000	0.500	0.250	0.000
+15	0.250	0.000	0.500	0.000
+16	0.250	0.000	0.000	0.000
+17	0.000	0.000	0.250	0.000
+18	0.250	0.000	0.000	0.000
+19	0.000	0.000	0.250	0.000
+
+=== Quality Scores ===
+Position	Mean	Std
+0	37.00	0.00
+1	37.00	0.00
+2	28.25	15.16
+3	28.25	15.16
+4	37.00	0.00
+5	37.00	0.00
+6	37.00	0.00
+7	37.00	0.00
+8	37.00	0.00
+9	37.00	0.00
+10	37.00	0.00
+11	37.00	0.00
+12	37.00	0.00
+13	37.00	0.00
+14	25.33	16.50
+15	23.67	15.46
+16	37.00	0.00
+17	2.00	0.00
+18	2.00	0.00
+19	2.00	0.00
+
+=== GC Content ===
+Overall GC%: 50.00
+
+</content>
+
+<content full_path="tests/__init__.py">
+
+</content>
+
+<content full_path="tests/test_cli.py">
+"""Test suite for getRPF CLI functionality."""
+
+import pytest
+from click.testing import CliRunner
+from getRPF.cli import cli
+
+
+@pytest.fixture
+def test_data(tmp_path):
+    """Create test FASTQ data in a temporary directory."""
+    test_file = tmp_path / "test_data.fastq"
+    reads = [
+        # Normal read
+        "@read1\n" "ATCGATCGATCGATCG\n" "+\n" "FFFFFFFFFFFFFFFA\n",
+        # Read with adapter
+        "@read2\n" "ATCGATCGAGATCGGAAGAG\n" "+\n" "FFFFFFFFFFFFFFFFF###\n",
+        # Short read
+        "@read3\n" "ATCGATCG\n" "+\n" "FFFFFFFF\n",
+        # Read with low quality
+        "@read4\n" "ATCGATCGATCGATCG\n" "+\n" "FF##FFFFFFFFFF##\n",
+    ]
+
+    test_file.write_text("".join(reads))
+    return test_file
+
+
+@pytest.fixture
+def runner():
+    """Create a CLI test runner."""
+    return CliRunner()
+
+
+def test_version(runner):
+    """Test CLI version command."""
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0
+    assert "0.1.0" in result.output
+
+
+def test_help(runner):
+    """Test CLI help command."""
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "getRPF" in result.output
+    assert "check" in result.output
+    assert "detect-adapter" in result.output
+
+
+class TestQualityCheck:
+    """Test suite for quality check command."""
+
+    def test_basic_check(self, runner, test_data, tmp_path):
+        """Test basic quality check functionality."""
+        output_file = tmp_path / "quality_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "check",
+                str(test_data),
+                "--format",
+                "fastq",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        # Check report content
+        content = output_file.read_text()
+        assert "Read Length Distribution" in content
+        assert "Nucleotide Frequencies" in content
+        assert "Quality Scores" in content
+
+    def test_invalid_format(self, runner, test_data, tmp_path):
+        """Test quality check with invalid format."""
+        output_file = tmp_path / "quality_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "check",
+                str(test_data),
+                "--format",
+                "invalid",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid value for '--format'" in result.output
+
+    def test_missing_file(self, runner, tmp_path):
+        """Test quality check with non-existent file."""
+        output_file = tmp_path / "quality_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "check",
+                "nonexistent.fastq",
+                "--format",
+                "fastq",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+
+
+class TestAdapterDetection:
+    """Test suite for adapter detection command."""
+
+    def test_basic_detection(self, runner, test_data, tmp_path):
+        """Test basic adapter detection functionality."""
+        output_file = tmp_path / "adapter_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "detect-adapter",
+                str(test_data),
+                "--format",
+                "fastq",
+                "--adapter",
+                "AGATCGGAAGAG",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        # Check report content
+        content = output_file.read_text()
+        assert "Adapter Contamination Summary" in content
+        assert "contamination rate" in content.lower()
+
+    def test_invalid_adapter(self, runner, test_data, tmp_path):
+        """Test adapter detection with invalid adapter sequence."""
+        output_file = tmp_path / "adapter_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "detect-adapter",
+                str(test_data),
+                "--format",
+                "fastq",
+                "--adapter",
+                "X",  # Invalid base
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid adapter sequence" in str(result.exception)
+
+    @pytest.mark.parametrize(
+        "adapter",
+        [
+            "AGATCGGAAGAG",  # Common Illumina adapter
+            "CTGTCTCTTATACACATCT",  # Another common adapter
+            "ACGT",  # Short adapter
+            "A" * 30,  # Long adapter
+        ],
+    )
+    def test_various_adapters(self, runner, test_data, tmp_path, adapter):
+        """Test adapter detection with various adapter sequences."""
+        output_file = tmp_path / "adapter_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "detect-adapter",
+                str(test_data),
+                "--format",
+                "fastq",
+                "--adapter",
+                adapter,
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+
+def test_integration(runner, test_data, tmp_path):
+    """Test running multiple commands in sequence."""
+    # Run quality check
+    quality_output = tmp_path / "quality_report.txt"
+    result1 = runner.invoke(
+        cli,
+        ["check", str(test_data), "--format", "fastq", "--output", str(quality_output)],
+    )
+    assert result1.exit_code == 0
+
+    # Run adapter detection
+    adapter_output = tmp_path / "adapter_report.txt"
+    result2 = runner.invoke(
+        cli,
+        [
+            "detect-adapter",
+            str(test_data),
+            "--format",
+            "fastq",
+            "--adapter",
+            "AGATCGGAAGAG",
+            "--output",
+            str(adapter_output),
+        ],
+    )
+    assert result2.exit_code == 0
+
+    # Verify both outputs exist and have content
+    assert quality_output.exists()
+    assert adapter_output.exists()
+    assert quality_output.stat().st_size > 0
+    assert adapter_output.stat().st_size > 0
+
+</content>
+
+<content full_path="tests/test_core/test_basic.py">
+def test_initial_setup():
+    assert True
+
+</content>
+
+<content full_path="tests/test_core/test_cleanliness.py">
+"""Test suite for cleanliness checking functionality."""
+
+from pathlib import Path
+
+import pytest
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from getRPF.core.handlers import handle_cleanliness_check
+
+
+@pytest.fixture
+def good_rpf_reads(tmp_path):
+    """Create FASTQ file with good RPF reads."""
+    reads = [
+        SeqRecord(
+            Seq("ATGCATGCATGCATGCATGCATGCATGCAT"),  # 31nt read
+            id=f"read{i}",
+            description="",
+            letter_annotations={"phred_quality": [40] * 30},
+        )
+        for i in range(100)
+    ]
+
+    output_file = tmp_path / "good_rpf.fastq"
+    SeqIO.write(reads, output_file, "fastq")
+    return output_file
+
+
+@pytest.fixture
+def bad_length_reads(tmp_path):
+    """Create FASTQ file with reads of wrong length."""
+    reads = [
+        SeqRecord(
+            Seq("ATGC" * 10),  # 40nt read
+            id=f"read{i}",
+            description="",
+            letter_annotations={"phred_quality": [40] * 40},
+        )
+        for i in range(100)
+    ]
+
+    output_file = tmp_path / "bad_length.fastq"
+    SeqIO.write(reads, output_file, "fastq")
+    return output_file
+
+
+@pytest.fixture
+def biased_composition_reads(tmp_path):
+    """Create FASTQ file with strong base bias."""
+    reads = [
+        SeqRecord(
+            Seq("A" * 15 + "ATGCATGCATGCATGC"),  # Strong A bias at start
+            id=f"read{i}",
+            description="",
+            letter_annotations={"phred_quality": [40] * 31},
+        )
+        for i in range(100)
+    ]
+
+    output_file = tmp_path / "biased.fastq"
+    SeqIO.write(reads, output_file, "fastq")
+    return output_file
+
+
+def test_good_rpf_data(good_rpf_reads, tmp_path):
+    """Test cleanliness check with good RPF data."""
+    output = tmp_path / "report.txt"
+    rpf_output = tmp_path / "report.rpf_checks.txt"
+
+    # Run check
+    handle_cleanliness_check(
+        good_rpf_reads, format="fastq", output=output, rpf_checks=True
+    )
+
+    # Verify outputs exist
+    assert output.exists()
+    assert rpf_output.exists()
+
+    # Check RPF report content
+    rpf_content = rpf_output.read_text()
+    assert "[PASS]" in rpf_content
+    # Updated to match the actual message from LengthDistributionCheck
+    assert (
+        "matches RPF expectations" in rpf_content
+    )  # This matches what the check returns
+
+
+def test_bad_length_data(bad_length_reads, tmp_path):
+    """Test cleanliness check with wrong read lengths."""
+    output = tmp_path / "report.txt"
+    rpf_output = tmp_path / "report.rpf_checks.txt"
+
+    # Run check
+    handle_cleanliness_check(
+        bad_length_reads, format="fastq", output=output, rpf_checks=True
+    )
+
+    # Check RPF report content
+    rpf_content = rpf_output.read_text()
+    assert "[FAIL]" in rpf_content
+    # Update assertion to match actual message
+    assert "in RPF range" in rpf_content  # More general assertion
+    # Additional specific checks
+    assert "Length Distribution" in rpf_content
+    assert rpf_output.read_text().count("[FAIL]") >= 1  # At least one FAIL
+
+
+def test_biased_composition(biased_composition_reads, tmp_path):
+    """Test cleanliness check with biased base composition."""
+    output = tmp_path / "report.txt"
+    rpf_output = tmp_path / "report.rpf_checks.txt"
+
+    # Run check
+    handle_cleanliness_check(
+        biased_composition_reads, format="fastq", output=output, rpf_checks=True
+    )
+
+    # Check RPF report content
+    rpf_content = rpf_output.read_text()
+    assert "[FAIL]" in rpf_content
+    assert "extreme base bias" in rpf_content
+
+
+def test_disabled_rpf_checks(good_rpf_reads, tmp_path):
+    """Test with RPF checks disabled."""
+    output = tmp_path / "report.txt"
+    rpf_output = tmp_path / "report.rpf_checks.txt"
+
+    # Run check with rpf_checks=False
+    handle_cleanliness_check(
+        good_rpf_reads, format="fastq", output=output, rpf_checks=False
+    )
+
+    # Verify only basic report exists
+    assert output.exists()
+    assert not rpf_output.exists()
+
+
+def test_invalid_input(tmp_path):
+    """Test with non-existent input file."""
+    output = tmp_path / "report.txt"
+
+    with pytest.raises(RuntimeError):
+        handle_cleanliness_check(
+            Path("nonexistent.fastq"), format="fastq", output=output
+        )
+
+
+def test_invalid_format(good_rpf_reads, tmp_path):
+    """Test with invalid format specification."""
+    output = tmp_path / "report.txt"
+
+    with pytest.raises(RuntimeError):
+        handle_cleanliness_check(good_rpf_reads, format="invalid", output=output)
+
+</content>
+
+<content full_path="docs/file_formats.md">
+# Supported File Formats in **getRPF**
+
+**getRPF** supports a variety of input file formats to accommodate different sequencing workflows. This flexibility ensures compatibility with raw, processed, and deduplicated sequencing data.
+
+---
+
+## File Format Details
+
+### 1. **FASTQ Format**
+The **FASTQ** format is a standard for raw sequencing data. Each record consists of four lines:
+1. **Header**: Starts with `@` and contains the read ID.
+2. **Sequence**: The DNA or RNA sequence.
+3. **Separator**: A `+` character, optionally followed by the same read ID.
+4. **Quality Scores**: Encoded scores for each nucleotide in the sequence.
+
+#### Example:
+```text
+@read_id
+SEQUENCE
++
+QUALITY_SCORES
+```
+
+Example FASTQ record:
+```text
+@read1
+ATCGATCGATCGATCG
++
+FFFFFFFFFFFFFFFFA
+```
+
+#### Key Features:
+- Most commonly used for raw sequencing data.
+- Includes **quality scores** for each nucleotide.
+- Occupies **four lines per record**.
+
+---
+
+### 2. **FASTA Format**
+The **FASTA** format is a simpler file format that contains only sequence data. Each record consists of two lines:
+1. **Header**: Starts with `>` followed by the read ID.
+2. **Sequence**: The DNA or RNA sequence.
+
+#### Example:
+```text
+>read_id
+SEQUENCE
+```
+
+Example FASTA record:
+```text
+>read1
+ATCGATCGATCGATCG
+```
+
+#### Key Features:
+- Contains **sequence-only data**.
+- **No quality information** is included.
+- Occupies **two lines per record**.
+
+---
+
+### 3. **Collapsed FASTA Format**
+The **Collapsed FASTA** format is a variation of the standard FASTA format. It is typically used for deduplicated data where headers include a count of reads.
+
+#### Example:
+```text
+>sequence_count_N
+SEQUENCE
+```
+
+Example Collapsed FASTA record:
+```text
+>read_42
+ATCGATCGATCGATCG
+```
+
+#### Key Features:
+- Used for **processed or deduplicated data**.
+- The header includes a **read count** (e.g., `read_42` indicates 42 reads).
+- Facilitates downstream analysis by reducing redundancy.
+
+---
+
+## Handling Compressed Files
+All supported file formats can be compressed with gzip (`.gz` extension). This allows for efficient storage and processing of large datasets.
+
+#### Example Command:
+```bash
+getRPF check input.fastq.gz --format fastq --output report.txt
+```
+
+---
+
+## Specifying the Input Format
+
+Use the `--format` option to specify the file format when running **getRPF**. Supported formats include:
+- `fastq` (for FASTQ files)
+- `fasta` (for standard FASTA files)
+- `collapsed` (for Collapsed FASTA files)
+
+### Example Commands:
+
+#### For FASTQ Format:
+```bash
+getRPF check input.fastq --format fastq --output report.txt
+```
+
+#### For FASTA Format:
+```bash
+getRPF check input.fasta --format fasta --output report.txt
+```
+
+#### For Collapsed FASTA Format:
+```bash
+getRPF check input.collapsed --format collapsed --output report.txt --count-pattern "read{id}_x{count}
+```
+
+---
+
+## Summary Table
+
+| **Format**          | **File Extension**   | **Features**                             | **Lines per Record** |
+|----------------------|----------------------|------------------------------------------|-----------------------|
+| FASTQ               | `.fastq`, `.fastq.gz`| Sequence and quality scores              | 4                     |
+| FASTA               | `.fasta`, `.fa.gz`   | Sequence-only                            | 2                     |
+| Collapsed FASTA     | `.collapsed`, `.fa.gz`| Sequence with read counts in the header  | 2                     |
+
+---
+
+</content>
+
+<content full_path="docs/api.md">
+# API Reference
+
+## Core Functions
+
+### Cleanliness Checking
+
+```python
+from getRPF.core import handle_cleanliness_check
+
+handle_cleanliness_check(
+    input_file="reads.fastq",
+    format="fastq",
+    output="report.txt",
+    min_quality=20,
+    threads=1,
+    rpf_checks=True
+)
+```
+
+### Adapter Detection
+
+```python
+from getRPF.core import handle_adapter_detection
+
+handle_adapter_detection(
+    input_file="reads.fastq",
+    format="fastq",
+    output="report.txt",
+    adapter="AGATCGGAAGAG",
+    min_overlap=10,
+    max_mismatches=1,
+    threads=1
+)
+```
+
+## Check Classes
+
+### Length Distribution Check
+
+```python
+from getRPF.core.checkers import LengthDistributionCheck
+
+checker = LengthDistributionCheck(
+    min_length=26,
+    max_length=35,
+    warn_threshold=0.5,
+    fail_threshold=0.3
+)
+```
+
+### Base Composition Check
+
+```python
+from getRPF.core.checkers import BaseCompositionCheck
+
+checker = BaseCompositionCheck(
+    max_base_freq=0.85
+)
+```
+
+### GC Content Check
+
+```python
+from getRPF.core.checkers import GCContentCheck
+
+checker = GCContentCheck(
+    min_gc=0.35,
+    max_gc=0.65
+)
+```
+
+## Result Classes
+
+### CleanlinessResults
+
+```python
+from getRPF.core.processors.check import CleanlinessResults
+
+results = CleanlinessResults(
+    length_distribution={},
+    nucleotide_frequencies={},
+    quality_scores=None,
+    gc_content=None
+)
+```
+
+### CheckResult
+
+```python
+from getRPF.core.checkers import CheckResult, Status
+
+result = CheckResult(
+    status=Status.PASS,
+    message="Check passed successfully",
+    details={}
+)
+```
+
+</content>
+
+<content full_path="docs/Makefile">
+# Minimal makefile for Sphinx documentation
+#
+
+# You can set these variables from the command line, and also
+# from the environment for the first two.
+SPHINXOPTS    ?=
+SPHINXBUILD   ?= sphinx-build
+SOURCEDIR     = .
+BUILDDIR      = _build
+
+# Put it first so that "make" without argument is like "make help".
+help:
+	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+.PHONY: help Makefile
+
+# Catch-all target: route all unknown targets to Sphinx using the new
+# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
+%: Makefile
+	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+</content>
+
+<content full_path="docs/usage.md">
+# Usage Guide
+
+## Installation
+
+Install getRPF using pip:
+
+```bash
+pip install getRPF
+```
+
+## Basic Commands
+
+getRPF provides two main commands:
+
+### Check Command
+
+The `check` command analyzes read quality and composition:
+
+```bash
+getRPF check input.fastq --format fastq --output report.txt
+```
+
+Options:
+- `--format`: Input file format (fastq/fasta/collapsed)
+- `--output`: Path for the output report
+- `--min-quality`: Minimum quality score threshold (default: 20)
+- `--threads`: Number of processing threads (default: 1)
+
+### Adapter Detection
+
+The `detect-adapter` command identifies adapter sequences:
+
+```bash
+getRPF detect-adapter input.fastq --format fastq --adapter AGATCGGAAGAG --output report.txt
+```
+
+Options:
+- `--format`: Input file format (fastq/fasta/collapsed)
+- `--output`: Path for the output report
+- `--adapter`: Adapter sequence to search for
+- `--min-overlap`: Minimum overlap for adapter matching (default: 10)
+- `--max-mismatches`: Maximum allowed mismatches (default: 1)
+
+## Example Usage
+
+### Checking RPF Data Quality
+
+```bash
+# Basic quality check
+getRPF check reads.fastq --format fastq --output quality_report.txt
+
+# Check with custom quality threshold
+getRPF check reads.fastq --format fastq --min-quality 25 --output report.txt
+
+# Process collapsed FASTA
+getRPF check reads.collapsed --format collapsed --output report.txt
+```
+
+### Detecting Adapters
+
+```bash
+# Basic adapter detection
+getRPF detect-adapter reads.fastq --format fastq --adapter AGATCGGAAGAG --output report.txt
+
+# Strict adapter matching
+getRPF detect-adapter reads.fastq --format fastq --adapter AGATCGGAAGAG --min-overlap 15 --max-mismatches 0 --output report.txt
+```
+
+</content>
+
+<content full_path="docs/conf.py">
+# Configuration file for the Sphinx documentation builder.
+#
+# For the full list of built-in configuration values, see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+# -- Project information -----------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+
+project = "getRPF"
+copyright = "2024, Jack Tierney"
+author = "Jack Tierney"
+release = "0.01"
+
+# -- General configuration ---------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "myst_parser",  # For Markdown support
+]
+
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+# Theme settings
+html_theme = "sphinx_rtd_theme"
+html_static_path = ["_static"]
+
+# MyST Markdown settings
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "fieldlist",
+    "html_image",
+    "replacements",
+    "smartquotes",
+    "tasklist",
+]
+
+</content>
+
+<content full_path="docs/make.bat">
+@ECHO OFF
+
+pushd %~dp0
+
+REM Command file for Sphinx documentation
+
+if "%SPHINXBUILD%" == "" (
+	set SPHINXBUILD=sphinx-build
+)
+set SOURCEDIR=.
+set BUILDDIR=_build
+
+%SPHINXBUILD% >NUL 2>NUL
+if errorlevel 9009 (
+	echo.
+	echo.The 'sphinx-build' command was not found. Make sure you have Sphinx
+	echo.installed, then set the SPHINXBUILD environment variable to point
+	echo.to the full path of the 'sphinx-build' executable. Alternatively you
+	echo.may add the Sphinx directory to PATH.
+	echo.
+	echo.If you don't have Sphinx installed, grab it from
+	echo.https://www.sphinx-doc.org/
+	exit /b 1
+)
+
+if "%1" == "" goto help
+
+%SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+goto end
+
+:help
+%SPHINXBUILD% -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+
+:end
+popd
+
+</content>
+
+<content full_path="docs/index.md">
+# getRPF Documentation
+
+`getRPF` is a tool for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments. It provides comprehensive quality control and adapter detection capabilities.
+
+## Quick Start
+
+```bash
+# Install the package
+pip install getRPF
+
+# Check read quality
+getRPF check input.fastq --format fastq --output quality_report.txt
+
+# Detect adapters
+getRPF detect-adapter input.fastq --format fastq --adapter AGATCGGAAGAG --output adapter_report.txt
+```
+
+## Contents
+
+```{toctree}
+:maxdepth: 2
+
+usage
+rpf_checks
+file_formats
+api
+```
+
+</content>
+
+<content full_path="docs/rpf_checks.md">
+# RPF-Specific Checks
+
+getRPF performs several specific checks designed for Ribosome Protected Fragment (RPF) data.
+
+## Length Distribution Check
+
+RPFs typically have a characteristic length distribution due to the physical size of the ribosome:
+
+- Expected range: 26-35 nucleotides
+- Typical mode: ~28-30 nucleotides
+
+The check will:
+- PASS if mode is within range and distribution is clean
+- WARN if mode is outside range but distribution is clean
+- FAIL if no clear mode or most reads outside range
+
+## Base Composition Check
+
+Checks for concerning patterns in nucleotide composition:
+
+- FAIL if any position shows extreme base bias (>85% single base)
+- Reports position-specific nucleotide frequencies
+- Identifies potential systematic biases
+
+## GC Content Check
+
+Monitors overall GC content:
+
+- Expected range: 35-65%
+- WARN if outside expected range
+- Helps identify potential contamination
+
+## Understanding Reports
+
+The check command generates two reports:
+
+1. Basic Statistics Report (`report.txt`):
+   - Read length distribution
+   - Nucleotide frequencies
+   - Quality scores (FASTQ only)
+   - GC content
+
+2. RPF Checks Report (`report.rpf_checks.txt`):
+   - Overall PASS/WARN/FAIL status
+   - Detailed check results
+   - Specific issues identified
+   - Recommendations if problems found
+
+Example Report:
+```
+=== RPF Data Check Results ===
+
+Summary:
+Length Distribution            [PASS]
+Base Composition              [PASS]
+GC Content                    [PASS]
+
+Detailed Results:
+Length Distribution:
+Status: PASS
+Message: Read length distribution matches RPF expectations
+Details:
+  mode_length: 30
+  fraction_in_range: 0.95
+  total_reads: 1000
+```
+
+</content>
+
+<content full_path="scripts/create_test_data.py">
+"""Create test datasets for getRPF testing.
+
+This script generates various test datasets in different formats
+(FASTQ, FASTA, collapsed)
+with different characteristics to test getRPF functionality.
+"""
+
+import random
+from pathlib import Path
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+
+def ensure_output_dir(base_dir: str = "test_data") -> Path:
+    """Create and return output directory."""
+    out_dir = Path(base_dir)
+    out_dir.mkdir(exist_ok=True)
+    return out_dir
+
+
+def create_rpf_read(length: int = 30, quality: int = 40) -> SeqRecord:
+    """Create a single RPF-like read."""
+    bases = ["A", "T", "G", "C"]
+    seq = "".join(random.choices(bases, k=length))
+    return SeqRecord(
+        Seq(seq),
+        id=f"read_{length}_{random.randint(1,1000)}",
+        description="",
+        letter_annotations={"phred_quality": [quality] * length},
+    )
+
+
+def create_good_rpf_dataset(
+    output_dir: Path, n_reads: int = 1000, length_range: tuple = (28, 32)
+) -> None:
+    """Create dataset with good RPF characteristics."""
+    reads = []
+    for _ in range(n_reads):
+        length = random.randint(*length_range)
+        reads.append(create_rpf_read(length=length))
+
+    # Write in different formats
+    SeqIO.write(reads, output_dir / "good_rpf.fastq", "fastq")
+    SeqIO.write(reads, output_dir / "good_rpf.fasta", "fasta")
+
+    # Create collapsed FASTA (with read counts in headers)
+    seq_counts = {}
+    for read in reads:
+        seq = str(read.seq)
+        seq_counts[seq] = seq_counts.get(seq, 0) + 1
+
+    with open(output_dir / "good_rpf.collapsed", "w") as f:
+        for seq, count in seq_counts.items():
+            f.write(f">read_{count}\n{seq}\n")
+
+
+def create_adapter_contaminated_dataset(
+    output_dir: Path,
+    adapter: str = "AGATCGGAAGAG",
+    contamination_rate: float = 0.3,
+) -> None:
+    """Create dataset with adapter contamination."""
+    reads = []
+    n_reads = 1000
+
+    for i in range(n_reads):
+        if random.random() < contamination_rate:
+            # Create read with adapter
+            base_len = random.randint(25, 35)
+            base_seq = "".join(random.choices(["A", "T", "G", "C"], k=base_len))
+            full_seq = base_seq + adapter[: random.randint(6, len(adapter))]
+        else:
+            # Create normal read
+            full_seq = "".join(
+                random.choices(["A", "T", "G", "C"], k=random.randint(28, 32))
+            )
+
+        reads.append(
+            SeqRecord(
+                Seq(full_seq),
+                id=f"read_{i}",
+                description="",
+                letter_annotations={"phred_quality": [40] * len(full_seq)},
+            )
+        )
+
+    SeqIO.write(reads, output_dir / "adapter_contaminated.fastq", "fastq")
+
+
+def create_length_outliers_dataset(output_dir: Path) -> None:
+    """Create dataset with abnormal length distribution."""
+    reads = []
+
+    # Add reads with various lengths
+    length_distributions = {15: 100, 20: 200, 40: 300, 50: 100}
+
+    for length, count in length_distributions.items():
+        for _ in range(count):
+            reads.append(create_rpf_read(length=length))
+
+    SeqIO.write(reads, output_dir / "length_outliers.fastq", "fastq")
+
+
+def create_base_biased_dataset(output_dir: Path) -> None:
+    """Create dataset with position-specific base bias."""
+    reads = []
+    n_reads = 1000
+    read_length = 30
+
+    for i in range(n_reads):
+        # Create read with strong A bias at the start
+        biased_part = "A" * 10
+        random_part = "".join(random.choices(["A", "T", "G", "C"], k=read_length - 10))
+
+        reads.append(
+            SeqRecord(
+                Seq(biased_part + random_part),
+                id=f"read_{i}",
+                description="",
+                letter_annotations={"phred_quality": [40] * read_length},
+            )
+        )
+
+    SeqIO.write(reads, output_dir / "base_biased.fastq", "fastq")
+
+
+def create_mixed_quality_dataset(output_dir: Path) -> None:
+    """Create dataset with varying quality scores."""
+    reads = []
+    n_reads = 1000
+
+    for i in range(n_reads):
+        length = random.randint(28, 32)
+        qualities = []
+
+        # Create varying quality pattern
+        for _ in range(length):
+            if random.random() < 0.2:  # 20% chance of low quality
+                qualities.append(random.randint(10, 20))
+            else:
+                qualities.append(random.randint(30, 40))
+
+        reads.append(
+            SeqRecord(
+                Seq("".join(random.choices(["A", "T", "G", "C"], k=length))),
+                id=f"read_{i}",
+                description="",
+                letter_annotations={"phred_quality": qualities},
+            )
+        )
+
+    SeqIO.write(reads, output_dir / "mixed_quality.fastq", "fastq")
+
+
+def main():
+    """Generate all test datasets."""
+    out_dir = ensure_output_dir()
+
+    # Create different test datasets
+    create_good_rpf_dataset(out_dir)
+    create_adapter_contaminated_dataset(out_dir)
+    create_length_outliers_dataset(out_dir)
+    create_base_biased_dataset(out_dir)
+    create_mixed_quality_dataset(out_dir)
+
+    print(f"Created test datasets in {out_dir}")
+    print("\nTest commands:")
+    print("\n1. Check good RPF data:")
+    print(
+        "getRPF check test_data/good_rpf.fastq \
+            --format fastq \
+            --output good_rpf_report.txt"
+    )
+
+    print("\n2. Check adapter contamination:")
+    print(
+        "getRPF detect-adapter test_data/adapter_contaminated.fastq \
+            --format fastq --adapter AGATCGGAAGAG --output adapter_report.txt"
+    )
+
+    print("\n3. Check length distribution issues:")
+    print(
+        "getRPF check test_data/length_outliers.fastq --format fastq \
+            --output length_report.txt"
+    )
+
+    print("\n4. Check base composition bias:")
+    print(
+        "getRPF check test_data/base_biased.fastq --format fastq \
+            --output bias_report.txt"
+    )
+
+    print("\n5. Check different input formats:")
+    print(
+        "getRPF check test_data/good_rpf.fasta --format fasta \
+            --output fasta_report.txt"
+    )
+    print(
+        "getRPF check test_data/good_rpf.collapsed --format collapsed \
+            --output collapsed_report.txt"
+    )
+
+
+if __name__ == "__main__":
+    main()
+
+</content>
+
+<content full_path="src/getRPF/__init__.py">
+"""getRPF - Get Ribosome Protected Fragment features.
+
+A toolkit for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments.
+"""
+
+__version__ = "0.1.0"
+__author__ = "Jack Tierney"
+
+</content>
+
+<content full_path="src/getRPF/cli.py">
+"""Command Line Interface for getRPF.
+
+This module implements the command-line interface for getRPF
+(Get Ribosome Protected Fragment features),
+a comprehensive tool for analyzing Ribosome Protected Fragments (RPFs)
+from Ribo-seq experiments.
+
+The CLI is built using Click and provides a hierarchical command structure:
+
+Main Commands:
+    check: Analyze read quality and nucleotide composition
+    detect-adapter: Identify and characterize adapter sequences
+
+Key Features:
+    - Supports multiple input formats (FASTQ, FASTA, Collapsed FASTA)
+    - Handles both gzipped and uncompressed files
+    - Provides detailed quality metrics and visualizations
+    - Implements efficient adapter detection algorithms
+
+Examples:
+    Basic quality analysis:
+        $ getRPF check input.fastq --format fastq --output quality_report.txt
+
+    Adapter detection with custom sequence:
+        $ getRPF detect-adapter input.fastq \
+            --format fastq --adapter AGATCGGAAGAG \
+            --output adapters.txt
+
+Notes:
+    - All file paths can be either relative or absolute
+    - For gzipped files, compression is automatically detected
+    - Memory usage scales with read length, not file size
+    - Temporary files are cleaned up automatically
+
+See Also:
+    - Documentation: https://getRPF.readthedocs.io
+    - Source Code: https://github.com/yourusername/getRPF
+    - Bug Reports: https://github.com/yourusername/getRPF/issues
+"""
+
+from enum import Enum
+from pathlib import Path
+from typing import Optional
+
+import click
+
+from .core.handlers import (
+    handle_adapter_detection,
+    handle_cleanliness_check,
+)
+
+
+class InputFormat(str, Enum):
+    """Supported input format types for sequence data.
+
+    This enum defines the valid input formats that getRPF can process.
+    Each format has specific characteristics and requirements.
+
+    Attributes:
+        FASTQ: Standard FASTQ format
+            - Contains sequence and quality scores
+            - Four lines per record
+            - Quality scores in Phred+33 format
+
+        FASTA: Standard FASTA format
+            - Contains sequence only
+            - Two lines per record
+            - No quality information
+
+        COLLAPSED: Collapsed FASTA format
+            - Modified FASTA where headers contain read counts
+            - Format: >sequence_count_N
+            - Used for deduplicated data
+
+    Example:
+        >>> format = InputFormat.FASTQ
+        >>> format == "fastq"
+        True
+        >>> format in InputFormat
+        True
+    """
+
+    FASTQ = "fastq"
+    FASTA = "fasta"
+    COLLAPSED = "collapsed"
+
+
+@click.group()
+@click.version_option(version="0.1.0")
+def cli():
+    """getRPF - Comprehensive Ribosome Protected Fragment Analysis.
+
+    This is the main entry point for the getRPF command-line interface.
+    It provides access to various analysis tools for Ribo-seq data processing.
+
+    The tool focuses on:
+        - Quality assessment of RPF reads
+        - Adapter sequence detection and analysis
+        - Read length distribution analysis
+        - Nucleotide composition profiling
+
+    For detailed documentation, visit: https://getRPF.readthedocs.io
+    """
+    pass
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file path",
+    required=True,
+)
+@click.option(
+    "--count-pattern",
+    "-p",
+    help="Pattern for extracting read count from collapsed FASTA headers. "
+    "Use {count} to mark where the count appears. "
+    'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
+    default="read_{count}",
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process. Default is all reads.",
+    default=None,
+)
+def check(
+    input_file: Path,
+    format: str,
+    output: Path,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+):
+    """Check read quality and composition.
+
+    For collapsed FASTA format, specify how to extract read counts from headers
+    using the --count-pattern option. The pattern should include {count} where
+    the number appears.
+
+    Examples:
+        # Header format: >read_123_500 (count is 500)
+        getRPF check input.fasta --format collapsed\
+              --count-pattern "read_{id}_{count}"
+
+        # Header format: >read1_x100 (count is 100)
+        getRPF check input.fasta --format collapsed \
+            --count-pattern "read_{id}_{count}"
+
+        # Process only first 1000 reads
+        getRPF check input.fastq --format fastq \
+            --output report.txt --max-reads 1000
+    """
+    handle_cleanliness_check(
+        input_file=input_file,
+        format=format,
+        output=output,
+        count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
+    )
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file path",
+    required=True,
+)
+@click.option("--adapter", "-a", help="Adapter sequence", required=True)
+@click.option(
+    "--min-overlap",
+    "-m",
+    help="Minimum overlap for adapter matching",
+    default=10,
+    type=int,
+)
+@click.option(
+    "--max-mismatches", "-M", help="Maximum allowed mismatches", default=1, type=int
+)
+@click.option(
+    "--count-pattern",
+    "-p",
+    help="Pattern for extracting read count from collapsed FASTA headers. "
+    "Use {count} to mark where the count appears. "
+    'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
+    default="read_{count}",
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process. Default is all reads.",
+    default=None,
+)
+def detect_adapter(
+    input_file: Path,
+    format: str,
+    output: Path,
+    adapter: str,
+    min_overlap: int = 10,
+    max_mismatches: int = 1,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+):
+    """Detect adapter sequences in reads.
+
+    For collapsed FASTA format, specify how to extract read counts from headers
+    using the --count-pattern option. The pattern should include {count} where
+    the number appears.
+
+    Examples:
+        # Standard FASTQ
+        getRPF detect-adapter input.fastq -f fastq -a AGATCGGAAGAG \
+            -o report.txt
+
+        # Collapsed FASTA with format >read_500
+        getRPF detect-adapter input.fasta -f collapsed -a AGATCGGAAGAG \
+            -o report.txt -p "read_{count}"
+
+        # Collapsed FASTA with format >read1_x100
+        getRPF detect-adapter input.fasta -f collapsed -a AGATCGGAAGAG \
+            -o report.txt -p "read\\d+_x{count}"
+
+        # Process only first 1000 reads
+        getRPF detect-adapter input.fastq -f fastq -a AGATCGGAAGAG \
+            -o report.txt --max-reads 1000
+    """
+    handle_adapter_detection(
+        input_file=input_file,
+        format=format,
+        output=output,
+        adapter=adapter,
+        min_overlap=min_overlap,
+        max_mismatches=max_mismatches,
+        count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
+    )
+
+
+if __name__ == "__main__":
+    cli()
+
+</content>
+
+<content full_path="src/getRPF/core/checkers.py">
+"""RPF-specific check implementations for getRPF.
+
+This module provides specialized checks for Ribosome Protected Fragment (RPF) data.
+Each check analyzes specific aspects of the sequence data to determine if it
+matches expectations for clean RPF data.
+"""
+
+import logging
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Dict, Optional
+
+from .processors.check import CleanlinessResults
+
+logger = logging.getLogger(__name__)
+
+
+class Status(Enum):
+    """Status of a check result."""
+
+    PASS = "PASS"
+    WARN = "WARNING"
+    FAIL = "FAIL"
+
+
+@dataclass
+class CheckResult:
+    """Result from a single check.
+
+    Attributes:
+        status: Overall status (PASS/WARN/FAIL)
+        message: Explanation of the result
+        details: Additional numerical/statistical details
+    """
+
+    status: Status
+    message: str
+    details: Optional[Dict] = None
+
+
+class BaseCheck:
+    """Base class for all RPF-specific checks."""
+
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Run check on CleanlinessResults.
+
+        Args:
+            results: CleanlinessResults object containing sequence statistics
+
+        Returns:
+            CheckResult containing status and details
+        """
+        raise NotImplementedError("Subclasses must implement check()")
+
+
+class LengthDistributionCheck(BaseCheck):
+    """Check if length distribution matches RPF expectations."""
+
+    def __init__(
+        self,
+        min_length: int = 26,
+        max_length: int = 35,
+        warn_threshold: float = 0.5,
+        fail_threshold: float = 0.3,
+    ):
+        """Initialize length distribution check.
+
+        Args:
+            min_length: Minimum expected RPF length
+            max_length: Maximum expected RPF length
+            warn_threshold: Warn if fraction in range below this
+            fail_threshold: Fail if fraction in range below this
+        """
+        self.min_length = min_length
+        self.max_length = max_length
+        self.warn_threshold = warn_threshold
+        self.fail_threshold = fail_threshold
+
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Check if read length distribution matches RPF expectations."""
+        dist = results.length_distribution
+        total_reads = sum(dist.values())
+
+        # Calculate reads in RPF range
+        in_range = sum(
+            count
+            for length, count in dist.items()
+            if self.min_length <= length <= self.max_length
+        )
+        fraction_in_range = in_range / total_reads if total_reads > 0 else 0
+
+        # Find mode
+        mode_length = max(dist.items(), key=lambda x: x[1])[0]
+        mode_fraction = dist[mode_length] / total_reads
+
+        # Determine status
+        if fraction_in_range < self.fail_threshold:
+            status = Status.FAIL
+            message = (
+                f"Only {fraction_in_range:.1%} of reads in RPF range "
+                f"({self.min_length}-{self.max_length})"
+            )
+        elif fraction_in_range < self.warn_threshold:
+            status = Status.WARN
+            message = (
+                f"Low fraction ({fraction_in_range:.1%}) of reads in RPF range "
+                f"({self.min_length}-{self.max_length})"
+            )
+        elif not (self.min_length <= mode_length <= self.max_length):
+            status = Status.WARN
+            message = (
+                f"Mode length ({mode_length}) outside expected RPF range "
+                f"({self.min_length}-{self.max_length})"
+            )
+        else:
+            status = Status.PASS
+            message = "Read length distribution matches RPF expectations"
+
+        return CheckResult(
+            status=status,
+            message=message,
+            details={
+                "fraction_in_range": fraction_in_range,
+                "mode_length": mode_length,
+                "mode_fraction": mode_fraction,
+                "total_reads": total_reads,
+                "min_length": self.min_length,
+                "max_length": self.max_length,
+            },
+        )
+
+
+class BaseCompositionCheck(BaseCheck):
+    """Check for concerning patterns in base composition."""
+
+    def __init__(self, max_base_freq: float = 0.85):
+        """Initialize base composition check.
+
+        Args:
+            max_base_freq: Maximum allowable frequency for any base at a position
+        """
+        self.max_base_freq = max_base_freq
+
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Check for positions with extreme base bias."""
+        problems = []
+        max_freq = 0.0
+        worst_pos = None
+        worst_base = None
+
+        # Check each position
+        positions = len(next(iter(results.nucleotide_frequencies.values())))
+        for pos in range(positions):
+            pos_freqs = {
+                base: freqs[pos]
+                for base, freqs in results.nucleotide_frequencies.items()
+            }
+            pos_max_freq = max(pos_freqs.values())
+            if pos_max_freq > self.max_base_freq:
+                max_base = max(pos_freqs.items(), key=lambda x: x[1])[0]
+                problems.append(f"Position {pos}: {max_base}={pos_max_freq:.1%}")
+                if pos_max_freq > max_freq:
+                    max_freq = pos_max_freq
+                    worst_pos = pos
+                    worst_base = max_base
+
+        # Determine status
+        if problems:
+            status = Status.FAIL
+            message = (
+                f"Found {len(problems)} positions with extreme base bias "
+                f"(>{self.max_base_freq:.1%})"
+            )
+        else:
+            status = Status.PASS
+            message = "Base composition looks normal"
+
+        return CheckResult(
+            status=status,
+            message=message,
+            details={
+                "problem_positions": problems,
+                "max_frequency": max_freq,
+                "worst_position": worst_pos,
+                "worst_base": worst_base,
+            },
+        )
+
+
+class GCContentCheck(BaseCheck):
+    """Check if GC content is within expected range."""
+
+    def __init__(
+        self,
+        min_gc: float = 0.35,
+        max_gc: float = 0.65,
+    ):
+        """Initialize GC content check.
+
+        Args:
+            min_gc: Minimum expected GC content (fraction)
+            max_gc: Maximum expected GC content (fraction)
+        """
+        self.min_gc = min_gc
+        self.max_gc = max_gc
+
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Check if GC content is within expected range."""
+        if results.gc_content is None:
+            return CheckResult(
+                status=Status.WARN,
+                message="GC content not available",
+                details={"gc_content": None},
+            )
+
+        gc_fraction = results.gc_content / 100  # Convert from percentage
+
+        if gc_fraction < self.min_gc:
+            status = Status.WARN
+            message = f"GC content ({gc_fraction:.1%}) below expected minimum ({self.min_gc:.1%})"
+        elif gc_fraction > self.max_gc:
+            status = Status.WARN
+            message = f"GC content ({gc_fraction:.1%}) above expected maximum ({self.max_gc:.1%})"
+        else:
+            status = Status.PASS
+            message = "GC content within expected range"
+
+        return CheckResult(
+            status=status, message=message, details={"gc_content": gc_fraction}
+        )
+
+
+def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
+    """Write check results to a file.
+
+    Args:
+        results: Dictionary mapping check names to results
+        output: Path where to write the report
+    """
+    with open(output, "w") as f:
+        # Write summary
+        f.write("=== RPF Data Check Results ===\n\n")
+        f.write("Summary:\n")
+        for check_name, result in results.items():
+            f.write(f"{check_name:30} [{result.status.value}]\n")
+
+        # Write details
+        f.write("\nDetailed Results:\n")
+        for check_name, result in results.items():
+            f.write(f"\n{check_name}:\n")
+            f.write(f"Status: {result.status.value}\n")
+            f.write(f"Message: {result.message}\n")
+
+            if result.details:
+                f.write("Details:\n")
+                for key, value in result.details.items():
+                    if isinstance(value, list):
+                        f.write(f"  {key}:\n")
+                        for item in value:
+                            f.write(f"    - {item}\n")
+                    else:
+                        f.write(f"  {key}: {value}\n")
+
+</content>
+
+<content full_path="src/getRPF/core/handlers.py">
+"""Core handlers for getRPF functionality.
+
+This module implements the main processing logic for getRPF commands, serving as an
+intermediary layer between the CLI and the core processing modules.
+
+The handlers in this module follow a consistent pattern:
+1. Validate inputs and options
+2. Initialize appropriate processor objects
+3. Process data in a memory-efficient manner
+4. Aggregate and format results
+5. Clean up temporary resources
+"""
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+from ..core.checkers import (
+    BaseCompositionCheck,
+    GCContentCheck,
+    LengthDistributionCheck,
+    write_check_report,
+)
+from ..core.processors.adapter import AdapterDetector
+from ..core.processors.check import CleanlinessChecker
+from ..utils.validation import validate_adapter_sequence
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+def handle_cleanliness_check(
+    input_file: Path,
+    format: str,
+    output: Path,
+    count_pattern: Optional[str] = None,
+    min_quality: Optional[int] = 20,
+    threads: Optional[int] = 1,
+    rpf_checks: bool = True,
+    max_reads: Optional[int] = None,
+) -> None:
+    """Handle the quality check command workflow.
+
+    Args:
+        input_file: Path to input sequence file
+        format: Format of input file (fastq/fasta/collapsed)
+        output: Path where report will be written
+        count_pattern: For collapsed format, pattern to extract read counts
+        min_quality: Minimum quality score threshold
+        threads: Number of processing threads
+        rpf_checks: Whether to run RPF-specific checks
+    """
+    logger.info(f"Starting cleanliness check for {input_file}")
+    try:
+        # Initialize checker with parameters
+        checker = CleanlinessChecker(
+            format=format,
+            min_quality=min_quality,
+            threads=threads,
+            max_reads=max_reads,
+        )
+
+        # Process file and get basic results
+        results = checker.analyze_file(
+            input_file,
+            count_pattern=count_pattern if format == "collapsed" else None,
+        )
+
+        # Write basic report
+        results.write_report(output)
+
+        # Run RPF-specific checks if requested
+        if rpf_checks:
+            checks = {
+                "Length Distribution": LengthDistributionCheck(),
+                "Base Composition": BaseCompositionCheck(),
+                "GC Content": GCContentCheck(),
+            }
+
+            # Run checks
+            check_results = {
+                name: check.check(results) for name, check in checks.items()
+            }
+
+            # Write RPF check report
+            rpf_report = output.with_suffix(".rpf_checks.txt")
+            write_check_report(check_results, rpf_report)
+            logger.info(f"RPF check report written to {rpf_report}")
+
+        logger.info("Cleanliness check completed successfully")
+
+    except Exception as e:
+        logger.error(f"Cleanliness check failed: {str(e)}")
+        raise RuntimeError(f"Cleanliness check failed: {str(e)}") from e
+
+
+def handle_adapter_detection(
+    input_file: Path,
+    format: str,
+    output: Path,
+    adapter: str,
+    min_overlap: Optional[int] = 10,
+    max_mismatches: Optional[int] = 1,
+    threads: Optional[int] = 1,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+) -> None:
+    """Handle the adapter detection command workflow.
+
+    Args:
+        input_file: Path to input sequence file
+        format: Format of input file (fastq/fasta/collapsed)
+        output: Path where report will be written
+        adapter: Sequence of adapter to detect
+        min_overlap: Minimum overlap for adapter detection
+        max_mismatches: Maximum allowed mismatches
+        threads: Number of processing threads
+        count_pattern: Pattern to count in header
+    """
+    logger.info(f"Starting adapter detection for {input_file}")
+
+    try:
+        # Validate adapter sequence
+        validate_adapter_sequence(adapter)
+
+        # Initialize detector with parameters
+        detector = AdapterDetector(
+            adapter=adapter,
+            format=format,
+            min_overlap=min_overlap,
+            max_mismatches=max_mismatches,
+            threads=threads,
+            count_pattern=count_pattern,
+            max_reads=max_reads,
+        )
+
+        # Process file and get results
+        results = detector.analyze_file(input_file)
+
+        # Write report
+        results.write_report(output)
+
+        logger.info("Adapter detection completed successfully")
+
+    except Exception as e:
+        logger.error(f"Adapter detection failed: {str(e)}")
+        raise RuntimeError(f"Adapter detection failed: {str(e)}") from e
+
+</content>
+
+<content full_path="src/getRPF/core/__init__.py">
+"""Core functionality for getRPF."""
+
+from .checkers import (
+    BaseCompositionCheck,
+    CheckResult,
+    GCContentCheck,
+    LengthDistributionCheck,
+    Status,
+    write_check_report,
+)
+from .handlers import handle_cleanliness_check
+
+__all__ = [
+    "Status",
+    "CheckResult",
+    "LengthDistributionCheck",
+    "BaseCompositionCheck",
+    "GCContentCheck",
+    "write_check_report",
+    "handle_cleanliness_check",
+]
+
+</content>
+
+<content full_path="src/getRPF/core/processors/collapsed.py">
+"""Handler for collapsed FASTA format processing."""
+
+import bz2
+import gzip
+import logging
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Optional, TextIO, Tuple, Union
+
+from getRPF.utils.file_utils import check_file_readability
+
+logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def fasta_opener(file_path: Path) -> TextIO:
+    """Context manager for reading FASTA files (compressed or uncompressed).
+
+    Args:
+        file_path: Path to FASTA file (can be .gz or .bz2)
+
+    Yields:
+        File handle for reading
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        PermissionError: If file cannot be read
+    """
+    check_file_readability(file_path)
+
+    suffix = file_path.suffix.lower()
+    if suffix == ".gz":
+        handle = gzip.open(file_path, "rt", encoding="utf-8")
+    elif suffix == ".bz2":
+        handle = bz2.open(file_path, "rt", encoding="utf-8")
+    else:
+        handle = open(file_path, "r", encoding="utf-8")
+
+    try:
+        yield handle
+    finally:
+        handle.close()
+
+
+class CollapsedHeaderParser:
+    """Parser for extracting counts from collapsed FASTA headers based on custom formatting."""
+
+    def __init__(self, format: str = "read_{id}_{count}"):
+        """
+        Initialize the parser with a custom header format.
+
+        Args:
+            format: A string indicating the layout of the header.
+                    Use '{id}' for non-count parts and '{count}' for the numeric count.
+        """
+        if "{count}" not in format:
+            raise ValueError("Format must contain '{count}' placeholder")
+
+        # Split on {count} to get left and right delimiters
+        self.left_part, *right_parts = format.split("{count}")
+        self.right_delim = right_parts[0] if right_parts else ""
+
+        # Get the delimiter before the count
+        if "{id}" in self.left_part:
+            # If there's an {id}, split on that and take what's after it
+            *_, self.left_delim = self.left_part.split("{id}")
+        else:
+            # Otherwise use the whole left part
+            self.left_delim = self.left_part
+
+    def extract_count(self, header: str) -> Optional[int]:
+        """
+        Extract the read count from the given header string based on the initialized format.
+
+        Args:
+            header: FASTA header string (without '>').
+
+        Returns:
+            The extracted read count or None if the format doesn't match.
+        """
+        try:
+            # Split based on left delimiter if it exists
+            if self.left_delim:
+                _, count_part = header.rsplit(self.left_delim, 1)
+            else:
+                count_part = header
+
+            # Split based on right delimiter if it exists
+            if self.right_delim:
+                count_str, _ = count_part.split(self.right_delim, 1)
+            else:
+                count_str = count_part
+
+            return int(count_str.strip("_"))
+        except (ValueError, IndexError):
+            return None
+
+
+def parse_collapsed_fasta(
+    file_path: Union[str, Path],
+    count_pattern: str = "read_{count}",
+    max_reads: Optional[int] = None,
+) -> Tuple[dict, dict]:
+    """Parse collapsed FASTA file with flexible header format.
+
+    Supports both compressed (.gz, .bz2) and uncompressed FASTA files.
+
+    Args:
+        file_path: Path to collapsed FASTA file
+        count_pattern: Pattern for extracting count from headers
+        max_reads: Maximum number of FASTA entries to process. None means process all entries.
+                  Note: Each entry may represent multiple reads in collapsed format.
+
+    Returns:
+        Tuple of (sequences dict, counts dict)
+
+    Example:
+        >>> seqs, counts = parse_collapsed_fasta('reads.fa.gz')
+        >>> all(isinstance(count, int) for count in counts.values())
+        True
+    """
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+
+    parser = CollapsedHeaderParser(count_pattern)
+    sequences = {}
+    counts = {}
+    entries_processed = 0
+
+    with fasta_opener(file_path) as f:
+        current_header = None
+        current_seq = []
+        partial_line = ""
+
+        for line in f:
+            # Check if we've hit the max entries
+            if max_reads is not None and entries_processed >= max_reads:
+                break
+
+            # Handle any partial line from previous iteration
+            if partial_line:
+                line = partial_line + line
+                partial_line = ""
+
+            line = line.strip()
+            if not line:
+                continue
+
+            if line.startswith(">"):
+                # Process previous sequence if exists
+                if current_header is not None:
+                    seq = "".join(current_seq)
+                    sequences[current_header] = seq
+
+                # Start new sequence
+                current_header = line[1:]  # Remove '>'
+                current_seq = []
+                entries_processed += 1
+
+                # Extract count
+                count = parser.extract_count(current_header)
+                if count is not None:
+                    counts[current_header] = count
+                else:
+                    counts[current_header] = 1  # Default to 1 if no count found
+            else:
+                current_seq.append(line)
+
+        # Process last sequence if we haven't hit max entries
+        if current_header is not None and (
+            max_reads is None or entries_processed < max_reads
+        ):
+            seq = "".join(current_seq)
+            sequences[current_header] = seq
+
+    return sequences, counts
+
+</content>
+
+<content full_path="src/getRPF/core/processors/check.py">
+"""Cleanliness and cleanliness checking for sequence data.
+
+This module provides functionality for analyzing sequence quality, composition,
+and potential contaminants in high-throughput sequencing data.
+"""
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import numpy as np
+from Bio import SeqIO
+
+from ...utils.file_utils import get_file_opener
+from ..processors.collapsed import parse_collapsed_fasta
+
+
+@dataclass
+class CleanlinessResults:
+    """Container for quality analysis results.
+
+    Attributes:
+        length_distribution: Distribution of read lengths
+        nucleotide_frequencies: Per-position nucleotide frequencies
+        quality_scores: Per-position quality scores (FASTQ only)
+        gc_content: Overall GC content percentage
+        complexity_scores: Sequence complexity measures
+    """
+
+    length_distribution: Dict[int, int]
+    nucleotide_frequencies: Dict[str, List[float]]
+    quality_scores: Optional[Dict[int, List[float]]] = None
+    gc_content: Optional[float] = None
+    complexity_scores: Optional[Dict[str, float]] = None
+
+    def write_report(self, output_path: Path) -> None:
+        """Write analysis results to a file.
+
+        Args:
+            output_path: Path where to write the report
+        """
+        with open(output_path, "w") as f:
+            # Write read length distribution
+            f.write("=== Read Length Distribution ===\n")
+            for length, count in sorted(self.length_distribution.items()):
+                f.write(f"{length}\t{count}\n")
+
+            # Write nucleotide frequencies
+            f.write("\n=== Nucleotide Frequencies ===\n")
+            positions = len(next(iter(self.nucleotide_frequencies.values())))
+            f.write("Position\tA\tC\tG\tT\n")
+            for pos in range(positions):
+                f.write(f"{pos}\t")
+                f.write(
+                    "\t".join(
+                        f"{self.nucleotide_frequencies[nt][pos]:.3f}" for nt in "ACGT"
+                    )
+                )
+                f.write("\n")
+
+            # Write quality scores if available
+            if self.quality_scores:
+                f.write("\n=== Quality Scores ===\n")
+                f.write("Position\tMean\tStd\n")
+                for pos, scores in sorted(self.quality_scores.items()):
+                    mean = np.mean(scores)
+                    std = np.std(scores)
+                    f.write(f"{pos}\t{mean:.2f}\t{std:.2f}\n")
+
+            # Write GC content if available
+            if self.gc_content is not None:
+                f.write("\n=== GC Content ===\n")
+                f.write(f"Overall GC%: {self.gc_content:.2f}\n")
+
+            # Write complexity scores if available
+            if self.complexity_scores:
+                f.write("\n=== Sequence Complexity ===\n")
+                for metric, score in self.complexity_scores.items():
+                    f.write(f"{metric}: {score:.3f}\n")
+
+
+class CleanlinessChecker:
+    """Analyzes sequence quality and composition."""
+
+    def __init__(
+        self,
+        format: str,
+        min_quality: int = 20,
+        threads: int = 1,
+        count_pattern: Optional[str] = None,
+        max_reads: Optional[int] = None,
+    ):
+        """Initialize the CleanlinessChecker.
+
+        Args:
+            format: Input file format (fastq/fasta/collapsed)
+            min_quality: Minimum quality score threshold
+            threads: Number of processing threads
+        """
+        self.format = format
+        self.min_quality = min_quality
+        self.threads = threads
+        self.max_reads = max_reads
+
+    def analyze_file(
+        self, input_path: Path, count_pattern: Optional[str] = None
+    ) -> CleanlinessResults:
+        """Analyze sequence file for quality metrics.
+
+        Args:
+            input_path: Path to input sequence file
+            count_pattern: For collapsed format, pattern to extract read counts
+
+        Returns:
+            CleanlinessResults object containing analysis results
+        """
+        # Initialize counters
+        length_dist = {}
+        nuc_freqs = {nt: [] for nt in "ACGT"}
+        quality_scores = {} if self.format == "fastq" else None
+        gc_count = 0
+        total_bases = 0
+
+        if self.format == "collapsed":
+            if count_pattern is None:
+                count_pattern = "read_{id}_{count}"
+
+            sequences, counts = parse_collapsed_fasta(
+                input_path, count_pattern, self.max_reads
+            )
+
+            for header, seq in sequences.items():
+                count = counts.get(header, 1)
+                length = len(seq)
+                # Update length distribution considering count
+                length_dist[length] = length_dist.get(length, 0) + count
+
+                # Update nucleotide frequencies
+                while max(len(nuc_freqs[nt]) for nt in "ACGT") < length:
+                    for nt in "ACGT":
+                        nuc_freqs[nt].append(0)
+
+                for pos, nt in enumerate(seq.upper()):
+                    if nt in nuc_freqs:
+                        nuc_freqs[nt][pos] += count
+                        if nt in "GC":
+                            gc_count += count
+                total_bases += length * count
+
+        else:
+            # Existing code for FASTQ/FASTA processing
+            file_opener = get_file_opener(input_path)
+            with file_opener(
+                str(input_path), "rt"
+            ) as handle:  # 'rt' mode for text reading
+                record_count = 0
+                for record in SeqIO.parse(handle, self.format):
+                    # Check if we've hit the max_reads limit
+                    if self.max_reads is not None and record_count >= self.max_reads:
+                        break
+
+                    length = len(record.seq)
+                    length_dist[length] = length_dist.get(length, 0) + 1
+
+                    seq_str = str(record.seq).upper()
+                    while max(len(nuc_freqs[nt]) for nt in "ACGT") < length:
+                        for nt in "ACGT":
+                            nuc_freqs[nt].append(0)
+
+                    for pos, nt in enumerate(seq_str):
+                        if nt in nuc_freqs:
+                            nuc_freqs[nt][pos] += 1
+                            if nt in "GC":
+                                gc_count += 1
+                    total_bases += length
+
+                    if self.format == "fastq" and hasattr(record, "letter_annotations"):
+                        phred_scores = record.letter_annotations.get(
+                            "phred_quality", []
+                        )
+                        for pos, score in enumerate(phred_scores):
+                            if pos not in quality_scores:
+                                quality_scores[pos] = []
+                            quality_scores[pos].append(score)
+
+                    record_count += 1
+
+        # Normalize nucleotide frequencies
+        total_reads = sum(length_dist.values())
+        for nt in "ACGT":
+            nuc_freqs[nt] = [count / total_reads for count in nuc_freqs[nt]]
+
+        # Calculate GC content
+        gc_content = (gc_count / total_bases * 100) if total_bases > 0 else None
+
+        return CleanlinessResults(
+            length_distribution=length_dist,
+            nucleotide_frequencies=nuc_freqs,
+            quality_scores=quality_scores,
+            gc_content=gc_content,
+        )
+
+</content>
+
+<content full_path="src/getRPF/core/processors/adapter.py">
+"""Adapter detection and analysis for sequence data.
+
+This module provides functionality for identifying and characterizing
+adapter sequences in high-throughput sequencing data, including support
+for collapsed read formats.
+"""
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+from Bio import SeqIO
+
+from ..processors.collapsed import parse_collapsed_fasta
+
+
+@dataclass
+class AdapterResults:
+    """Container for adapter detection results.
+
+    Attributes:
+        adapter_positions: Position-wise adapter occurrence counts
+        partial_matches: Counts of partial adapter matches
+        variant_counts: Counts of common adapter variants
+        contamination_rate: Overall adapter contamination rate
+    """
+
+    adapter_positions: Dict[int, int]
+    partial_matches: Dict[int, int]  # key is match length
+    variant_counts: Dict[str, int]
+    contamination_rate: float
+
+    def write_report(self, output_path: Path) -> None:
+        """Write adapter analysis results to a file.
+
+        Args:
+            output_path: Path where to write the report
+        """
+        with open(output_path, "w") as f:
+            # Write overall statistics
+            f.write("=== Adapter Contamination Summary ===\n")
+            f.write(f"Overall contamination rate: {self.contamination_rate:.2f}%\n\n")
+
+            # Write position-wise occurrence
+            f.write("=== Adapter Positions ===\n")
+            f.write("Position\tCount\n")
+            for pos, count in sorted(self.adapter_positions.items()):
+                f.write(f"{pos}\t{count}\n")
+
+            # Write partial match distribution
+            f.write("\n=== Partial Matches ===\n")
+            f.write("Match Length\tCount\n")
+            for length, count in sorted(self.partial_matches.items()):
+                f.write(f"{length}\t{count}\n")
+
+            # Write variant frequencies
+            f.write("\n=== Common Variants ===\n")
+            f.write("Variant\tCount\n")
+            for variant, count in sorted(
+                self.variant_counts.items(), key=lambda x: x[1], reverse=True
+            ):
+                f.write(f"{variant}\t{count}\n")
+
+
+class AdapterDetector:
+    """Detects and analyzes adapter sequences."""
+
+    def __init__(
+        self,
+        adapter: str,
+        format: str,
+        min_overlap: int = 10,
+        max_mismatches: int = 1,
+        threads: int = 1,
+        count_pattern: Optional[str] = None,
+        max_reads: Optional[int] = None,
+    ):
+        """Initialize the AdapterDetector.
+
+        Args:
+            adapter: Adapter sequence to search for
+            format: Input file format (fastq/fasta/collapsed)
+            min_overlap: Minimum overlap for adapter matching
+            max_mismatches: Maximum allowed mismatches
+            threads: Number of processing threads
+            count_pattern: For collapsed format, pattern to extract read counts
+        """
+        self.adapter = adapter.upper()
+        self.format = format
+        self.min_overlap = min_overlap
+        self.max_mismatches = max_mismatches
+        self.threads = threads
+        self.count_pattern = count_pattern
+        self.max_reads = max_reads
+
+    def _count_mismatches(self, seq1: str, seq2: str) -> int:
+        """Count mismatches between two sequences.
+
+        Args:
+            seq1: First sequence
+            seq2: Second sequence
+
+        Returns:
+            Number of mismatches
+        """
+        return sum(1 for a, b in zip(seq1, seq2) if a != b)
+
+    def _find_best_match(
+        self, sequence: str
+    ) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+        """Find the best adapter match in a sequence.
+
+        Args:
+            sequence: Sequence to search in
+
+        Returns:
+            Tuple of (position, match_length, variant)
+        """
+        best_pos = None
+        best_length = None
+        best_variant = None
+        min_mismatches = float("inf")
+
+        seq_len = len(sequence)
+        adapter_len = len(self.adapter)
+
+        # Check each possible position
+        for pos in range(seq_len - self.min_overlap + 1):
+            # Check different match lengths
+            for length in range(self.min_overlap, min(adapter_len, seq_len - pos) + 1):
+                seq_part = sequence[pos : pos + length]
+                adapter_part = self.adapter[:length]
+
+                mismatches = self._count_mismatches(seq_part, adapter_part)
+
+                if mismatches <= self.max_mismatches and mismatches < min_mismatches:
+                    min_mismatches = mismatches
+                    best_pos = pos
+                    best_length = length
+                    best_variant = seq_part
+
+        return best_pos, best_length, best_variant
+
+    def analyze_file(self, input_path: Path) -> AdapterResults:
+        """Analyze sequence file for adapter content.
+
+        Args:
+            input_path: Path to input sequence file
+
+        Returns:
+            AdapterResults object containing analysis results
+        """
+        # Initialize counters
+        positions: Dict[int, int] = {}
+        partial_matches: Dict[int, int] = {}
+        variants: Dict[str, int] = {}
+        total_reads = 0
+        contaminated_reads = 0
+
+        if self.format == "collapsed":
+            # Handle collapsed format
+            if self.count_pattern is None:
+                self.count_pattern = "read_{id}_{count}"
+
+            sequences, counts = parse_collapsed_fasta(
+                input_path, self.count_pattern, self.max_reads
+            )
+
+            for header, sequence in sequences.items():
+                count = counts.get(header, 1)
+                total_reads += count
+                sequence = sequence.upper()
+
+                # Find best adapter match
+                pos, length, variant = self._find_best_match(sequence)
+
+                if pos is not None:
+                    contaminated_reads += count
+                    positions[pos] = positions.get(pos, 0) + count
+                    partial_matches[length] = partial_matches.get(length, 0) + count
+                    if variant:
+                        variants[variant] = variants.get(variant, 0) + count
+
+        else:
+            # Handle standard FASTQ/FASTA formats
+            for record in SeqIO.parse(str(input_path), self.format):
+                total_reads += 1
+                sequence = str(record.seq).upper()
+
+                # Find best adapter match
+                pos, length, variant = self._find_best_match(sequence)
+
+                if pos is not None:
+                    contaminated_reads += 1
+                    positions[pos] = positions.get(pos, 0) + 1
+                    partial_matches[length] = partial_matches.get(length, 0) + 1
+                    if variant:
+                        variants[variant] = variants.get(variant, 0) + 1
+
+        # Calculate contamination rate
+        contamination_rate = (
+            contaminated_reads / total_reads * 100 if total_reads > 0 else 0
+        )
+
+        return AdapterResults(
+            adapter_positions=positions,
+            partial_matches=partial_matches,
+            variant_counts=variants,
+            contamination_rate=contamination_rate,
+        )
+
+</content>
+
+<content full_path="src/getRPF/core/processors/__init__.py">
+"""Core processing modules for getRPF."""
+
+from .adapter import AdapterDetector
+from .check import CleanlinessChecker, CleanlinessResults
+
+__all__ = ["CleanlinessChecker", "CleanlinessResults", "AdapterDetector"]
+
+</content>
+
+<content full_path="src/getRPF/utils/logging.py">
+"""Logging configuration for getRPF.
+
+This module provides logging utilities including:
+    - Logging setup and configuration
+    - Custom formatters and handlers
+    - Logging context managers
+"""
+
+import logging
+from pathlib import Path
+from typing import List, Optional
+
+
+def setup_logging(
+    log_level: str = "INFO",
+    log_file: Optional[Path] = None,
+    module_name: str = "getRPF",
+) -> None:
+    """Configure logging for the module.
+
+    Sets up logging with consistent formatting and optional file output.
+
+    Args:
+        log_level: Logging level (default: "INFO")
+        log_file: Optional path to log file
+        module_name: Name to use for logger (default: "getRPF")
+
+    Raises:
+        ValueError: If log_level is invalid
+        PermissionError: If log_file cannot be written
+
+    Example:
+        >>> setup_logging(log_level="DEBUG", log_file=Path("app.log"))
+
+    Notes:
+        - Log format includes timestamp, logger name, level, and message
+        - Stream handler (stdout) is always added
+        - File handler is optional
+    """
+    # Validate log level
+    try:
+        numeric_level = getattr(logging, log_level.upper())
+    except AttributeError:
+        raise ValueError(f"Invalid log level: {log_level}")
+
+    # Configure handlers
+    handlers: List[logging.Handler] = [logging.StreamHandler()]
+    if log_file is not None:
+        try:
+            handlers.append(logging.FileHandler(log_file))
+        except PermissionError:
+            raise PermissionError(f"Cannot write to log file: {log_file}")
+
+    # Setup basic configuration
+    logging.basicConfig(
+        level=numeric_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=handlers,
+    )
+
+    # Get logger for module
+    logger = logging.getLogger(module_name)
+    logger.setLevel(numeric_level)
+
+</content>
+
+<content full_path="src/getRPF/utils/__init__.py">
+"""Utility functions and helpers for getRPF.
+
+This module provides common utilities used across the getRPF package:
+    - File handling and validation
+    - Sequence manipulation and validation
+    - Logging configuration
+    - Common data structures and helpers
+"""
+
+from .file_utils import check_file_readability
+from .logging import setup_logging
+from .validation import validate_adapter_sequence, validate_input_format
+
+__all__ = [
+    "validate_input_format",
+    "validate_adapter_sequence",
+    "check_file_readability",
+    "setup_logging",
+]
+
+</content>
+
+<content full_path="src/getRPF/utils/file_utils.py">
+"""File handling utilities for getRPF.
+
+This module provides utilities for:
+    - File validation and checking
+    - File path manipulation
+    - Common file operations
+"""
+
+import bz2
+import gzip
+import os
+from pathlib import Path
+from typing import Union
+
+
+def check_file_readability(file_path: Union[str, Path]) -> bool:
+    """Check if a file exists and is readable.
+
+    Args:
+        file_path: Path to file to check
+
+    Returns:
+        bool: True if file is readable
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        PermissionError: If file cannot be read
+        TypeError: If file_path is not str or Path
+
+    Examples:
+        >>> check_file_readability('existing_file.txt')
+        True
+        >>> check_file_readability('nonexistent.txt')
+        Raises FileNotFoundError
+    """
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+    elif not isinstance(file_path, Path):
+        raise TypeError(f"file_path must be str or Path, not {type(file_path)}")
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if not os.access(file_path, os.R_OK):
+        raise PermissionError(f"Cannot read file: {file_path}")
+    return True
+
+
+def get_file_opener(filepath: Path):
+    """Determine the appropriate file opener based on file extension."""
+    suffix = filepath.suffix.lower()
+    if suffix == ".gz":
+        return gzip.open
+    elif suffix == ".bz2":
+        return bz2.open
+    return open
+
+</content>
+
+<content full_path="src/getRPF/utils/validation.py">
+"""Validation utilities for getRPF.
+
+This module provides validation functions for various inputs including:
+    - File formats
+    - Sequence data
+    - Configuration parameters
+"""
+
+from typing import Set
+
+
+def validate_input_format(format: str) -> bool:
+    """Validate the input format string.
+
+    Args:
+        format: Format string to validate
+
+    Returns:
+        bool: True if format is valid
+
+    Raises:
+        ValueError: If format is not supported
+
+    Examples:
+        >>> validate_input_format('fastq')
+        True
+        >>> validate_input_format('invalid')
+        Raises ValueError
+    """
+    valid_formats: Set[str] = {"fastq", "fasta", "collapsed"}
+    if format.lower() not in valid_formats:
+        raise ValueError(
+            f"Unsupported format: {format}. " f"Must be one of {sorted(valid_formats)}"
+        )
+    return True
+
+
+def validate_adapter_sequence(adapter: str) -> bool:
+    """Validate the adapter sequence.
+
+    Args:
+        adapter: Adapter sequence to validate
+
+    Returns:
+        bool: True if adapter sequence is valid
+
+    Raises:
+        ValueError: If adapter sequence contains invalid characters
+
+    Examples:
+        >>> validate_adapter_sequence('ATCG')
+        True
+        >>> validate_adapter_sequence('INVALID')
+        Raises ValueError
+    """
+    valid_bases: Set[str] = {"A", "T", "C", "G", "N"}
+    if not adapter:
+        raise ValueError("Adapter sequence cannot be empty")
+    if not all(base.upper() in valid_bases for base in adapter):
+        raise ValueError(
+            f"Invalid adapter sequence: {adapter}. "
+            f"Must contain only {sorted(valid_bases)}"
+        )
+    return True
+
+</content>
+
+</repo-to-text>

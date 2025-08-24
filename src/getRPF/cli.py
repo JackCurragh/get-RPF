@@ -48,6 +48,7 @@ from .core.handlers import (
     handle_adapter_detection,
     handle_cleanliness_check,
     handle_align_detect,
+    handle_extract_rpf,
 )
 
 
@@ -344,6 +345,82 @@ def align_detect(
         output=output,
         output_format=output_format,
         count_pattern=count_pattern if format == "collapsed" else None,
+        max_reads=max_reads,
+    )
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("output_file", type=click.Path(path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--architecture-db",
+    "-a",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to custom architecture database (JSON file)",
+)
+@click.option(
+    "--output-format",
+    "-of",
+    type=click.Choice(["json", "csv"]),
+    help="Format for extraction report",
+    default="json",
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process",
+    default=None,
+)
+def extract_rpf(
+    input_file: Path,
+    output_file: Path,
+    format: str,
+    architecture_db: Optional[Path] = None,
+    output_format: str = "json",
+    max_reads: Optional[int] = None,
+):
+    """Extract ribosome protected fragments automatically.
+
+    This is the core command for automated RPF extraction. It uses pattern
+    matching against known architectures or de novo detection to identify
+    and extract clean RPF sequences from raw ribosome profiling reads.
+
+    The system automatically:
+    - Detects read architecture (UMI, barcodes, adapters)  
+    - Extracts RPF portions while removing contaminants
+    - Validates extraction quality
+    - Provides detailed reports
+
+    Examples:
+        # Extract RPFs from FASTQ using built-in architectures
+        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq
+
+        # Use custom architecture database  
+        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
+            -a custom_architectures.json
+
+        # Extract from collapsed FASTA with processing limit
+        getRPF extract-rpf input.fasta output_rpfs.fasta -f collapsed \\
+            --max-reads 50000
+
+        # Get CSV report instead of JSON
+        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
+            --output-format csv
+    """
+    handle_extract_rpf(
+        input_file=input_file,
+        output_file=output_file,
+        format=format,
+        architecture_db=architecture_db,
+        output_format=output_format,
         max_reads=max_reads,
     )
 

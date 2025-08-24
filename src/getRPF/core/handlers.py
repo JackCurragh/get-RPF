@@ -24,6 +24,7 @@ from ..core.checkers import (
 from ..core.processors.adapter import AdapterDetector
 from ..core.processors.check import CleanlinessChecker
 from ..core.processors.alignment import STARAligner
+from ..core.processors.rpf_extractor import RPFExtractor
 from ..utils.validation import validate_adapter_sequence
 
 # Configure logging
@@ -199,3 +200,55 @@ def handle_align_detect(
     except Exception as e:
         logger.error(f"Alignment and detection failed: {str(e)}")
         raise RuntimeError(f"Alignment and detection failed: {str(e)}") from e
+
+
+def handle_extract_rpf(
+    input_file: Path,
+    output_file: Path,
+    format: str,
+    architecture_db: Optional[Path] = None,
+    output_format: str = "json",
+    max_reads: Optional[int] = None,
+) -> None:
+    """Handle the RPF extraction command workflow.
+
+    Automatically extracts ribosome protected fragments from raw sequencing
+    reads using pattern matching or de novo detection.
+
+    Args:
+        input_file: Path to input sequence file
+        output_file: Path for extracted RPF sequences
+        format: Format of input file (fastq/fasta/collapsed)
+        architecture_db: Path to custom architecture database
+        output_format: Format for extraction report (json/csv)
+        max_reads: Maximum number of reads to process
+    """
+    logger.info(f"Starting RPF extraction from {input_file}")
+
+    try:
+        # Initialize RPF extractor
+        extractor = RPFExtractor(architecture_db_path=architecture_db)
+
+        # Extract RPFs
+        results = extractor.extract_rpfs(
+            input_file=input_file,
+            output_file=output_file,
+            format=format,
+            max_reads=max_reads,
+        )
+
+        # Write extraction report
+        report_path = output_file.with_suffix(f".extraction_report.{output_format}")
+        results.write_report(report_path, format=output_format)
+
+        logger.info(f"RPF extraction completed successfully")
+        logger.info(f"Extracted {results.extracted_rpfs} RPFs from {results.input_reads} reads")
+        logger.info(f"Extraction method: {results.extraction_method}")
+        if results.architecture_match:
+            logger.info(f"Matched architecture: {results.architecture_match}")
+        logger.info(f"Results written to {output_file}")
+        logger.info(f"Report written to {report_path}")
+
+    except Exception as e:
+        logger.error(f"RPF extraction failed: {str(e)}")
+        raise RuntimeError(f"RPF extraction failed: {str(e)}") from e

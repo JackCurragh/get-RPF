@@ -16,6 +16,7 @@ import re
 
 from ...utils.file_utils import get_file_opener
 from ..seqspec_generator import SeqSpecGenerator
+from ..seqspec_loader import SeqSpecArchitectureLoader
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +85,17 @@ class RPFExtractionResult:
 class ArchitectureDatabase:
     """Database of known read architectures from ribosome profiling protocols."""
     
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, seqspec_dir: Optional[Path] = None):
         """Initialize architecture database.
         
         Args:
             db_path: Path to JSON database file, or None for built-in
+            seqspec_dir: Path to directory containing seqspec files to load
         """
         self.architectures: List[ReadArchitecture] = []
         self.db_path = db_path
+        self.seqspec_dir = seqspec_dir
+        self.seqspec_loader = SeqSpecArchitectureLoader()
         self._load_architectures()
     
     def _load_architectures(self) -> None:
@@ -180,8 +184,112 @@ class ArchitectureDatabase:
             }
         )
         
-        self.architectures = [preprocessed, mcglincy_2017, ingolia_2009, generic_umi]
+        # ERR605046-style protocol (STAU1 ribosome profiling)
+        err605046_style = ReadArchitecture(
+            protocol_name="err605046_stau1_riboseq",
+            lab_source="ERR605046 STAU1 ribosome profiling dataset",
+            umi_positions=[],  # May have random barcodes but not clearly defined
+            barcode_positions=[],  # May have specific barcodes but positions unclear
+            adapter_sequences=["AGATCGGAAGAGC", "GATCGGAAGAGC"],  # Standard Illumina adapter found in data
+            rpf_start=1,  # Skip first N nucleotide
+            rpf_end=-1,  # Variable, adapter removal needed
+            expected_rpf_length=(15, 45),  # After adapter removal from 50nt reads
+            quality_markers={
+                "adapter_match_threshold": 0.2,  # 23.7% of reads have this adapter
+                "rpf_gc_content_range": (0.2, 0.8)
+            }
+        )
+        
+        # ERR10323209-style protocol (ENA ribosome profiling data)
+        ena_riboseq = ReadArchitecture(
+            protocol_name="ena_riboseq_standard",
+            lab_source="ENA ribosome profiling dataset ERR10323209",
+            umi_positions=[],  # No UMI detected
+            barcode_positions=[],  # No barcode detected
+            adapter_sequences=["GGAATTCTCGGGTGCCAAGG", "TGGAATTCTCGGGTGCCAAGG"],  # 3' adapter found in real data
+            rpf_start=0,
+            rpf_end=-1,  # Variable, adapter removal needed
+            expected_rpf_length=(25, 80),  # Wide range observed in real data
+            quality_markers={
+                "adapter_match_threshold": 0.5,  # 75.6% of reads had this adapter
+                "rpf_gc_content_range": (0.2, 0.8)
+            }
+        )
+        
+        self.architectures = [err605046_style, ena_riboseq, preprocessed, mcglincy_2017, ingolia_2009, generic_umi]
         logger.info(f"Initialized {len(self.architectures)} built-in architectures")
+        
+        # Load additional architectures from seqspec directory if provided
+        if self.seqspec_dir and self.seqspec_dir.exists():
+            self.load_from_seqspec_directory(self.seqspec_dir)
+    
+    def load_from_seqspec_directory(self, seqspec_dir: Path) -> int:
+        """Load architectures from seqspec files in a directory.
+        
+        Args:
+            seqspec_dir: Directory containing .yaml/.yml seqspec files
+            
+        Returns:
+            Number of architectures loaded
+        """
+        logger.info(f"Loading architectures from seqspec directory: {seqspec_dir}")
+        
+        initial_count = len(self.architectures)
+        seqspec_architectures = self.seqspec_loader.load_from_directory(seqspec_dir)
+        
+        # Add to our database
+        for arch in seqspec_architectures:
+            self.architectures.append(arch)
+            logger.info(f"Added seqspec-based architecture: {arch.protocol_name}")
+        
+        loaded_count = len(seqspec_architectures)
+        logger.info(f"Loaded {loaded_count} architectures from seqspec files")
+        
+        return loaded_count
+    
+    def overwrite_with_seqspec_directory(self, seqspec_dir: Path) -> int:
+        """Overwrite the entire architecture database with seqspec files.
+        
+        Args:
+            seqspec_dir: Directory containing .yaml/.yml seqspec files
+            
+        Returns:
+            Number of architectures loaded
+        """
+        logger.info(f"Overwriting architecture database with seqspec directory: {seqspec_dir}")
+        
+        # Clear existing architectures
+        self.architectures.clear()
+        
+        # Load only from seqspec files
+        seqspec_architectures = self.seqspec_loader.load_from_directory(seqspec_dir)
+        self.architectures.extend(seqspec_architectures)
+        
+        logger.info(f"Architecture database overwritten with {len(self.architectures)} seqspec-based architectures")
+        
+        return len(self.architectures)
+    
+    def add_seqspec_file(self, seqspec_file: Path) -> bool:
+        """Add a single seqspec file to the database.
+        
+        Args:
+            seqspec_file: Path to seqspec .yaml/.yml file
+            
+        Returns:
+            True if successfully added, False otherwise
+        """
+        try:
+            arch = self.seqspec_loader.load_from_seqspec(seqspec_file)
+            if arch:
+                self.architectures.append(arch)
+                logger.info(f"Added architecture from {seqspec_file}: {arch.protocol_name}")
+                return True
+            else:
+                logger.warning(f"Failed to load architecture from {seqspec_file}")
+                return False
+        except Exception as e:
+            logger.error(f"Error adding seqspec file {seqspec_file}: {e}")
+            return False
     
     def match_architecture(self, reads: List[str]) -> Tuple[Optional[ReadArchitecture], float]:
         """Find best matching architecture for sample reads.
@@ -204,7 +312,7 @@ class ArchitectureDatabase:
                 best_arch = architecture
         
         # Require minimum confidence for positive match
-        confidence_threshold = 0.7
+        confidence_threshold = 0.5  # Lowered for real-world data
         if best_score < confidence_threshold:
             return None, best_score
         
@@ -602,13 +710,14 @@ class DeNovoDetector:
 class RPFExtractor:
     """Main RPF extraction processor combining pattern matching and de novo detection."""
     
-    def __init__(self, architecture_db_path: Optional[Path] = None):
+    def __init__(self, architecture_db_path: Optional[Path] = None, seqspec_dir: Optional[Path] = None):
         """Initialize RPF extractor.
         
         Args:
             architecture_db_path: Path to architecture database
+            seqspec_dir: Directory containing seqspec files for novel protocols
         """
-        self.architecture_db = ArchitectureDatabase(architecture_db_path)
+        self.architecture_db = ArchitectureDatabase(db_path=architecture_db_path, seqspec_dir=seqspec_dir)
         self.de_novo_detector = DeNovoDetector()
         self.seqspec_generator = SeqSpecGenerator()
     
@@ -633,7 +742,7 @@ class RPFExtractor:
         logger.info(f"Starting RPF extraction from {input_file}")
         
         # Load sample reads for architecture detection
-        sample_reads = self._load_sample_reads(input_file, format, sample_size=10000)
+        sample_reads, sample_headers = self._load_sample_reads(input_file, format, sample_size=10000)
         
         # Check for mixed data (clean + contaminated reads)
         mixed_strategy = self._detect_mixed_data(sample_reads)
@@ -647,7 +756,7 @@ class RPFExtractor:
         # Try pattern matching on homogeneous data
         matched_arch, match_confidence = self.architecture_db.match_architecture(sample_reads)
         
-        if matched_arch and match_confidence > 0.7:
+        if matched_arch and match_confidence > 0.5:  # Use same threshold as architecture matching
             logger.info(f"Using pattern matching with {matched_arch.protocol_name}")
             return self._extract_with_pattern_matching(
                 input_file, output_file, matched_arch, format, max_reads
@@ -658,9 +767,14 @@ class RPFExtractor:
                 input_file, output_file, format, max_reads
             )
     
-    def _load_sample_reads(self, input_file: Path, format: str, sample_size: int = 10000) -> List[str]:
-        """Load sample reads for analysis."""
+    def _load_sample_reads(self, input_file: Path, format: str, sample_size: int = 10000) -> Tuple[List[str], List[str]]:
+        """Load sample reads and headers for analysis.
+        
+        Returns:
+            Tuple of (reads, headers)
+        """
         reads = []
+        headers = []
         count = 0
         
         opener = get_file_opener(input_file)
@@ -677,27 +791,32 @@ class RPFExtractor:
                     
                     if header and sequence:
                         reads.append(sequence)
+                        headers.append(header)
                         count += 1
                         
             elif format in ["fasta", "collapsed"]:
                 # Read FASTA format
                 current_seq = []
+                current_header = None
                 for line in f:
                     line = line.strip()
                     if line.startswith('>'):
-                        if current_seq and count < sample_size:
+                        if current_seq and current_header and count < sample_size:
                             reads.append(''.join(current_seq))
+                            headers.append(current_header)
                             count += 1
                         current_seq = []
+                        current_header = line
                     else:
                         current_seq.append(line)
                 
                 # Add last sequence
-                if current_seq and count < sample_size:
+                if current_seq and current_header and count < sample_size:
                     reads.append(''.join(current_seq))
+                    headers.append(current_header)
         
-        logger.info(f"Loaded {len(reads)} sample reads for analysis")
-        return reads
+        logger.info(f"Loaded {len(reads)} sample reads with headers for analysis")
+        return reads, headers
     
     def _extract_with_pattern_matching(
         self,
@@ -726,11 +845,12 @@ class RPFExtractor:
         segments.append(rpf_segment)
         
         # Generate seqspec for known architecture
-        sample_reads = self._load_sample_reads(input_file, format, 1000)
+        sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
         seqspec_output = output_file.with_suffix('.seqspec.yaml')
         seqspec_data = self.seqspec_generator.generate_from_architecture(
             architecture=architecture,
             sample_reads=sample_reads,
+            sample_headers=sample_headers,
             detected_segments=segments,
             output_file=seqspec_output
         )
@@ -762,7 +882,7 @@ class RPFExtractor:
         """Extract RPFs using de novo detection."""
         
         # Load sample for de novo analysis
-        sample_reads = self._load_sample_reads(input_file, format, 1000)
+        sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
         
         # Detect architecture
         segments, confidence = self.de_novo_detector.detect_architecture(sample_reads)
@@ -772,6 +892,7 @@ class RPFExtractor:
         seqspec_data = self.seqspec_generator.generate_from_architecture(
             architecture=None,
             sample_reads=sample_reads,
+            sample_headers=sample_headers,
             detected_segments=segments,
             output_file=seqspec_output
         )
@@ -1086,7 +1207,7 @@ class RPFExtractor:
         logger.info(f"Success rate: {success_rate*100:.1f}% ({total_extracted}/{total_count})")
         
         # Generate seqspec for mixed data
-        sample_reads = self._load_sample_reads(input_file, format, 1000)
+        sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
         clean_sample = [r for r in sample_reads if not any(a in r for a in adapter_patterns)]
         contam_sample = [r for r in sample_reads if any(a in r for a in adapter_patterns)]
         

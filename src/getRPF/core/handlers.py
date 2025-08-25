@@ -207,6 +207,8 @@ def handle_extract_rpf(
     output_file: Path,
     format: str,
     architecture_db: Optional[Path] = None,
+    seqspec_dir: Optional[Path] = None,
+    generate_seqspec: bool = False,
     output_format: str = "json",
     max_reads: Optional[int] = None,
 ) -> None:
@@ -220,14 +222,19 @@ def handle_extract_rpf(
         output_file: Path for extracted RPF sequences
         format: Format of input file (fastq/fasta/collapsed)
         architecture_db: Path to custom architecture database
+        seqspec_dir: Directory containing seqspec files for novel protocols
+        generate_seqspec: Whether to generate seqspec file for detected architecture
         output_format: Format for extraction report (json/csv)
         max_reads: Maximum number of reads to process
     """
     logger.info(f"Starting RPF extraction from {input_file}")
 
     try:
-        # Initialize RPF extractor
-        extractor = RPFExtractor(architecture_db_path=architecture_db)
+        # Initialize RPF extractor with seqspec directory support
+        if seqspec_dir and architecture_db:
+            raise ValueError("Cannot specify both --architecture-db and --seqspec-dir")
+        
+        extractor = RPFExtractor(architecture_db_path=architecture_db, seqspec_dir=seqspec_dir)
 
         # Extract RPFs
         results = extractor.extract_rpfs(
@@ -236,6 +243,17 @@ def handle_extract_rpf(
             format=format,
             max_reads=max_reads,
         )
+
+        # Generate seqspec if requested and architecture was detected
+        if generate_seqspec and results.architecture_match:
+            seqspec_path = output_file.with_suffix(".seqspec.yaml")
+            extractor.seqspec_generator.generate_seqspec(
+                input_file=input_file,
+                output_file=seqspec_path,
+                architecture_name=results.architecture_match,
+                format=format
+            )
+            logger.info(f"Generated seqspec file: {seqspec_path}")
 
         # Write extraction report
         report_path = output_file.with_suffix(f".extraction_report.{output_format}")

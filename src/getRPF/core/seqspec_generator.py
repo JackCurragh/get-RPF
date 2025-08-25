@@ -8,7 +8,7 @@ and RPF regions.
 import yaml
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
@@ -87,7 +87,8 @@ class SeqSpecGenerator:
         architecture,
         sample_reads: List[str],
         detected_segments: List = None,
-        output_file: Optional[Path] = None
+        output_file: Optional[Path] = None,
+        sample_headers: List[str] = None
     ) -> Dict[str, Any]:
         """Generate seqspec from detected architecture or segments.
         
@@ -96,11 +97,17 @@ class SeqSpecGenerator:
             sample_reads: Sample reads for analysis
             detected_segments: List of SegmentInfo objects from de novo detection
             output_file: Optional path to write YAML file
+            sample_headers: Optional headers for structure parsing
             
         Returns:
             Dictionary representation of seqspec
         """
-        if architecture:
+        # Check if headers contain structure information
+        if sample_headers and self._has_structure_annotations(sample_headers):
+            return self._generate_from_annotated_headers(
+                sample_headers, sample_reads, output_file
+            )
+        elif architecture:
             return self._generate_from_known_architecture(
                 architecture, sample_reads, output_file
             )
@@ -543,3 +550,213 @@ class SeqSpecGenerator:
             self._write_yaml(seqspec_dict, output_file)
         
         return seqspec_dict
+    
+    def _has_structure_annotations(self, headers: List[str]) -> bool:
+        """Check if headers contain structure annotations."""
+        if not headers:
+            return False
+        
+        # Look for structure patterns in headers
+        structure_keywords = ['umi:', 'barcode:', 'adapter:', 'spacer:', 'rpf:', 'untemplated:']
+        
+        for header in headers[:10]:  # Check first 10 headers
+            if any(keyword in header.lower() for keyword in structure_keywords):
+                return True
+        
+        return False
+    
+    def _generate_from_annotated_headers(
+        self,
+        sample_headers: List[str],
+        sample_reads: List[str],
+        output_file: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        """Generate seqspec from structure-annotated headers."""
+        
+        # Parse structure information from headers
+        structure_info = self._parse_structure_annotations(sample_headers, sample_reads)
+        
+        assay = SeqSpecAssay(
+            assay_id="ribosome_profiling_annotated",
+            name="Ribosome Profiling - Structure Annotated",
+            description=f"Complex read structure parsed from annotations. {len(structure_info['regions'])} distinct regions detected.",
+            library_protocol="complex_annotated_structure"
+        )
+        
+        # Build regions from parsed structure
+        regions = []
+        for region_info in structure_info['regions']:
+            region = SeqSpecRegion(
+                region_id=region_info['id'],
+                region_type=self._map_annotation_to_seqspec_type(region_info['type']),
+                sequence_type=self._infer_sequence_type(region_info),
+                name=region_info['name'],
+                sequence=region_info.get('consensus_sequence'),
+                min_len=region_info['min_len'],
+                max_len=region_info['max_len'],
+                strand="pos"
+            )
+            regions.append(region)
+        
+        assay.sequence_spec = regions
+        
+        # Create read specification
+        read_lengths = [len(read) for read in sample_reads[:100]]
+        read_spec = SeqSpecRead(
+            read_id="R1_annotated",
+            name="Annotated Read 1",
+            modality="rna",
+            primer_id="complex_primer",
+            strand="pos", 
+            min_len=min(read_lengths) if read_lengths else 50,
+            max_len=max(read_lengths) if read_lengths else 100,
+            files=[{"file_id": "R1.fastq.gz", "filename": "annotated_input.fastq"}]
+        )
+        
+        seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
+        
+        if output_file:
+            self._write_yaml(seqspec_dict, output_file)
+            logger.info(f"seqspec file written to {output_file}")
+        
+        return seqspec_dict
+    
+    def _parse_structure_annotations(self, headers: List[str], reads: List[str]) -> Dict[str, Any]:
+        """Parse structure annotations from FASTQ headers.
+        
+        Expected format: @read_id_element1:length_element2:length_...
+        """
+        region_data = {}  # region_type -> {positions: [], lengths: [], sequences: []}
+        total_structures = []
+        
+        for i, header in enumerate(headers[:100]):  # Sample first 100
+            if i >= len(reads):
+                break
+                
+            # Parse structure from header
+            structure = self._extract_structure_from_header(header)
+            if structure:
+                total_structures.append(structure)
+                
+                # Extract sequences for each region
+                read_seq = reads[i]
+                current_pos = 0
+                
+                for region_type, length in structure:
+                    if region_type not in region_data:
+                        region_data[region_type] = {
+                            'positions': [],
+                            'lengths': [],
+                            'sequences': []
+                        }
+                    
+                    end_pos = current_pos + length
+                    if end_pos <= len(read_seq):
+                        region_seq = read_seq[current_pos:end_pos]
+                        region_data[region_type]['positions'].append((current_pos, end_pos))
+                        region_data[region_type]['lengths'].append(length)
+                        region_data[region_type]['sequences'].append(region_seq)
+                    
+                    current_pos = end_pos
+        
+        # Build summary regions
+        regions = []
+        for region_type, data in region_data.items():
+            if data['lengths']:
+                consensus_seq = self._get_consensus_sequence(data['sequences'])
+                
+                region_info = {
+                    'id': f"region_{region_type}",
+                    'type': region_type,
+                    'name': f"{region_type.title()} Region",
+                    'min_len': min(data['lengths']),
+                    'max_len': max(data['lengths']),
+                    'consensus_sequence': consensus_seq,
+                    'occurrence_count': len(data['lengths']),
+                    'sequences': data['sequences'][:10]  # Sample sequences
+                }
+                regions.append(region_info)
+        
+        return {
+            'regions': regions,
+            'total_reads_analyzed': len(total_structures),
+            'unique_structures': len(set(str(s) for s in total_structures))
+        }
+    
+    def _extract_structure_from_header(self, header: str) -> List[Tuple[str, int]]:
+        """Extract structure information from FASTQ header.
+        
+        Args:
+            header: FASTQ header like '@read_0_umi:8_spacer1:4_barcode:6_adapter1:12_rpf:30'
+            
+        Returns:
+            List of (element_type, length) tuples
+        """
+        import re
+        
+        # Find all element:length patterns
+        pattern = r'([a-zA-Z_][a-zA-Z0-9_]*):(\d+)'
+        matches = re.findall(pattern, header)
+        
+        structure = []
+        for element_type, length_str in matches:
+            try:
+                length = int(length_str)
+                structure.append((element_type.lower(), length))
+            except ValueError:
+                continue
+        
+        return structure
+    
+    def _map_annotation_to_seqspec_type(self, annotation_type: str) -> str:
+        """Map annotation type to seqspec region type."""
+        mapping = {
+            'umi': 'umi',
+            'barcode': 'barcode',
+            'adapter': 'illumina_p7',
+            'adapter1': 'illumina_p5',
+            'adapter2': 'illumina_p7',
+            'adapter_5': 'illumina_p5',
+            'adapter_3': 'illumina_p7',
+            'spacer': 'linker',
+            'spacer1': 'linker',
+            'spacer2': 'linker',
+            'rpf': 'cdna',
+            'untemplated': 'poly_tail',
+            'poly_a': 'poly_tail',
+            'poly_t': 'poly_tail',
+            'random_tail': 'poly_tail',
+            'umi_partial': 'umi',
+            'adapter_partial': 'illumina_p7'
+        }
+        
+        return mapping.get(annotation_type.lower(), 'unknown')
+    
+    def _infer_sequence_type(self, region_info: Dict) -> str:
+        """Infer sequence type from region characteristics."""
+        region_type = region_info['type'].lower()
+        sequences = region_info.get('sequences', [])
+        
+        if not sequences:
+            return 'unknown'
+        
+        # Calculate sequence diversity
+        unique_sequences = len(set(sequences))
+        total_sequences = len(sequences)
+        diversity = unique_sequences / total_sequences if total_sequences > 0 else 0
+        
+        # Type-specific inference
+        if region_type in ['umi', 'umi_partial']:
+            return 'random' if diversity > 0.7 else 'onlist'
+        elif region_type in ['barcode']:
+            return 'onlist' if diversity < 0.5 else 'random'
+        elif region_type in ['adapter', 'adapter1', 'adapter2', 'adapter_5', 'adapter_3', 'adapter_partial']:
+            return 'fixed' if diversity < 0.3 else 'joined'
+        elif region_type in ['spacer', 'spacer1', 'spacer2']:
+            return 'fixed' if diversity < 0.5 else 'random'
+        elif region_type in ['rpf']:
+            return 'joined'  # Biological sequence
+        elif region_type in ['untemplated', 'poly_a', 'poly_t', 'random_tail']:
+            return 'random'
+        else:
+            return 'joined'

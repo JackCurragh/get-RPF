@@ -1,0 +1,69 @@
+=== RPF Data Check Results ===
+
+Sample Status: NEEDS_SEQSPEC
+Primary Failure Type: low_complexity
+All Failure Types: low_complexity
+
+Check Summary:
+length_distribution            [PASS]
+information_content            [FAIL]
+end_bias                       [PASS]
+base_composition               [PASS]
+gc_content                     [PASS]
+
+Detailed Results:
+
+length_distribution:
+Status: PASS
+Message: Read length distribution matches RPF expectations
+Details:
+  fraction_in_range: 0.761
+  mode_length: 31
+  mode_fraction: 0.159
+  total_reads: 1000
+  min_length: 26
+  max_length: 35
+
+information_content:
+Status: FAIL
+Message: Found 11 positions with low information content (entropy < 1.0)
+Details:
+  mean_entropy: 1.5581193152131896
+  min_entropy: 0.15443447263618731
+  low_entropy_positions:
+    - (34, 0.9598165907154388)
+    - (35, 0.9028872554768564)
+    - (36, 0.8607754487024989)
+    - (37, 0.8084097105302406)
+    - (38, 0.7307455413564754)
+    - (39, 0.5673600200515823)
+    - (40, 0.44274771770017773)
+    - (41, 0.38417121639819946)
+    - (42, 0.3129815057689849)
+    - (43, 0.22469615680379212)
+    - (44, 0.15443447263618731)
+  entropy_threshold: 1.0
+
+end_bias:
+Status: PASS
+Message: No excessive nucleotide bias at read ends
+Details:
+  biased_positions:
+  max_bias_found: 0.0
+  worst_position: None
+  bias_threshold: 0.6
+
+base_composition:
+Status: PASS
+Message: Base composition looks normal
+Details:
+  problem_positions:
+  max_frequency: 0.0
+  worst_position: None
+  worst_base: None
+
+gc_content:
+Status: PASS
+Message: GC content within expected range
+Details:
+  gc_content: 0.4987443341908612

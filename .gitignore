@@ -37,3 +37,5 @@ htmlcov/
 
 # Docs
 docs/_build/
+
+testing/

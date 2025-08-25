@@ -119,6 +119,91 @@ def cli():
     "--output",
     "-o",
     type=click.Path(path_type=Path),
+    help="Output directory for categorized reports",
+    required=True,
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Maximum number of reads to process for testing",
+    default=1000,
+)
+def check_cleanliness(
+    input_file: Path,
+    format: str,
+    output: Path,
+    max_reads: int = 1000,
+):
+    """Enhanced cleanliness checking with failure categorization.
+    
+    This command runs comprehensive RPF cleanliness checks and categorizes
+    failures by type for batch seqspec generation. Essential for scaling
+    to thousands of samples.
+    
+    The system checks:
+    - Read length distribution (RPF size expectations)
+    - Information content uniformity (no repetitive sequences)  
+    - End bias detection (5'/3' nucleotide bias)
+    - Base composition uniformity (no positional bias)
+    - GC content within normal range
+    
+    Results:
+    - CLEAN samples: Pass all checks, ready for analysis
+    - NEEDS_SEQSPEC samples: Categorized by failure type for batch processing
+    
+    Examples:
+        # Check sample cleanliness with categorization
+        getRPF check-cleanliness input.fastq -f fastq -o reports/
+        
+        # Check collapsed format with limited reads
+        getRPF check-cleanliness input.fasta -f collapsed -o reports/ --max-reads 5000
+    """
+    from .core.processors.check import CleanlinessChecker
+    from .core.checkers import run_all_cleanliness_checks, categorize_failures, write_check_report
+    
+    # Create output directory
+    output.mkdir(exist_ok=True)
+    
+    # Run sequence analysis
+    checker = CleanlinessChecker(format=format, max_reads=max_reads)
+    sequence_results = checker.analyze_file(input_file)
+    
+    # Run all cleanliness checks
+    check_results = run_all_cleanliness_checks(sequence_results)
+    
+    # Categorize failures
+    categories = categorize_failures(check_results)
+    
+    # Write detailed report
+    report_path = output / f"{input_file.stem}_cleanliness_report.txt"
+    write_check_report(check_results, report_path)
+    
+    # Print summary
+    if categories['is_clean']:
+        click.echo(f"✅ CLEAN: {input_file.name} passed all cleanliness checks")
+        click.echo(f"📄 Report: {report_path}")
+    else:
+        click.echo(f"❌ NEEDS_SEQSPEC: {input_file.name}")
+        click.echo(f"🔍 Primary failure: {categories['primary_failure']}")
+        click.echo(f"📋 All failures: {', '.join(categories['failure_categories'])}")
+        click.echo(f"📄 Report: {report_path}")
+        click.echo(f"💡 Batch process with similar failures for seqspec generation")
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
     help="Output file path",
     required=True,
 )
@@ -366,6 +451,18 @@ def align_detect(
     help="Path to custom architecture database (JSON file)",
 )
 @click.option(
+    "--seqspec-dir",
+    "-s",
+    type=click.Path(exists=True, path_type=Path),
+    help="Directory containing seqspec files for novel protocols",
+)
+@click.option(
+    "--generate-seqspec",
+    "-g",
+    is_flag=True,
+    help="Generate seqspec file for detected architecture",
+)
+@click.option(
     "--output-format",
     "-of",
     type=click.Choice(["json", "csv"]),
@@ -384,6 +481,8 @@ def extract_rpf(
     output_file: Path,
     format: str,
     architecture_db: Optional[Path] = None,
+    seqspec_dir: Optional[Path] = None,
+    generate_seqspec: bool = False,
     output_format: str = "json",
     max_reads: Optional[int] = None,
 ):
@@ -407,19 +506,25 @@ def extract_rpf(
         getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
             -a custom_architectures.json
 
+        # Load novel protocols from seqspec directory
+        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
+            --seqspec-dir my_protocols/
+
+        # Generate seqspec file for detected architecture
+        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
+            --generate-seqspec
+
         # Extract from collapsed FASTA with processing limit
         getRPF extract-rpf input.fasta output_rpfs.fasta -f collapsed \\
             --max-reads 50000
-
-        # Get CSV report instead of JSON
-        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
-            --output-format csv
     """
     handle_extract_rpf(
         input_file=input_file,
         output_file=output_file,
         format=format,
         architecture_db=architecture_db,
+        seqspec_dir=seqspec_dir,
+        generate_seqspec=generate_seqspec,
         output_format=output_format,
         max_reads=max_reads,
     )

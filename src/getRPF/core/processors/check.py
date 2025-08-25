@@ -193,9 +193,97 @@ class CleanlinessChecker:
         # Calculate GC content
         gc_content = (gc_count / total_bases * 100) if total_bases > 0 else None
 
-        return CleanlinessResults(
+        # Generate reversed nucleotide frequencies for 3' end analysis
+        reversed_nuc_freqs = self._generate_reversed_frequencies(
+            sequences if self.format == "collapsed" else None,
+            counts if self.format == "collapsed" else None,
+            input_path
+        )
+
+        results = CleanlinessResults(
             length_distribution=length_dist,
             nucleotide_frequencies=nuc_freqs,
             quality_scores=quality_scores,
             gc_content=gc_content,
         )
+        
+        # Add reversed frequencies as additional data
+        results.reversed_nucleotide_frequencies = reversed_nuc_freqs
+        return results
+
+    def _generate_reversed_frequencies(self, sequences=None, counts=None, input_path=None):
+        """Generate nucleotide frequencies from reversed sequences for 3' end analysis."""
+        if self.format == "collapsed" and sequences:
+            return self._generate_reversed_from_collapsed(sequences, counts)
+        else:
+            return self._generate_reversed_from_file(input_path)
+    
+    def _generate_reversed_from_collapsed(self, sequences, counts):
+        """Generate reversed frequencies from collapsed sequences."""
+        reversed_nuc_freqs = {nt: [] for nt in "ACGT"}
+        max_length = max(len(seq) for seq in sequences.values()) if sequences else 0
+        
+        # Initialize frequency arrays
+        for nt in "ACGT":
+            reversed_nuc_freqs[nt] = [0] * max_length
+        
+        # Process each sequence in reverse
+        for header, seq in sequences.items():
+            count = counts.get(header, 1)
+            reversed_seq = seq[::-1]  # Reverse the sequence
+            
+            # Extend arrays if needed
+            while max(len(reversed_nuc_freqs[nt]) for nt in "ACGT") < len(reversed_seq):
+                for nt in "ACGT":
+                    reversed_nuc_freqs[nt].append(0)
+            
+            # Count nucleotides in reversed sequence
+            for pos, nt in enumerate(reversed_seq.upper()):
+                if nt in reversed_nuc_freqs:
+                    reversed_nuc_freqs[nt][pos] += count
+        
+        # Normalize
+        total_reads = sum(counts.values()) if counts else len(sequences)
+        for nt in "ACGT":
+            reversed_nuc_freqs[nt] = [count / total_reads for count in reversed_nuc_freqs[nt]]
+        
+        return reversed_nuc_freqs
+    
+    def _generate_reversed_from_file(self, input_path):
+        """Generate reversed frequencies by re-reading the file."""
+        reversed_nuc_freqs = {nt: [] for nt in "ACGT"}
+        
+        file_opener = get_file_opener(input_path)
+        with file_opener(str(input_path), "rt") as handle:
+            record_count = 0
+            sequences = []
+            
+            for record in SeqIO.parse(handle, self.format):
+                if self.max_reads is not None and record_count >= self.max_reads:
+                    break
+                sequences.append(str(record.seq).upper())
+                record_count += 1
+        
+        if not sequences:
+            return reversed_nuc_freqs
+        
+        # Find max length and reverse all sequences
+        max_length = max(len(seq) for seq in sequences)
+        
+        # Initialize frequency arrays
+        for nt in "ACGT":
+            reversed_nuc_freqs[nt] = [0] * max_length
+        
+        # Process reversed sequences
+        for seq in sequences:
+            reversed_seq = seq[::-1]  # Reverse
+            for pos, nt in enumerate(reversed_seq):
+                if nt in reversed_nuc_freqs and pos < max_length:
+                    reversed_nuc_freqs[nt][pos] += 1
+        
+        # Normalize
+        total_reads = len(sequences)
+        for nt in "ACGT":
+            reversed_nuc_freqs[nt] = [count / total_reads for count in reversed_nuc_freqs[nt]]
+        
+        return reversed_nuc_freqs

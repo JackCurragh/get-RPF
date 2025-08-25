@@ -6,10 +6,11 @@ matches expectations for clean RPF data.
 """
 
 import logging
+import math
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from .processors.check import CleanlinessResults
 
@@ -231,6 +232,257 @@ class GCContentCheck(BaseCheck):
         )
 
 
+class InformationContentCheck(BaseCheck):
+    """Check for consistent information content across read positions.
+    
+    This is the primary check for detecting adapter contamination and repetitive
+    sequences by measuring Shannon entropy at each position.
+    """
+    
+    def __init__(self, min_entropy: float = 1.0, ignore_end_positions: int = 2):
+        """Initialize information content check.
+        
+        Args:
+            min_entropy: Minimum Shannon entropy threshold per position
+            ignore_end_positions: Number of positions to ignore at each end
+        """
+        self.min_entropy = min_entropy
+        self.ignore_end_positions = ignore_end_positions
+    
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Check Shannon entropy at each position for uniform complexity."""
+        entropies = []
+        low_entropy_positions = []
+        
+        positions = len(next(iter(results.nucleotide_frequencies.values())))
+        
+        # Only check middle positions, ignore ends
+        start_pos = self.ignore_end_positions
+        end_pos = positions - self.ignore_end_positions
+        
+        for pos in range(start_pos, end_pos):
+            # Get frequencies at this position
+            freqs = [results.nucleotide_frequencies[nt][pos] for nt in "ACGT"]
+            # Filter out zero frequencies for entropy calculation
+            freqs = [f for f in freqs if f > 0]
+            
+            if len(freqs) <= 1:
+                entropy = 0.0  # No diversity
+            else:
+                # Calculate Shannon entropy
+                entropy = -sum(f * math.log2(f) for f in freqs)
+            
+            entropies.append(entropy)
+            
+            if entropy < self.min_entropy:
+                low_entropy_positions.append((pos, entropy))
+        
+        mean_entropy = sum(entropies) / len(entropies) if entropies else 0
+        min_entropy = min(entropies) if entropies else 0
+        
+        # Determine status
+        if low_entropy_positions:
+            status = Status.FAIL
+            message = f"Found {len(low_entropy_positions)} positions with low information content (entropy < {self.min_entropy})"
+        else:
+            status = Status.PASS
+            message = "Information content uniform across positions"
+        
+        return CheckResult(
+            status=status,
+            message=message, 
+            details={
+                "mean_entropy": mean_entropy,
+                "min_entropy": min_entropy,
+                "low_entropy_positions": low_entropy_positions,
+                "entropy_threshold": self.min_entropy
+            }
+        )
+
+
+class EndBiasCheck(BaseCheck):
+    """Check for extreme nucleotide bias at 5' and 3' ends of reads.
+    
+    Note: This detects single-nucleotide bias (e.g. poly-A tails, primer sites).
+    For adapter contamination (repetitive sequences), use InformationContentCheck.
+    """
+    
+    def __init__(self, end_positions: int = 3, max_bias: float = 0.7):
+        """Initialize end bias check.
+        
+        Args:
+            end_positions: Number of positions to check at each end
+            max_bias: Maximum allowable nucleotide frequency at ends
+        """
+        self.end_positions = end_positions
+        self.max_bias = max_bias
+    
+    def check(self, results: CleanlinessResults) -> CheckResult:
+        """Check for excessive nucleotide bias at read ends.
+        
+        For 3' end analysis, we use reversed sequences to align all reads at their 3' ends,
+        making adapter contamination detectable as nucleotide bias.
+        """
+        problems = []
+        max_bias_found = 0.0
+        worst_position = None
+        
+        positions = len(next(iter(results.nucleotide_frequencies.values())))
+        
+        # Check 5' end positions (straightforward - all reads start at pos 0)
+        for pos in range(min(self.end_positions, positions)):
+            pos_freqs = {nt: results.nucleotide_frequencies[nt][pos] for nt in "ACGT"}
+            max_freq = max(pos_freqs.values())
+            
+            if max_freq > self.max_bias:
+                dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
+                problems.append(f"5' position {pos}: {dominant_nt}={max_freq:.1%}")
+                if max_freq > max_bias_found:
+                    max_bias_found = max_freq
+                    worst_position = f"5'_{pos}"
+        
+        # Check 3' end positions using REVERSED sequences
+        if hasattr(results, 'reversed_nucleotide_frequencies') and results.reversed_nucleotide_frequencies:
+            reversed_positions = len(next(iter(results.reversed_nucleotide_frequencies.values())))
+            
+            for pos in range(min(self.end_positions, reversed_positions)):
+                pos_freqs = {nt: results.reversed_nucleotide_frequencies[nt][pos] for nt in "ACGT"}
+                max_freq = max(pos_freqs.values())
+                
+                if max_freq > self.max_bias:
+                    dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
+                    problems.append(f"3' position {pos} (reversed): {dominant_nt}={max_freq:.1%}")
+                    if max_freq > max_bias_found:
+                        max_bias_found = max_freq
+                        worst_position = f"3'_reversed_{pos}"
+        else:
+            # Fallback to old method if reversed frequencies not available
+            for i in range(min(self.end_positions, positions)):
+                pos = positions - 1 - i  # Count from end
+                pos_freqs = {nt: results.nucleotide_frequencies[nt][pos] for nt in "ACGT"}
+                max_freq = max(pos_freqs.values())
+                
+                if max_freq > self.max_bias:
+                    dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
+                    problems.append(f"3' position -{i+1}: {dominant_nt}={max_freq:.1%}")
+                    if max_freq > max_bias_found:
+                        max_bias_found = max_freq
+                        worst_position = f"3'_{i+1}"
+        
+        # Determine status
+        if problems:
+            status = Status.FAIL
+            message = f"Found end bias at {len(problems)} positions (>{self.max_bias:.1%} frequency)"
+        else:
+            status = Status.PASS
+            message = "No excessive nucleotide bias at read ends"
+        
+        return CheckResult(
+            status=status,
+            message=message,
+            details={
+                "biased_positions": problems,
+                "max_bias_found": max_bias_found,
+                "worst_position": worst_position,
+                "bias_threshold": self.max_bias,
+                "uses_reversed_analysis": hasattr(results, 'reversed_nucleotide_frequencies')
+            }
+        )
+
+
+class SoftClippingCheck(BaseCheck):
+    """Check for excessive soft-clipping in alignments."""
+    
+    def __init__(self, max_clip_rate: float = 0.1, max_mean_clips: float = 1.0):
+        """Initialize soft-clipping check.
+        
+        Args:
+            max_clip_rate: Maximum fraction of reads with soft clips
+            max_mean_clips: Maximum mean soft clips per read
+        """
+        self.max_clip_rate = max_clip_rate
+        self.max_mean_clips = max_mean_clips
+    
+    def check(self, alignment_stats: Dict[str, Any]) -> CheckResult:
+        """Check soft-clipping statistics from alignment."""
+        if "total_reads_analyzed" not in alignment_stats:
+            return CheckResult(
+                status=Status.WARN,
+                message="Soft-clipping statistics not available",
+                details={}
+            )
+        
+        total_reads = alignment_stats["total_reads_analyzed"]
+        reads_with_clips = alignment_stats["reads_with_soft_clips"]
+        mean_5prime = alignment_stats["mean_5prime_clips"]
+        mean_3prime = alignment_stats["mean_3prime_clips"]
+        
+        if total_reads == 0:
+            clip_rate = 0
+        else:
+            clip_rate = reads_with_clips / total_reads
+        
+        mean_total_clips = mean_5prime + mean_3prime
+        
+        problems = []
+        if clip_rate > self.max_clip_rate:
+            problems.append(f"High soft-clipping rate: {clip_rate:.1%}")
+        
+        if mean_total_clips > self.max_mean_clips:
+            problems.append(f"High mean soft clips: {mean_total_clips:.1f}")
+        
+        if problems:
+            status = Status.FAIL
+            message = "; ".join(problems)
+        else:
+            status = Status.PASS
+            message = "Soft-clipping within acceptable limits"
+        
+        return CheckResult(
+            status=status,
+            message=message,
+            details={
+                "clip_rate": clip_rate,
+                "mean_total_clips": mean_total_clips,
+                "reads_with_clips": reads_with_clips,
+                "total_reads": total_reads
+            }
+        )
+
+
+def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
+    """Categorize sample by failure type for seqspec batch processing.
+    
+    Args:
+        results: Dictionary mapping check names to results
+        
+    Returns:
+        Dictionary with failure categories
+    """
+    failure_categories = []
+    
+    for check_name, result in results.items():
+        if result.status == Status.FAIL:
+            if "length" in check_name.lower():
+                failure_categories.append("length_distribution")
+            elif "end" in check_name.lower() or "bias" in check_name.lower():
+                failure_categories.append("end_bias")
+            elif "information" in check_name.lower() or "entropy" in check_name.lower():
+                failure_categories.append("low_complexity")
+            elif "clipping" in check_name.lower():
+                failure_categories.append("soft_clipping")
+            elif "composition" in check_name.lower():
+                failure_categories.append("base_composition")
+            else:
+                failure_categories.append("other")
+    
+    return {
+        "failure_categories": failure_categories,
+        "primary_failure": failure_categories[0] if failure_categories else None,
+        "is_clean": len(failure_categories) == 0
+    }
+
+
 def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
     """Write check results to a file.
 
@@ -241,7 +493,16 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
     with open(output, "w") as f:
         # Write summary
         f.write("=== RPF Data Check Results ===\n\n")
-        f.write("Summary:\n")
+        
+        # Add cleanliness status
+        categories = categorize_failures(results)
+        f.write(f"Sample Status: {'CLEAN' if categories['is_clean'] else 'NEEDS_SEQSPEC'}\n")
+        if not categories['is_clean']:
+            f.write(f"Primary Failure Type: {categories['primary_failure']}\n")
+            f.write(f"All Failure Types: {', '.join(categories['failure_categories'])}\n")
+        f.write("\n")
+        
+        f.write("Check Summary:\n")
         for check_name, result in results.items():
             f.write(f"{check_name:30} [{result.status.value}]\n")
 
@@ -261,3 +522,38 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
                             f.write(f"    - {item}\n")
                     else:
                         f.write(f"  {key}: {value}\n")
+
+
+def run_all_cleanliness_checks(
+    sequence_results: CleanlinessResults,
+    alignment_stats: Optional[Dict[str, Any]] = None
+) -> Dict[str, CheckResult]:
+    """Run all cleanliness checks and return results.
+    
+    Args:
+        sequence_results: Results from sequence analysis
+        alignment_stats: Optional alignment statistics
+        
+    Returns:
+        Dictionary mapping check names to results
+    """
+    checks = {
+        "length_distribution": LengthDistributionCheck(),
+        "information_content": InformationContentCheck(),
+        "end_bias": EndBiasCheck(),
+        "base_composition": BaseCompositionCheck(),
+        "gc_content": GCContentCheck()
+    }
+    
+    results = {}
+    
+    # Run sequence-based checks
+    for check_name, check in checks.items():
+        results[check_name] = check.check(sequence_results)
+    
+    # Run alignment-based checks if available
+    if alignment_stats:
+        soft_clip_check = SoftClippingCheck()
+        results["soft_clipping"] = soft_clip_check.check(alignment_stats)
+    
+    return results

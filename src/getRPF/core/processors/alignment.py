@@ -10,6 +10,13 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import json
+try:
+    import pysam
+    PYSAM_AVAILABLE = True
+except ImportError:
+    PYSAM_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("pysam not available - soft-clipping analysis will be disabled")
 
 from ...utils.file_utils import create_temp_file, cleanup_temp_files
 from ..processors.collapsed import CollapsedFASTAProcessor
@@ -215,6 +222,8 @@ class STARAligner:
         bam_file = temp_dir / "Aligned_Aligned.sortedByCoord.out.bam"
         if bam_file.exists():
             stats["bam_file"] = bam_file
+            # Add soft-clipping analysis
+            stats.update(self._analyze_soft_clipping(bam_file))
         
         return stats
     
@@ -255,6 +264,66 @@ class STARAligner:
             logger.warning(f"Error parsing STAR log: {e}")
             
         return stats
+    
+    def _analyze_soft_clipping(self, bam_file: Path) -> Dict[str, Any]:
+        """Analyze soft-clipping patterns in aligned reads.
+        
+        Args:
+            bam_file: Path to sorted BAM file
+            
+        Returns:
+            Dictionary with soft-clipping statistics
+        """
+        soft_clip_stats = {
+            "total_reads_analyzed": 0,
+            "reads_with_soft_clips": 0,
+            "mean_5prime_clips": 0.0,
+            "mean_3prime_clips": 0.0,
+            "max_5prime_clips": 0,
+            "max_3prime_clips": 0,
+        }
+        
+        if not PYSAM_AVAILABLE:
+            logger.warning("pysam not available - skipping soft-clipping analysis")
+            return soft_clip_stats
+        
+        try:
+            with pysam.AlignmentFile(str(bam_file), "rb") as bamfile:
+                clip_5prime = []
+                clip_3prime = []
+                reads_with_clips = 0
+                
+                for read in bamfile:
+                    if read.is_unmapped:
+                        continue
+                    
+                    soft_clip_stats["total_reads_analyzed"] += 1
+                    
+                    # Parse CIGAR for soft clips
+                    cigar = read.cigartuples
+                    if cigar:
+                        # 5' soft clip (start of read)
+                        clip_5 = cigar[0][1] if cigar[0][0] == 4 else 0  # 4 = soft clip
+                        # 3' soft clip (end of read)  
+                        clip_3 = cigar[-1][1] if cigar[-1][0] == 4 else 0
+                        
+                        clip_5prime.append(clip_5)
+                        clip_3prime.append(clip_3)
+                        
+                        if clip_5 > 0 or clip_3 > 0:
+                            reads_with_clips += 1
+                
+                if clip_5prime:
+                    soft_clip_stats["reads_with_soft_clips"] = reads_with_clips
+                    soft_clip_stats["mean_5prime_clips"] = sum(clip_5prime) / len(clip_5prime)
+                    soft_clip_stats["mean_3prime_clips"] = sum(clip_3prime) / len(clip_3prime)
+                    soft_clip_stats["max_5prime_clips"] = max(clip_5prime)
+                    soft_clip_stats["max_3prime_clips"] = max(clip_3prime)
+                    
+        except Exception as e:
+            logger.warning(f"Error analyzing soft clipping: {e}")
+            
+        return soft_clip_stats
     
     def align_reads(
         self, 

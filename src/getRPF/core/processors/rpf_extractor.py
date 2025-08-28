@@ -726,7 +726,8 @@ class RPFExtractor:
         input_file: Path, 
         output_file: Path,
         format: str = "fastq",
-        max_reads: Optional[int] = None
+        max_reads: Optional[int] = None,
+        generate_seqspec: bool = False
     ) -> RPFExtractionResult:
         """Extract RPFs from input file.
         
@@ -750,7 +751,7 @@ class RPFExtractor:
         if mixed_strategy:
             logger.info("Detected mixed data (clean + contaminated reads)")
             return self._extract_with_mixed_strategy(
-                input_file, output_file, mixed_strategy, format, max_reads
+                input_file, output_file, mixed_strategy, format, max_reads, generate_seqspec
             )
         
         # Try pattern matching on homogeneous data
@@ -759,12 +760,12 @@ class RPFExtractor:
         if matched_arch and match_confidence > 0.5:  # Use same threshold as architecture matching
             logger.info(f"Using pattern matching with {matched_arch.protocol_name}")
             return self._extract_with_pattern_matching(
-                input_file, output_file, matched_arch, format, max_reads
+                input_file, output_file, matched_arch, format, max_reads, generate_seqspec
             )
         else:
             logger.info("Pattern matching failed, using de novo detection")
             return self._extract_with_de_novo(
-                input_file, output_file, format, max_reads
+                input_file, output_file, format, max_reads, generate_seqspec
             )
     
     def _load_sample_reads(self, input_file: Path, format: str, sample_size: int = 10000) -> Tuple[List[str], List[str]]:
@@ -824,7 +825,8 @@ class RPFExtractor:
         output_file: Path, 
         architecture: ReadArchitecture,
         format: str,
-        max_reads: Optional[int]
+        max_reads: Optional[int],
+        generate_seqspec: bool = False
     ) -> RPFExtractionResult:
         """Extract RPFs using known architecture pattern."""
         
@@ -844,16 +846,18 @@ class RPFExtractor:
         )
         segments.append(rpf_segment)
         
-        # Generate seqspec for known architecture
-        sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
-        seqspec_output = output_file.with_suffix('.seqspec.yaml')
-        seqspec_data = self.seqspec_generator.generate_from_architecture(
-            architecture=architecture,
-            sample_reads=sample_reads,
-            sample_headers=sample_headers,
-            detected_segments=segments,
-            output_file=seqspec_output
-        )
+        # Generate seqspec for known architecture if requested
+        seqspec_data = None
+        if generate_seqspec:
+            sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
+            seqspec_output = output_file.with_suffix('.seqspec.yaml')
+            seqspec_data = self.seqspec_generator.generate_from_architecture(
+                architecture=architecture,
+                sample_reads=sample_reads,
+                sample_headers=sample_headers,
+                detected_segments=segments,
+                output_file=seqspec_output
+            )
         
         # Process reads and extract RPFs
         extracted_count = self._extract_rpfs_from_reads(
@@ -877,7 +881,8 @@ class RPFExtractor:
         input_file: Path,
         output_file: Path,
         format: str, 
-        max_reads: Optional[int]
+        max_reads: Optional[int],
+        generate_seqspec: bool = False
     ) -> RPFExtractionResult:
         """Extract RPFs using de novo detection."""
         
@@ -887,15 +892,17 @@ class RPFExtractor:
         # Detect architecture
         segments, confidence = self.de_novo_detector.detect_architecture(sample_reads)
         
-        # Generate seqspec for detected segments
-        seqspec_output = output_file.with_suffix('.seqspec.yaml')
-        seqspec_data = self.seqspec_generator.generate_from_architecture(
-            architecture=None,
-            sample_reads=sample_reads,
-            sample_headers=sample_headers,
-            detected_segments=segments,
-            output_file=seqspec_output
-        )
+        # Generate seqspec for detected segments if requested
+        seqspec_data = None
+        if generate_seqspec:
+            seqspec_output = output_file.with_suffix('.seqspec.yaml')
+            seqspec_data = self.seqspec_generator.generate_from_architecture(
+                architecture=None,
+                sample_reads=sample_reads,
+                sample_headers=sample_headers,
+                detected_segments=segments,
+                output_file=seqspec_output
+            )
         
         # Extract RPFs using detected segments
         extracted_count = self._extract_rpfs_from_reads(
@@ -1067,7 +1074,8 @@ class RPFExtractor:
         output_file: Path,
         mixed_info: Dict[str, Any],
         format: str,
-        max_reads: Optional[int]
+        max_reads: Optional[int],
+        generate_seqspec: bool = False
     ) -> RPFExtractionResult:
         """Extract RPFs from mixed clean/contaminated data."""
         
@@ -1206,18 +1214,20 @@ class RPFExtractor:
         logger.info(f"Mixed strategy results: {clean_count} clean + {processed_count} processed = {total_extracted} total RPFs")
         logger.info(f"Success rate: {success_rate*100:.1f}% ({total_extracted}/{total_count})")
         
-        # Generate seqspec for mixed data
-        sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
-        clean_sample = [r for r in sample_reads if not any(a in r for a in adapter_patterns)]
-        contam_sample = [r for r in sample_reads if any(a in r for a in adapter_patterns)]
-        
-        seqspec_output = output_file.with_suffix('.seqspec.yaml')
-        seqspec_data = self.seqspec_generator.generate_mixed_seqspec(
-            clean_reads=clean_sample,
-            contaminated_reads=contam_sample,
-            architecture=architecture,
-            output_file=seqspec_output
-        )
+        # Generate seqspec for mixed data if requested
+        seqspec_data = None
+        if generate_seqspec:
+            sample_reads, sample_headers = self._load_sample_reads(input_file, format, 1000)
+            clean_sample = [r for r in sample_reads if not any(a in r for a in adapter_patterns)]
+            contam_sample = [r for r in sample_reads if any(a in r for a in adapter_patterns)]
+            
+            seqspec_output = output_file.with_suffix('.seqspec.yaml')
+            seqspec_data = self.seqspec_generator.generate_mixed_seqspec(
+                clean_reads=clean_sample,
+                contaminated_reads=contam_sample,
+                architecture=architecture,
+                output_file=seqspec_output
+            )
         
         return RPFExtractionResult(
             input_reads=total_count,

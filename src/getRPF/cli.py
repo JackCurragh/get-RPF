@@ -487,7 +487,7 @@ def align_detect(
     "--output-format",
     "-of",
     type=click.Choice(["json", "csv"]),
-    help="Format for extraction report",
+    help="Format for detection report",
     default="json",
 )
 @click.option(
@@ -497,7 +497,7 @@ def align_detect(
     help="Maximum number of reads to process",
     default=None,
 )
-def extract_rpf(
+def detect_architecture(
     input_file: Path,
     output_file: Path,
     format: str,
@@ -507,37 +507,38 @@ def extract_rpf(
     output_format: str = "json",
     max_reads: Optional[int] = None,
 ):
-    """Extract ribosome protected fragments automatically.
+    """Detect read architecture and optionally extract clean RPFs.
 
-    This is the core command for automated RPF extraction. It uses pattern
-    matching against known architectures or de novo detection to identify
-    and extract clean RPF sequences from raw ribosome profiling reads.
+    This command analyzes ribosome profiling reads to identify their structure
+    using pattern matching against known architectures or de novo detection.
+    The primary output is a seqspec file that describes the detected architecture.
 
     The system automatically:
-    - Detects read architecture (UMI, barcodes, adapters)  
-    - Extracts RPF portions while removing contaminants
-    - Validates extraction quality
-    - Provides detailed reports
+    - Detects read architecture (UMI, barcodes, adapters) using known patterns
+    - Falls back to de novo detection for unknown protocols  
+    - Generates seqspec files for discovered architectures
+    - Optionally extracts clean RPF sequences
+    - Provides detailed detection reports
 
     Examples:
-        # Extract RPFs from FASTQ using built-in architectures
-        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq
+        # Detect architecture and generate seqspec
+        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq --generate-seqspec
 
         # Use custom architecture database  
-        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
-            -a custom_architectures.json
+        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq \\
+            -a custom_architectures.json --generate-seqspec
 
         # Load novel protocols from seqspec directory
-        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
-            --seqspec-dir my_protocols/
+        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq \\
+            --seqspec-dir my_protocols/ --generate-seqspec
 
-        # Generate seqspec file for detected architecture
-        getRPF extract-rpf input.fastq output_rpfs.fastq -f fastq \\
-            --generate-seqspec
+        # Architecture detection only (no RPF extraction)
+        getRPF detect-architecture input.fastq temp_output.fastq -f fastq \\
+            --generate-seqspec --max-reads 5000
 
-        # Extract from collapsed FASTA with processing limit
-        getRPF extract-rpf input.fasta output_rpfs.fasta -f collapsed \\
-            --max-reads 50000
+        # Process collapsed FASTA with processing limit
+        getRPF detect-architecture input.fasta output_rpfs.fasta -f collapsed \\
+            --generate-seqspec --max-reads 50000
     """
     handle_extract_rpf(
         input_file=input_file,

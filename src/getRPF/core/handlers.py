@@ -242,17 +242,13 @@ def handle_extract_rpf(
             output_file=output_file,
             format=format,
             max_reads=max_reads,
+            generate_seqspec=generate_seqspec,
         )
 
-        # Generate seqspec if requested and architecture was detected
-        if generate_seqspec and results.architecture_match:
+        # Seqspec generation is handled internally by the extractor
+        # based on the generate_seqspec parameter passed to extract_rpfs()
+        if generate_seqspec and results.seqspec_data:
             seqspec_path = output_file.with_suffix(".seqspec.yaml")
-            extractor.seqspec_generator.generate_seqspec(
-                input_file=input_file,
-                output_file=seqspec_path,
-                architecture_name=results.architecture_match,
-                format=format
-            )
             logger.info(f"Generated seqspec file: {seqspec_path}")
 
         # Write extraction report

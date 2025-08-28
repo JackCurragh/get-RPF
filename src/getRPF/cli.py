@@ -160,7 +160,14 @@ def check_cleanliness(
         getRPF check-cleanliness input.fasta -f collapsed -o reports/ --max-reads 5000
     """
     from .core.processors.check import CleanlinessChecker
-    from .core.checkers import run_all_cleanliness_checks, categorize_failures, write_check_report
+    from .core.checkers import (
+        run_all_cleanliness_checks, 
+        categorize_failures, 
+        write_check_report,
+        LengthDistributionCheck,
+        BaseCompositionCheck,
+        GCContentCheck
+    )
     
     # Create output directory
     output.mkdir(exist_ok=True)
@@ -169,15 +176,29 @@ def check_cleanliness(
     checker = CleanlinessChecker(format=format, max_reads=max_reads)
     sequence_results = checker.analyze_file(input_file)
     
-    # Run all cleanliness checks
+    # Run all cleanliness checks (enhanced version)
     check_results = run_all_cleanliness_checks(sequence_results)
+    
+    # Also run basic RPF checks for compatibility (.rpf_checks.txt format)
+    basic_checks = {
+        "Length Distribution": LengthDistributionCheck(),
+        "Base Composition": BaseCompositionCheck(),
+        "GC Content": GCContentCheck(),
+    }
+    basic_check_results = {
+        name: check.check(sequence_results) for name, check in basic_checks.items()
+    }
     
     # Categorize failures
     categories = categorize_failures(check_results)
     
-    # Write detailed report
+    # Write detailed report (enhanced format)
     report_path = output / f"{input_file.stem}_cleanliness_report.txt"
     write_check_report(check_results, report_path)
+    
+    # Write basic RPF check report (.rpf_checks.txt format for compatibility)
+    rpf_report_path = output / f"{input_file.stem}_cleanliness_report.rpf_checks.txt"
+    write_check_report(basic_check_results, rpf_report_path)
     
     # Print summary
     if categories['is_clean']:

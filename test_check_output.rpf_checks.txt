@@ -1,0 +1,36 @@
+=== RPF Data Check Results ===
+
+Sample Status: CLEAN
+
+Check Summary:
+Length Distribution            [PASS]
+Base Composition               [PASS]
+GC Content                     [PASS]
+
+Detailed Results:
+
+Length Distribution:
+Status: PASS
+Message: Read length distribution matches RPF expectations
+Details:
+  fraction_in_range: 1.0
+  mode_length: 28
+  mode_fraction: 0.216
+  total_reads: 1000
+  min_length: 26
+  max_length: 35
+
+Base Composition:
+Status: PASS
+Message: Base composition looks normal
+Details:
+  problem_positions:
+  max_frequency: 0.0
+  worst_position: None
+  worst_base: None
+
+GC Content:
+Status: PASS
+Message: GC content within expected range
+Details:
+  gc_content: 0.5000333288894814

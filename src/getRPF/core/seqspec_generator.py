@@ -425,39 +425,54 @@ class SeqSpecGenerator:
         return seqspec
     
     def _write_yaml(self, seqspec_dict: Dict[str, Any], output_file: Path):
-        """Write seqspec dictionary to YAML file."""
-        
-        # Custom YAML representer to handle the !Region, !Read, !File tags
-        def represent_tagged_dict(dumper, data):
-            # Extract the tag and remove it from data
-            tag = None
-            clean_data = {}
-            for key, value in data.items():
-                if key.startswith('!'):
-                    tag = key
-                else:
-                    clean_data[key] = value
-            
-            if tag:
-                tag_name = f"tag:yaml.org,2002:python/object/apply:__main__.{tag[1:]}"
-                return dumper.represent_mapping(tag_name, clean_data)
+        """Write seqspec dictionary to YAML file with proper tags."""
+
+        class TaggedDict(dict):
+            """Dictionary subclass that holds a YAML tag."""
+            yaml_tag = None
+
+        def dict_representer(dumper, data):
+            """Represent tagged dictionaries with proper YAML tags."""
+            if isinstance(data, TaggedDict) and data.yaml_tag:
+                return dumper.represent_mapping(data.yaml_tag, dict(data))
+            return dumper.represent_mapping('tag:yaml.org,2002:map', data)
+
+        # Add representer for TaggedDict
+        yaml.add_representer(TaggedDict, dict_representer)
+
+        def convert_to_tagged(obj: Any) -> Any:
+            """Recursively convert dicts with !Tag markers to TaggedDict."""
+            if isinstance(obj, dict):
+                tag = obj.get('!Assay') or obj.get('!Region') or obj.get('!Read') or obj.get('!File')
+                clean_dict = {k: convert_to_tagged(v) for k, v in obj.items() if not k.startswith('!')}
+
+                if tag is not None:
+                    # Extract the tag name
+                    for key in obj.keys():
+                        if key.startswith('!'):
+                            tagged = TaggedDict(clean_dict)
+                            tagged.yaml_tag = key
+                            return tagged
+
+                return clean_dict
+            elif isinstance(obj, list):
+                return [convert_to_tagged(item) for item in obj]
             else:
-                return dumper.represent_mapping('tag:yaml.org,2002:map', clean_data)
-        
-        # Add custom representers
-        yaml.add_representer(dict, represent_tagged_dict)
-        
+                return obj
+
+        # Convert the seqspec dict to use TaggedDict
+        converted = convert_to_tagged(seqspec_dict)
+
         with open(output_file, 'w') as f:
-            # Write seqspec with proper formatting
             yaml.dump(
-                seqspec_dict,
+                converted,
                 f,
                 default_flow_style=False,
                 indent=2,
                 sort_keys=False,
                 allow_unicode=True
             )
-        
+
         logger.info(f"seqspec YAML written to {output_file}")
     
     def generate_mixed_seqspec(

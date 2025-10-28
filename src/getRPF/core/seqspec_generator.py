@@ -222,11 +222,14 @@ class SeqSpecGenerator:
         
         # Generate the complete seqspec structure
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
-        
+
         if output_file:
             self._write_yaml(seqspec_dict, output_file)
             logger.info(f"seqspec file written to {output_file}")
-        
+
+            # Also write adapter FASTA file
+            self._write_adapter_fasta(architecture, output_file)
+
         return seqspec_dict
     
     def _generate_from_detected_segments(
@@ -522,7 +525,36 @@ class SeqSpecGenerator:
             )
 
         logger.info(f"seqspec YAML written to {output_file}")
-    
+
+    def _write_adapter_fasta(self, architecture, seqspec_file: Path):
+        """Write adapter sequences to FASTA file alongside seqspec.
+
+        Args:
+            architecture: ReadArchitecture object with adapter info
+            seqspec_file: Path to seqspec file (used to derive FASTA filename)
+        """
+        if not architecture or not hasattr(architecture, 'adapter_sequences'):
+            return
+
+        # Create adapter FASTA filename based on seqspec filename
+        adapter_fasta = seqspec_file.with_suffix('.adapters.fa')
+
+        adapter_count = 0
+        with open(adapter_fasta, 'w') as f:
+            for i, adapter_seq in enumerate(architecture.adapter_sequences):
+                if adapter_seq and adapter_seq not in ['', 'N', 'X']:
+                    # Skip sequences that are all N's
+                    if not all(c in 'Nn' for c in adapter_seq):
+                        adapter_name = f"adapter_{i+1}"
+                        f.write(f">{adapter_name}\n{adapter_seq}\n")
+                        adapter_count += 1
+
+        if adapter_count > 0:
+            logger.info(f"Wrote {adapter_count} adapter(s) to {adapter_fasta}")
+        else:
+            # Remove empty file
+            adapter_fasta.unlink(missing_ok=True)
+
     def generate_mixed_seqspec(
         self,
         clean_reads: List[str],
@@ -589,24 +621,39 @@ class SeqSpecGenerator:
             regions = [clean_variant, contaminated_variant]
         else:
             regions = [clean_variant]
-        
-        assay.sequence_spec = regions
-        
-        # Create read spec for mixed data
+
+        # Calculate total library length
         all_reads = clean_reads + contaminated_reads
         read_lengths = [len(read) for read in all_reads[:100]]
-        
+        min_read_len = min(read_lengths) if read_lengths else 20
+        max_read_len = max(read_lengths) if read_lengths else 50
+
+        # Create hierarchical library structure with mixed variants
+        library_construct = SeqSpecRegion(
+            region_id="mixed_library_construct",
+            region_type="joined",
+            sequence_type="joined",
+            name="Mixed library structure (clean + contaminated variants)",
+            min_len=min_read_len,
+            max_len=max_read_len,
+            strand="pos",
+            regions=regions
+        )
+
+        assay.sequence_spec = [library_construct]
+
+        # Create read spec for mixed data
         read_spec = SeqSpecRead(
             read_id="R1_mixed",
             name="Mixed Read 1",
-            modality="rna", 
-            primer_id="mixed_primers",
+            modality="rna",
+            primer_id="mixed_library_construct",
             strand="pos",
-            min_len=min(read_lengths) if read_lengths else 20,
-            max_len=max(read_lengths) if read_lengths else 50,
+            min_len=min_read_len,
+            max_len=max_read_len,
             files=[{"file_id": "R1.fastq.gz", "filename": "mixed_input.fastq"}]
         )
-        
+
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
         
         if output_file:
@@ -660,22 +707,38 @@ class SeqSpecGenerator:
                 strand="pos"
             )
             regions.append(region)
-        
-        assay.sequence_spec = regions
-        
-        # Create read specification
+
+        # Calculate total library length
         read_lengths = [len(read) for read in sample_reads[:100]]
+        min_read_len = min(read_lengths) if read_lengths else 50
+        max_read_len = max(read_lengths) if read_lengths else 100
+
+        # Create hierarchical library structure
+        library_construct = SeqSpecRegion(
+            region_id="annotated_library_construct",
+            region_type="joined",
+            sequence_type="joined",
+            name="Annotated library structure",
+            min_len=min_read_len,
+            max_len=max_read_len,
+            strand="pos",
+            regions=regions
+        )
+
+        assay.sequence_spec = [library_construct]
+
+        # Create read specification
         read_spec = SeqSpecRead(
             read_id="R1_annotated",
             name="Annotated Read 1",
             modality="rna",
-            primer_id="complex_primer",
-            strand="pos", 
-            min_len=min(read_lengths) if read_lengths else 50,
-            max_len=max(read_lengths) if read_lengths else 100,
+            primer_id="annotated_library_construct",
+            strand="pos",
+            min_len=min_read_len,
+            max_len=max_read_len,
             files=[{"file_id": "R1.fastq.gz", "filename": "annotated_input.fastq"}]
         )
-        
+
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
         
         if output_file:

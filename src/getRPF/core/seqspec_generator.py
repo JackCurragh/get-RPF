@@ -365,7 +365,7 @@ class SeqSpecGenerator:
     
     def _create_seqspec_dict(self, assay: SeqSpecAssay, reads: List[SeqSpecRead]) -> Dict[str, Any]:
         """Create complete seqspec dictionary structure."""
-        
+
         # Convert regions to dict format
         def region_to_dict(region: SeqSpecRegion) -> Dict[str, Any]:
             region_dict = {
@@ -378,17 +378,33 @@ class SeqSpecGenerator:
                 "max_len": region.max_len,
                 "strand": region.strand
             }
-            
+
             if region.sequence:
                 region_dict["sequence"] = region.sequence
-            
+
             if region.regions:
                 region_dict["regions"] = [region_to_dict(r) for r in region.regions]
-            
+
             return region_dict
-        
+
         # Convert reads to dict format
         def read_to_dict(read: SeqSpecRead) -> Dict[str, Any]:
+            # Convert files with proper File object fields
+            files = []
+            for f in read.files:
+                file_dict = {
+                    "!File": None,
+                    "file_id": f.get("file_id", "R1.fastq.gz"),
+                    "filename": f.get("filename", "input.fastq"),
+                    "filetype": f.get("filetype", "fastq"),
+                    "filesize": f.get("filesize", 0),
+                    "url": f.get("url", "."),
+                    "urltype": f.get("urltype", "local")
+                }
+                if "md5" in f:
+                    file_dict["md5"] = f["md5"]
+                files.append(file_dict)
+
             return {
                 "!Read": None,
                 "read_id": read.read_id,
@@ -398,30 +414,36 @@ class SeqSpecGenerator:
                 "strand": read.strand,
                 "min_len": read.min_len,
                 "max_len": read.max_len,
-                "files": [{"!File": None, **f} for f in read.files]
+                "files": files
             }
-        
+
         seqspec = {
             "!Assay": None,
             "seqspec_version": assay.seqspec_version,
             "assay_id": assay.assay_id,
             "name": assay.name,
-            "doi": assay.doi,
             "publication_date": assay.publication_date,
             "description": assay.description,
             "modalities": assay.modalities,
-            "lib_struct": assay.lib_struct,
             "library_protocol": assay.library_protocol,
-            "library_kit": assay.library_kit,
-            "sequence_protocol": assay.sequence_protocol,
-            "sequence_kit": assay.sequence_kit,
-            "sequence_spec": [region_to_dict(r) for r in assay.sequence_spec],
-            "library_spec": [region_to_dict(r) for r in assay.library_spec]
         }
-        
-        if reads:
-            seqspec["reads"] = [read_to_dict(r) for r in reads]
-        
+
+        # Add optional fields only if they have meaningful values
+        if assay.doi and assay.doi != "auto-detected":
+            seqspec["doi"] = assay.doi
+        if assay.lib_struct:
+            seqspec["lib_struct"] = assay.lib_struct
+        if assay.library_kit:
+            seqspec["library_kit"] = assay.library_kit
+        if assay.sequence_protocol:
+            seqspec["sequence_protocol"] = assay.sequence_protocol
+        if assay.sequence_kit:
+            seqspec["sequence_kit"] = assay.sequence_kit
+
+        # CORRECT STRUCTURE: library_spec contains Regions, sequence_spec contains Reads
+        seqspec["library_spec"] = [region_to_dict(r) for r in assay.sequence_spec]
+        seqspec["sequence_spec"] = [read_to_dict(r) for r in reads] if reads else []
+
         return seqspec
     
     def _write_yaml(self, seqspec_dict: Dict[str, Any], output_file: Path):

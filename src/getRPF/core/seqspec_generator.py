@@ -133,14 +133,14 @@ class SeqSpecGenerator:
             library_kit=architecture.lab_source
         )
         
-        # Build sequence spec regions
-        regions = []
+        # Build ordered library structure regions (hierarchical)
+        ordered_regions = []
         current_pos = 0
-        
+
         # Add UMI regions
         for i, (start, end) in enumerate(architecture.umi_positions):
             umi_sequence = self._extract_consensus(sample_reads, start, end)
-            regions.append(SeqSpecRegion(
+            ordered_regions.append(SeqSpecRegion(
                 region_id=f"umi_{i+1}",
                 region_type="umi",
                 sequence_type="random",
@@ -150,11 +150,11 @@ class SeqSpecGenerator:
                 max_len=end - start
             ))
             current_pos = end
-        
+
         # Add barcode regions
         for i, (start, end) in enumerate(architecture.barcode_positions):
             barcode_sequence = self._extract_consensus(sample_reads, start, end)
-            regions.append(SeqSpecRegion(
+            ordered_regions.append(SeqSpecRegion(
                 region_id=f"barcode_{i+1}",
                 region_type="barcode",
                 sequence_type="onlist" if barcode_sequence else "random",
@@ -164,10 +164,10 @@ class SeqSpecGenerator:
                 max_len=end - start
             ))
             current_pos = end
-        
+
         # Add adapters as separate regions
         for i, adapter_seq in enumerate(architecture.adapter_sequences):
-            regions.append(SeqSpecRegion(
+            ordered_regions.append(SeqSpecRegion(
                 region_id=f"adapter_{i+1}",
                 region_type="illumina_p7" if "AGATCGG" in adapter_seq else "custom_primer",
                 sequence_type="fixed",
@@ -176,10 +176,10 @@ class SeqSpecGenerator:
                 min_len=len(adapter_seq),
                 max_len=len(adapter_seq)
             ))
-        
+
         # Add RPF region
         rpf_min, rpf_max = architecture.expected_rpf_length
-        regions.append(SeqSpecRegion(
+        ordered_regions.append(SeqSpecRegion(
             region_id="rpf_sequence",
             region_type="cdna",
             sequence_type="joined",
@@ -187,25 +187,38 @@ class SeqSpecGenerator:
             min_len=rpf_min,
             max_len=rpf_max
         ))
-        
-        # Calculate total read structure
+
+        # Calculate total library length
         read_lengths = [len(read) for read in sample_reads[:100]]
         min_read_len = min(read_lengths) if read_lengths else 20
         max_read_len = max(read_lengths) if read_lengths else 50
-        
+
+        # Create hierarchical library structure with parent region
+        library_construct = SeqSpecRegion(
+            region_id="library_construct",
+            region_type="joined",
+            sequence_type="joined",
+            name=f"{architecture.protocol_name} library structure",
+            min_len=min_read_len,
+            max_len=max_read_len,
+            strand="pos",
+            regions=ordered_regions
+        )
+
         # Create read specification
         read_spec = SeqSpecRead(
             read_id="R1",
             name="Read 1",
             modality="rna",
-            primer_id="primer_5",
+            primer_id="library_construct",
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
             files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}]
         )
-        
-        assay.sequence_spec = regions
+
+        # Store as library_spec (will be converted correctly in _create_seqspec_dict)
+        assay.sequence_spec = [library_construct]
         
         # Generate the complete seqspec structure
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
@@ -277,7 +290,7 @@ class SeqSpecGenerator:
         if not regions:
             read_lengths = [len(read) for read in sample_reads[:100]]
             avg_len = sum(read_lengths) // len(read_lengths) if read_lengths else 30
-            
+
             regions.append(SeqSpecRegion(
                 region_id="full_rpf_sequence",
                 region_type="cdna",
@@ -286,24 +299,37 @@ class SeqSpecGenerator:
                 min_len=avg_len - 5,
                 max_len=avg_len + 5
             ))
-        
-        # Create read specification
+
+        # Calculate total library length
         read_lengths = [len(read) for read in sample_reads[:100]]
         min_read_len = min(read_lengths) if read_lengths else 20
         max_read_len = max(read_lengths) if read_lengths else 50
-        
+
+        # Create hierarchical library structure
+        library_construct = SeqSpecRegion(
+            region_id="detected_library_construct",
+            region_type="joined",
+            sequence_type="joined",
+            name="De novo detected library structure",
+            min_len=min_read_len,
+            max_len=max_read_len,
+            strand="pos",
+            regions=regions
+        )
+
+        # Create read specification
         read_spec = SeqSpecRead(
             read_id="R1",
-            name="Read 1", 
+            name="Read 1",
             modality="rna",
-            primer_id="unknown_primer",
+            primer_id="detected_library_construct",
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
             files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}]
         )
-        
-        assay.sequence_spec = regions
+
+        assay.sequence_spec = [library_construct]
         
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
         

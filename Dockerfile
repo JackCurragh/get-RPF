@@ -12,7 +12,7 @@ COPY README.md LICENSE ./
 # Install dependencies (including STAR from bioconda via pixi)
 # Install dependencies and the package itself
 RUN pixi install && \
-    pixi run pip install .
+    pixi run python -m pip install .
 
 # Add the pixi environment to PATH so Nextflow can find the executable
 ENV PATH="/app/.pixi/envs/default/bin:$PATH"

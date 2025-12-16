@@ -90,6 +90,7 @@ platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.dependencies]
 python = "3.10.*"
+pip = "*"
 star = ">=2.7.10a"
 samtools = ">=1.15"
 click = "*"

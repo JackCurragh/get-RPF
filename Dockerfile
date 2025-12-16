@@ -10,8 +10,13 @@ COPY src/ ./src/
 COPY README.md LICENSE ./
 
 # Install dependencies (including STAR from bioconda via pixi)
-RUN pixi install
+# Install dependencies and the package itself
+RUN pixi install && \
+    pixi run pip install .
 
-# Set entrypoint to run getRPF
-# Note: we run via pixi run to ensure environment is activated
-ENTRYPOINT ["pixi", "run", "getRPF"]
+# Add the pixi environment to PATH so Nextflow can find the executable
+ENV PATH="/app/.pixi/envs/default/bin:$PATH"
+ENV PYTHONPATH="/app/src:$PYTHONPATH"
+
+# Default command
+CMD ["getRPF", "--help"]

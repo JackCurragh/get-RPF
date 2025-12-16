@@ -207,6 +207,10 @@ class STARAligner:
             "--outFilterMismatchNmax", "1",  # Allow 1 mismatch
             "--seedSearchStartLmax", "20",  # Shorter seed for short reads
         ]
+
+        # Handle compressed input
+        if str(input_fastq).endswith(".gz"):
+            star_cmd.extend(["--readFilesCommand", "zcat"])
         
         logger.info(f"Running STAR alignment: {' '.join(star_cmd)}")
         
@@ -215,6 +219,7 @@ class STARAligner:
                 star_cmd,
                 capture_output=True,
                 text=True,
+                errors="replace",  # Handle potential binary garbage in logs
                 check=True,
                 timeout=3600,  # 1 hour timeout
             )

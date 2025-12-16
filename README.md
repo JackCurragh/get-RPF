@@ -11,7 +11,9 @@ getRPF is a comprehensive tool for automated analysis and extraction of Ribosome
 - **📊 Comprehensive Quality Assessment**: Multi-dimensional cleanliness checking with failure categorization
 - **🧬 seqspec Integration**: Load novel protocols from standard seqspec files for unlimited extensibility  
 - **⚡ Scalable Processing**: Designed to handle thousands of samples with efficient batch processing workflows
-- **📈 Detailed Reporting**: Rich analysis reports in JSON/CSV formats with extraction statistics
+- **⚡ Scalable Processing**: Designed to handle thousands of samples with efficient batch processing workflows
+- **📈 Insightful Reporting**: Interactive HTML reports with architecture flowcharts and alignment sparklines
+- **🧠 Intelligent Detection**: Strict pattern matching + Probabilistic HMM segmentation for novel reads
 
 ## 📋 Table of Contents
 
@@ -97,11 +99,26 @@ mkdir my_protocols/
 getRPF extract-rpf input_reads.fastq output_rpfs.fastq -f fastq --seqspec-dir my_protocols/
 ```
 
+
+
+### 4. Architecture Detection & Reporting
+
+Designed for automated processing with "clean/fail" logic, but generates interactive reports for **post-hoc investigation**:
+
+```bash
+# Run automated detection
+getRPF detect-architecture input.fastq output.fastq --generate-seqspec
+
+# View report for detailed investigation: output.report.html
+# Features for post-hoc analysis:
+# - Interactive signal plots to verify UMI/Adapter boundaries
+# - Decision trace to understand why a specific architecture was inferred
+```
+
 ## 📋 Commands Overview
 
 getRPF provides five main commands for different aspects of RPF analysis:
 
-### Core Commands
 
 | Command | Purpose | Use Case |
 |---------|---------|----------|

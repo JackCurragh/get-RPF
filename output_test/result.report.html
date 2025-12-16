@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>getRPF Extraction Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; color: #333; }
+        .header { border-bottom: 2px solid #eaeaea; padding-bottom: 20px; margin-bottom: 30px; }
+        .card { background: #fff; border: 1px solid #eaeaea; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .metric-plot { width: 100%; height: 300px; background: #fafafa; border: 1px dashed #ddd; position: relative; }
+        .bar { display: inline-block; width: 10px; background: #0070f3; position: absolute; bottom: 0; }
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .log-box { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; max-height: 200px; overflow-y: auto; }
+        .structure-map { display: flex; gap: 5px; margin: 20px 0; }
+        .segment { padding: 10px; border-radius: 4px; text-align: center; color: white; font-weight: bold; min-width: 50px; }
+        .umi { background: #f5a623; }
+        .rpf { background: #4a90e2; flex-grow: 1; }
+        .adapter { background: #d0021b; }
+        .barcode { background: #bd10e0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>getRPF Extraction Report</h1>
+        <p>File: result.report.html</p>
+        <p>Identified Protocol: <strong>de_novo_inferred</strong></p>
+    </div>
+
+    <div class="card">
+        <h2>Read Structure</h2>
+        <div class="structure-map">
+            <div class="segment umi">UMI<br>39nt</div><div class="segment rpf">RPF<br>4nt</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Signal Metrics (5' Entropy)</h2>
+        <div class="metric-plot" id="entropyPlot">
+            <!-- Simple JS/CSS Bars for now -->
+            <div class="bar" style="left: 0.0%; width: 2.3255813953488373%; height: 99.81563094771695%;" title="Pos 0: 2.00"></div><div class="bar" style="left: 2.3255813953488373%; width: 2.3255813953488373%; height: 99.7493758376298%;" title="Pos 1: 1.99"></div><div class="bar" style="left: 4.651162790697675%; width: 2.3255813953488373%; height: 99.92568089099436%;" title="Pos 2: 2.00"></div><div class="bar" style="left: 6.976744186046512%; width: 2.3255813953488373%; height: 99.97150013259048%;" title="Pos 3: 2.00"></div><div class="bar" style="left: 9.30232558139535%; width: 2.3255813953488373%; height: 99.94662736466681%;" title="Pos 4: 2.00"></div><div class="bar" style="left: 11.627906976744187%; width: 2.3255813953488373%; height: 99.98144615386242%;" title="Pos 5: 2.00"></div><div class="bar" style="left: 13.953488372093023%; width: 2.3255813953488373%; height: 99.95407441545234%;" title="Pos 6: 2.00"></div><div class="bar" style="left: 16.27906976744186%; width: 2.3255813953488373%; height: 99.96021133606276%;" title="Pos 7: 2.00"></div><div class="bar" style="left: 18.6046511627907%; width: 2.3255813953488373%; height: 99.80403283815379%;" title="Pos 8: 2.00"></div><div class="bar" style="left: 20.930232558139537%; width: 2.3255813953488373%; height: 99.89543998004969%;" title="Pos 9: 2.00"></div><div class="bar" style="left: 23.255813953488374%; width: 2.3255813953488373%; height: 99.95685746712296%;" title="Pos 10: 2.00"></div><div class="bar" style="left: 25.581395348837212%; width: 2.3255813953488373%; height: 99.95148812557328%;" title="Pos 11: 2.00"></div><div class="bar" style="left: 27.906976744186046%; width: 2.3255813953488373%; height: 99.9230597408004%;" title="Pos 12: 2.00"></div><div class="bar" style="left: 30.232558139534884%; width: 2.3255813953488373%; height: 99.95809689893979%;" title="Pos 13: 2.00"></div><div class="bar" style="left: 32.55813953488372%; width: 2.3255813953488373%; height: 99.78289431394474%;" title="Pos 14: 2.00"></div><div class="bar" style="left: 34.88372093023256%; width: 2.3255813953488373%; height: 99.96667011389158%;" title="Pos 15: 2.00"></div><div class="bar" style="left: 37.2093023255814%; width: 2.3255813953488373%; height: 99.84734223314645%;" title="Pos 16: 2.00"></div><div class="bar" style="left: 39.53488372093023%; width: 2.3255813953488373%; height: 99.86912383846163%;" title="Pos 17: 2.00"></div><div class="bar" style="left: 41.86046511627907%; width: 2.3255813953488373%; height: 99.95745488982372%;" title="Pos 18: 2.00"></div><div class="bar" style="left: 44.18604651162791%; width: 2.3255813953488373%; height: 100.0%;" title="Pos 19: 2.00"></div><div class="bar" style="left: 46.51162790697675%; width: 2.3255813953488373%; height: 99.9197428761569%;" title="Pos 20: 2.00"></div><div class="bar" style="left: 48.83720930232558%; width: 2.3255813953488373%; height: 99.67150569870856%;" title="Pos 21: 1.99"></div><div class="bar" style="left: 51.162790697674424%; width: 2.3255813953488373%; height: 99.96932661669148%;" title="Pos 22: 2.00"></div><div class="bar" style="left: 53.48837209302326%; width: 2.3255813953488373%; height: 99.67963524569998%;" title="Pos 23: 1.99"></div><div class="bar" style="left: 55.81395348837209%; width: 2.3255813953488373%; height: 99.97518332480652%;" title="Pos 24: 2.00"></div><div class="bar" style="left: 58.139534883720934%; width: 2.3255813953488373%; height: 99.8106351096169%;" title="Pos 25: 2.00"></div><div class="bar" style="left: 60.46511627906977%; width: 2.3255813953488373%; height: 99.75288309538232%;" title="Pos 26: 1.99"></div><div class="bar" style="left: 62.79069767441861%; width: 2.3255813953488373%; height: 99.76654955836061%;" title="Pos 27: 2.00"></div><div class="bar" style="left: 65.11627906976744%; width: 2.3255813953488373%; height: 99.56393840726162%;" title="Pos 28: 1.99"></div><div class="bar" style="left: 67.44186046511628%; width: 2.3255813953488373%; height: 99.80748783511866%;" title="Pos 29: 2.00"></div><div class="bar" style="left: 69.76744186046513%; width: 2.3255813953488373%; height: 99.04118649857543%;" title="Pos 30: 1.98"></div><div class="bar" style="left: 72.09302325581396%; width: 2.3255813953488373%; height: 99.51883694328019%;" title="Pos 31: 1.99"></div><div class="bar" style="left: 74.4186046511628%; width: 2.3255813953488373%; height: 95.71577144022488%;" title="Pos 32: 1.91"></div><div class="bar" style="left: 76.74418604651163%; width: 2.3255813953488373%; height: 94.40499397086562%;" title="Pos 33: 1.89"></div><div class="bar" style="left: 79.06976744186046%; width: 2.3255813953488373%; height: 91.4909565139925%;" title="Pos 34: 1.83"></div><div class="bar" style="left: 81.39534883720931%; width: 2.3255813953488373%; height: 85.64685687632978%;" title="Pos 35: 1.71"></div><div class="bar" style="left: 83.72093023255815%; width: 2.3255813953488373%; height: 88.7130702765627%;" title="Pos 36: 1.77"></div><div class="bar" style="left: 86.04651162790698%; width: 2.3255813953488373%; height: 93.69248630316113%;" title="Pos 37: 1.87"></div><div class="bar" style="left: 88.37209302325581%; width: 2.3255813953488373%; height: 96.16986973582581%;" title="Pos 38: 1.92"></div><div class="bar" style="left: 90.69767441860466%; width: 2.3255813953488373%; height: 75.7213457558757%;" title="Pos 39: 1.51"></div><div class="bar" style="left: 93.0232558139535%; width: 2.3255813953488373%; height: 48.257665386689425%;" title="Pos 40: 0.97"></div><div class="bar" style="left: 95.34883720930233%; width: 2.3255813953488373%; height: 50.00244243864841%;" title="Pos 41: 1.00"></div><div class="bar" style="left: 97.67441860465117%; width: 2.3255813953488373%; height: 43.58630988975473%;" title="Pos 42: 0.87"></div>
+        </div>
+        <p><small>Showing first 50 positions. High entropy = Random (UMI), Low = Consensus (Adapter)</small></p>
+    </div>
+
+    <div class="card">
+        <h2>Decision Trace</h2>
+        <div class="log-box">
+            Used HMM segmentation based on entropy profile.
+        </div>
+    </div>
+</body>
+</html>
+        

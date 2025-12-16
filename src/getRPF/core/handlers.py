@@ -157,6 +157,7 @@ def handle_align_detect(
     output: Path,
     output_format: str = "json",
     count_pattern: Optional[str] = None,
+    save_bam_path: Optional[Path] = None,
     max_reads: Optional[int] = None,
 ) -> None:
     """Handle the align and detect command workflow.
@@ -189,6 +190,7 @@ def handle_align_detect(
             input_file,
             format=format,
             count_pattern=count_pattern if format == "collapsed" else None,
+            save_bam_path=save_bam_path,
         )
 
         # Write results in requested format

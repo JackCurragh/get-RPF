@@ -83,3 +83,18 @@ exclude = [
 
 # Allow unused variables when underscore-prefixed
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.pixi.project]
+channels = ["conda-forge", "bioconda"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = "3.10.*"
+star = ">=2.7.10a"
+samtools = ">=1.15"
+click = "*"
+biopython = "*"
+numpy = "*"
+pyyaml = "*"
+pysam = "*"
+

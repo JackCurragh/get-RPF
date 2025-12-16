@@ -411,6 +411,12 @@ def detect_adapter(
     default="read_{count}",
 )
 @click.option(
+    "--save-bam",
+    "-b",
+    type=click.Path(path_type=Path),
+    help="Path to save the alignment BAM file",
+)
+@click.option(
     "--max-reads",
     "-n",
     type=int,
@@ -425,6 +431,7 @@ def align_detect(
     output: Path,
     output_format: str = "json",
     count_pattern: Optional[str] = None,
+    save_bam: Optional[Path] = None,
     max_reads: Optional[int] = 100000,
 ):
     """Align reads with STAR and detect features.
@@ -451,6 +458,7 @@ def align_detect(
         output=output,
         output_format=output_format,
         count_pattern=count_pattern if format == "collapsed" else None,
+        save_bam_path=save_bam,
         max_reads=max_reads,
     )
 

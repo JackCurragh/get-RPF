@@ -60,7 +60,9 @@ class RPFExtractionResult:
     extraction_method: str  # "pattern_match" or "de_novo"
     segments: Dict[str, List[SegmentInfo]]
     quality_metrics: Dict[str, float]
+    quality_metrics: Dict[str, float]
     seqspec_data: Optional[Dict[str, Any]] = None
+    trim_recommendations: Optional[Dict[str, Any]] = None  # Standardized trimming params for external tools
     
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write extraction results to file."""
@@ -873,7 +875,12 @@ class RPFExtractor:
             extraction_method="pattern_match",
             segments={"detected": segments},
             quality_metrics={"extraction_rate": 1.0},
-            seqspec_data=seqspec_data
+            seqspec_data=seqspec_data,
+            trim_recommendations={
+                "recommended_5prime_trim": architecture.rpf_start,
+                "recommended_3prime_trim": abs(architecture.rpf_end) if architecture.rpf_end < 0 and architecture.rpf_end != -1 else 0,
+                "three_prime_adapter": architecture.adapter_sequences[0] if architecture.adapter_sequences else None
+            }
         )
     
     def _extract_with_de_novo(
@@ -918,8 +925,38 @@ class RPFExtractor:
             extraction_method="de_novo",
             segments={"detected": segments},
             quality_metrics={"detection_confidence": confidence},
-            seqspec_data=seqspec_data
+            seqspec_data=seqspec_data,
+            trim_recommendations=self._derive_trim_recommendations(segments)
         )
+
+    def _derive_trim_recommendations(self, segments: List[SegmentInfo]) -> Dict[str, Any]:
+        """Derive standard trim recommendations from segments."""
+        rpf_segments = [s for s in segments if s.segment_type == "rpf"]
+        if not rpf_segments:
+            return {"recommended_5prime_trim": 0, "recommended_3prime_trim": 0}
+        
+        rpf = rpf_segments[0]
+        # 5' trim is just the start position
+        trim_5p = rpf.start_pos
+        
+        # 3' trim: check if there's a segment after RPF
+        trim_3p = 0
+        sorted_segments = sorted(segments, key=lambda s: s.start_pos)
+        rpf_idx = sorted_segments.index(rpf)
+        
+        # If there are segments after RPF, those are 3' trims
+        if rpf_idx < len(sorted_segments) - 1:
+            # Check if remaining segments cover the rest of the read or are specific
+            # For de novo, we often just find the RPF boundaries.
+            # We can't easily determine static 3' trim without read length context,
+            # but usually de novo implies we found the "good part".
+            pass
+            
+        return {
+            "recommended_5prime_trim": trim_5p,
+            "recommended_3prime_trim": trim_3p,  # De novo usually implies extracting the segment
+            "note": "For de novo, exact 3' trim may depend on read length"
+        }
     
     def _extract_rpfs_from_reads(
         self,

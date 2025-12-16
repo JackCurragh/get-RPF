@@ -505,7 +505,18 @@ def align_detect(
     help="Maximum number of reads to process",
     default=None,
 )
-def detect_architecture(
+@click.option(
+    "--star-index",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to STAR index for alignment-based verification",
+)
+@click.option(
+    "--star-threads",
+    type=int,
+    help="Threads for STAR verification",
+    default=1,
+)
+def extract_rpf(
     input_file: Path,
     output_file: Path,
     format: str,
@@ -514,39 +525,18 @@ def detect_architecture(
     generate_seqspec: bool = False,
     output_format: str = "json",
     max_reads: Optional[int] = None,
+    star_index: Optional[Path] = None,
+    star_threads: int = 1,
 ):
-    """Detect read architecture and optionally extract clean RPFs.
+    """Extract clean RPFs with architecture detection and alignment verification.
 
-    This command analyzes ribosome profiling reads to identify their structure
-    using pattern matching against known architectures or de novo detection.
-    The primary output is a seqspec file that describes the detected architecture.
+    This is the master command for RPF isolation. It combines:
+    1. Pattern matching against known architectures
+    2. De novo probabilistic segmentation (HMM)
+    3. Optional STAR-based alignment verification (soft-clipping analysis)
 
-    The system automatically:
-    - Detects read architecture (UMI, barcodes, adapters) using known patterns
-    - Falls back to de novo detection for unknown protocols  
-    - Generates seqspec files for discovered architectures
-    - Optionally extracts clean RPF sequences
-    - Provides detailed detection reports
-
-    Examples:
-        # Detect architecture and generate seqspec
-        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq --generate-seqspec
-
-        # Use custom architecture database  
-        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq \\
-            -a custom_architectures.json --generate-seqspec
-
-        # Load novel protocols from seqspec directory
-        getRPF detect-architecture input.fastq output_rpfs.fastq -f fastq \\
-            --seqspec-dir my_protocols/ --generate-seqspec
-
-        # Architecture detection only (no RPF extraction)
-        getRPF detect-architecture input.fastq temp_output.fastq -f fastq \\
-            --generate-seqspec --max-reads 5000
-
-        # Process collapsed FASTA with processing limit
-        getRPF detect-architecture input.fasta output_rpfs.fasta -f collapsed \\
-            --generate-seqspec --max-reads 50000
+    If --star-index is provided, the tool performs a "whole shebang" analysis:
+    checking if the detected architecture boundaries agree with alignment soft-clipping patterns.
     """
     handle_extract_rpf(
         input_file=input_file,
@@ -557,6 +547,8 @@ def detect_architecture(
         generate_seqspec=generate_seqspec,
         output_format=output_format,
         max_reads=max_reads,
+        star_index=star_index,
+        star_threads=star_threads,
     )
 
 

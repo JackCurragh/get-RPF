@@ -560,5 +560,28 @@ def detect_architecture(
     )
 
 
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--star-index", "-s", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--format", "-f", type=click.Choice(["fastq", "fasta", "collapsed"]), required=True)
+@click.option("--output", "-o", type=click.Path(path_type=Path), required=True)
+@click.option("--max-reads", "-n", type=int, default=10000)
+def decide_trim(input_file, star_index, format, output, max_reads):
+    """Auto-configure trimming by combining methods.
+    
+    Runs both architecture detection and alignment verification to determine
+    the optimal trimming parameters.
+    """
+    from .core.handlers import handle_decide_trim
+    
+    handle_decide_trim(
+        input_file=input_file,
+        star_index=star_index,
+        format=format,
+        output=output,
+        max_reads=max_reads
+    )
+
 if __name__ == "__main__":
     cli()

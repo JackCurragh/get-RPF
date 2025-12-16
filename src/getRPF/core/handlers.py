@@ -268,3 +268,80 @@ def handle_extract_rpf(
     except Exception as e:
         logger.error(f"RPF extraction failed: {str(e)}")
         raise RuntimeError(f"RPF extraction failed: {str(e)}") from e
+
+
+def handle_decide_trim(
+    input_file: Path,
+    star_index: Path,
+    format: str,
+    output: Path,
+    max_reads: int = 10000,
+) -> None:
+    """Handle the decision making workflow for trim parameters.
+    
+    Synthesizes results from architecture detection and alignment verification.
+    """
+    import json
+    from dataclasses import asdict
+    from .processors.consensus import TrimDecider
+    
+    logger.info(f"Starting consensus trim decision for {input_file}")
+    
+    try:
+        # 1. Run Architecture Detection
+        logger.info("Step 1/3: detecting read architecture...")
+        extractor = RPFExtractor()
+        # We process a small sample to be fast, but we need the report
+        # We can use a temp file for the RPF output as we only care about the report
+        from ..utils.file_utils import create_temp_file, cleanup_temp_files
+        temp_rpf = create_temp_file(suffix=".fastq")
+        
+        arch_results = extractor.extract_rpfs(
+            input_file=input_file,
+            output_file=temp_rpf,
+            format=format,
+            max_reads=max_reads,
+            generate_seqspec=False
+        )
+        arch_data = asdict(arch_results)
+        
+        # 2. Run Alignment Verification
+        logger.info("Step 2/3: verifying with STAR alignment...")
+        aligner = STARAligner(star_index=star_index, threads=1, max_reads=max_reads)
+        # Use simple 5' trimming from architecture for better alignment if known?
+        # For now, align raw/collapsed to see soft clipping
+        align_results_obj = aligner.align_reads(
+            input_file=input_file, 
+            format=format,
+            save_bam_path=None # No need to save BAM for config decision
+        )
+        
+        # Convert alignment results to dict
+        align_data = {
+            "trim_recommendations": align_results_obj.trim_recommendations,
+            "alignment_statistics": {
+                "input_reads": align_results_obj.input_reads,
+                "aligned_reads": align_results_obj.aligned_reads,
+                "alignment_rate": align_results_obj.alignment_rate
+            }
+        }
+        
+        # 3. Consensus Decision
+        logger.info("Step 3/3: calculating consensus parameters...")
+        decider = TrimDecider()
+        consensus = decider.decide(arch_data, align_data)
+        
+        # Write Output
+        output_data = asdict(consensus)
+        with open(output, 'w') as f:
+            json.dump(output_data, f, indent=2)
+            
+        logger.info(f"Consensus decision: 5' trim={consensus.trim_5p}, 3' trim={consensus.trim_3p}")
+        logger.info(f"Report written to {output}")
+        
+        # Cleanup
+        cleanup_temp_files([temp_rpf])
+        
+    except Exception as e:
+        logger.error(f"Trim decision failed: {str(e)}")
+        raise RuntimeError(f"Trim decision failed: {str(e)}") from e

@@ -1,0 +1,35 @@
+{
+  "input_reads": 0,
+  "processed_reads": 0,
+  "extracted_rpfs": 0,
+  "failed_extractions": 0,
+  "architecture_match": "de_novo_inferred",
+  "extraction_method": "probabilistic_hmm",
+  "segments": {
+    "detected": [
+      {
+        "segment_type": "umi",
+        "start_pos": 0,
+        "end_pos": 39,
+        "confidence": 0.9,
+        "consensus": null
+      },
+      {
+        "segment_type": "rpf",
+        "start_pos": 39,
+        "end_pos": 43,
+        "confidence": 0.9,
+        "consensus": null
+      }
+    ]
+  },
+  "quality_metrics": {
+    "confidence": 0.95
+  },
+  "seqspec_data": null,
+  "trim_recommendations": {
+    "recommended_5prime_trim": 39,
+    "recommended_3prime_trim": 0,
+    "note": "Use detected adapter sequences for 3' trimming"
+  }
+}

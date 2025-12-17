@@ -262,10 +262,69 @@ class RPFExtractor:
             # Fallback to Probabilistic Segmentation
             logger.info("No strict architecture match found. Attempting probabilistic segmentation...")
             method = "probabilistic_hmm"
-            extracted_segments = self.segmenter.segment(signals)
             
+            # IMPROVEMENT: Multi-Scale Binning Strategy
+            # Variable read lengths can smear the signal. We bin reads by length and detect on each bin independently.
+            from collections import Counter
+            length_counts = Counter(len(r) for r in sample_reads)
+            
+            # Select bins with sufficient coverage (>1000 reads)
+            valid_bins = [l for l, c in length_counts.items() if c > 1000]
+            valid_bins.sort()
+            
+            detected_segments_per_bin = []
+            
+            if len(valid_bins) > 1:
+                logger.info(f"Multi-scale detection: analyzing {len(valid_bins)} length bins: {valid_bins}")
+                for length in valid_bins:
+                    bin_reads = [r for r in sample_reads if len(r) == length]
+                    bin_signals = self.signal_processor.process_reads(bin_reads)
+                    bin_segments = self.segmenter.segment(bin_signals)
+                    
+                    if bin_segments:
+                        detected_segments_per_bin.append(bin_segments)
+                
+                # Consensus logic: Do the bins agree on structure?
+                # We enforce that UMI structures must be consistent across length bins.
+                if detected_segments_per_bin:
+                    bin_votes = []
+                    for segs in detected_segments_per_bin:
+                        # Extract UMI info
+                        umis = [s for s in segs if s.segment_type == 'umi']
+                        umi_len = umis[0].end_pos - umis[0].start_pos if umis else 0
+                        # Extract RPF start (which is UMI end)
+                        rpf_starts = [s.start_pos for s in segs if s.segment_type == 'rpf']
+                        rpf_start = rpf_starts[0] if rpf_starts else 0
+                        bin_votes.append((umi_len, rpf_start))
+                    
+                    # Find majority vote
+                    vote_counts = Counter(bin_votes)
+                    most_common, count = vote_counts.most_common(1)[0]
+                    consensus_ratio = count / len(bin_votes)
+                    
+                    if consensus_ratio > 0.5:
+                        logger.info(f"Multi-scale Consensus: {consensus_ratio:.0%} of bins agree on UMI length {most_common[0]}.")
+                        
+                        # Find a representative bin that matches the consensus
+                        for segs in detected_segments_per_bin:
+                            bg_umis = [s for s in segs if s.segment_type == 'umi']
+                            bg_len = bg_umis[0].end_pos - bg_umis[0].start_pos if bg_umis else 0
+                            if bg_len == most_common[0]:
+                                extracted_segments = segs
+                                break
+                    else:
+                         logger.warning(f"Multi-scale Conflict: Bins disagree on structure (consensus {consensus_ratio:.0%}).")
+                         # Fall through to safety net or global detection
+                         extracted_segments = []
+
+                    trace_log.append(f"Used multi-scale segmentation across {len(valid_bins)} bins (Consensus: {consensus_ratio:.2f}).")
+            
+            if not extracted_segments:
+                 # Try global signal if binning failed or was skipped
+                 extracted_segments = self.segmenter.segment(signals)
+
             if extracted_segments:
-                trace_log.append("Used HMM segmentation based on entropy profile.")
+                trace_log.append("Used HMM segmentation.")
                 # Create a specific dummy architecture for the report
                 final_architecture = ReadArchitecture(
                     protocol_name="de_novo_inferred",
@@ -278,6 +337,53 @@ class RPFExtractor:
                 )
             else:
                 trace_log.append("Segmentation failed.")
+
+            # Safety Net: Brute-force Adapter Scan
+            # If we are in "No RPF segment detected" land or the HMM produced nonsense (e.g. all UMI),
+            # we should check if one of our known adapters is actually present.
+            rpf_found = any(s.segment_type == 'rpf' for s in extracted_segments)
+            if not rpf_found or (extracted_segments and extracted_segments[0].segment_type == 'umi' and extracted_segments[0].end_pos > 40):
+                logger.info("Suspicious structure detected (No RPF or giant UMI). Running brute-force adapter scan...")
+                
+                # We need to import AdapterDetector here or implementing a quick check
+                # A quick check is better given we have loaded Sample Reads
+                
+                best_adapter = None
+                best_count = 0
+                threshold = len(sample_reads) * 0.1 # 10% of reads
+                
+                # Check top 20 adapters (common) to be fast
+                from .adapter import AdapterDetector
+                
+                # Just use simple find for speed on the sample
+                for name, seq in list(KNOWN_ADAPTERS.items())[:20]:
+                    count = sum(1 for r in sample_reads if seq in r)
+                    if count > best_count:
+                        best_count = count
+                        best_adapter = (name, seq)
+                
+                if best_adapter and best_count > threshold:
+                    logger.info(f"Fallback Scan: Found adapter {best_adapter[0]} in {best_count} reads. Overriding HMM.")
+                    adapter_seq = best_adapter[1]
+                    
+                    # Construct override architecture
+                    final_architecture = ReadArchitecture(
+                        protocol_name=f"fallback_detected_{best_adapter[0]}",
+                        lab_source="Brute-force Scan Fallback",
+                        umi_positions=[],
+                        barcode_positions=[],
+                        adapter_sequences=[adapter_seq],
+                        rpf_start=0,
+                        rpf_end= -1, # Let dynamic trimming handle it
+                        expected_rpf_length=(20, 40),
+                        quality_markers={"fallback_match": True}
+                    )
+                    method = "fallback_adapter_scan"
+                    extracted_segments = [
+                        SegmentInfo("rpf", 0, -1, 0.99), # Placeholder
+                        SegmentInfo("adapter", -1, -1, 0.99) # Placeholder
+                    ]
+                    trace_log.append(f"Override: Found dominant adapter {best_adapter[0]}.")
         
         # 4. Generate Reports
         if final_architecture and extracted_segments:

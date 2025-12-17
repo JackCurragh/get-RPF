@@ -28,9 +28,12 @@ class Reporter:
         # Structure Map
         structure_str = ""
         for seg in segments:
-            length = seg.end_pos - seg.start_pos
             name = seg.segment_type.upper()
-            structure_str += f"[{name}:{length}]--"
+            if seg.end_pos == -1:
+                 structure_str += f"[{name}:Variable/End]--"
+            else:
+                 length = seg.end_pos - seg.start_pos
+                 structure_str += f"[{name}:{length}]--"
             
         report.append(f"  Structure: {structure_str[:-2]}") # Remove last --
         
@@ -128,8 +131,18 @@ class Reporter:
         html_segs = []
         for seg in segments:
             type_class = seg.segment_type.lower()
-            length = seg.end_pos - seg.start_pos
-            html_segs.append(f'<div class="segment {type_class}">{seg.segment_type.upper()}<br>{length}nt</div>')
+            
+            # Handle placeholder/dynamic lengths
+            if seg.end_pos == -1:
+                length_str = "Variable / End"
+            else:
+                length = seg.end_pos - seg.start_pos
+                if length < 0:
+                    length_str = "Unknown"
+                else:
+                    length_str = f"{length}nt"
+            
+            html_segs.append(f'<div class="segment {type_class}">{seg.segment_type.upper()}<br>{length_str}</div>')
         return html_segs
 
     def _render_css_bars(self, data: List[float]) -> str:

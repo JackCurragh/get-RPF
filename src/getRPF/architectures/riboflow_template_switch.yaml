@@ -1,0 +1,32 @@
+seqspec_version: "0.3.0"
+assay_id: "riboflow_template_switch"
+name: "RiboFlow Template Switching"
+description: "RiboFlow prep with 12nt 5' UMI, 4nt 'NGGG' spacer, and poly-A style adapter."
+library_kit: "RiboFlow Template Switching Protocol"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: umi_5prime
+    region_type: umi
+    sequence_type: random
+    min_len: 12
+    max_len: 12
+  - region_id: spacer
+    region_type: linker
+    # "NGGG" sequence (discarded). N=random, GGG=fixed.
+    sequence_type: fixed
+    min_len: 4
+    max_len: 4
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 20
+    max_len: 40
+  - region_id: adapter
+    region_type: adapter
+    sequence: AAAAAAAAAACAAAAAAAAAA
+    min_len: 21
+    max_len: 21
+quality_markers:
+  # RPF starts after 12nt UMI + 4nt Spacer = 16
+  rpf_start: 16
+  rpf_end: -1

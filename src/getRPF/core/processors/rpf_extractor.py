@@ -27,52 +27,7 @@ from .reporting import Reporter
 logger = logging.getLogger(__name__)
 
 
-# Comprehensive database of known adapters
-KNOWN_ADAPTERS = {
-    # Guo et al. (2014)
-    "Guo14": "TCGTATGCCGTCTTCTG",
-    
-    # Hakon
-    "Hakon2": "CACTCGGGCACCAAGGA",
-    "Hakon3": "GTGTCAGTCACTTCCAGCGG",
-    "Hakon4": "TGTAGGCACCATC",
-    "Hakon5": "AAAAAAAAAA",
-    "Hakon6": "TCGTATGCCGTCTTCTGCTT",
 
-    # Kiniry et al.
-    "Kiniry1": "CTGTAGGCACCATCAAT",
-    "Kiniry2": "AGATCGGAAGAGC",
-    "Kiniry3": "CGCCTTGGCCGTACAGCAG",
-    "Kiniry5": "TGGAATTCTCGGGTGCCAAGG",
-    "Kiniry6": "CCTTGGCACCCGAGAATT",
-    "Kiniry7": "GATCGGAAGAGCGTCGT",
-    "Kiniry8": "CTGATGGCGCGAGGGAG",
-    "Kiniry9": "GATCGGAAGAGCACACG",
-    "Kiniry10": "AATGATACGGCGACCAC",
-    "Kiniry11": "GATCGGAAGAGCTCGTA",
-    "Kiniry12": "CAAGCAGAAGACGGCAT",
-    "Kiniry13": "ACACTCTTTCCCTACA",
-    "Kiniry14": "GATCGGAAGAGCGGTT",
-    "Kiniry15": "ACAGGTTCAGAGTTCTA",
-    "Kiniry16": "CAAGCAGAAGACGGCAT",
-    "Kiniry17": "ACAGGTTCAGAGTTCTA",
-    "Kiniry19": "TGATCGGAAGAGCACAC",
-    "Kiniry20": "GATCGGAAGAGCACACGT",
-    "Kiniry21": "AGATCGGAAGAGCAC",
-    "Kiniry22": "AGATCGGAAGAGCACACGTCT",
-
-    # Illumina / Standard
-    "Illumina Universal Adapter": "AGATCGGAAGAGC",
-    "Illumina Small RNA 3' Adapter": "TGGAATTCTCGG",
-    "Illumina Small RNA 5' Adapter": "GATCGTCGGACT",
-    "Nextera Transposase Sequence": "CTGTCTCTTATA",
-    "SOLID Small RNA Adapter": "CGCCTTGGCCGT",
-    "Ingolia 2012 adapter": "CTGTAGGCACCATCAAT",
-    "Illumina Uni. Adapter var2": "ATCGTAGATCGGAAG",
-    "Tru-seq Small RNA": "TGGAATTCTCGGGTGCCAAGG",
-    "Tru-seq Small RNA 2": "GGAATTCTCGGGTGCCAAGG",
-    "Illumina": "CTGTCTCTTATACACATCT"
-}
 
 
 class ArchitectureDatabase:
@@ -104,105 +59,34 @@ class ArchitectureDatabase:
             self._initialize_builtin_architectures()
     
     def _initialize_builtin_architectures(self) -> None:
-        # McGlincy & Ingolia (2017)
-        mcglincy_2017 = ReadArchitecture(
-            protocol_name="mcglincy_ingolia_2017",
-            lab_source="Ingolia Lab - Nature Protocols 2017",
-            umi_positions=[(0, 5)],
-            barcode_positions=[(5, 10)],
-            adapter_sequences=["AGATCGGAAGAGCAC"],
-            rpf_start=10,
-            rpf_end=-1,
-            expected_rpf_length=(26, 34),
-            quality_markers={"umi_complexity_min": 0.8}
-        )
-        
-        # Ingolia et al. (2009)
-        ingolia_2009 = ReadArchitecture(
-            protocol_name="ingolia_2009", 
-            lab_source="Ingolia et al. Science 2009",
-            umi_positions=[],
-            barcode_positions=[],
-            adapter_sequences=["CTGTAGGCACCATCAAT"],
-            rpf_start=0,
-            rpf_end=-17,
-            expected_rpf_length=(28, 35),
-            quality_markers={"adapter_match_threshold": 0.85}
-        )
-        
-        # Generic UMI
-        generic_umi = ReadArchitecture(
-            protocol_name="generic_umi_protocol",
-            lab_source="Common UMI-based protocol",
-            umi_positions=[(0, 6)],
-            barcode_positions=[],
-            adapter_sequences=["TGGAATTCTCGGGTGCCAAGG"],
-            rpf_start=6,
-            rpf_end=-1,
-            expected_rpf_length=(25, 35),
-            quality_markers={"umi_complexity_min": 0.75}
-        )
-        
-        # Preprocessed
-        preprocessed = ReadArchitecture(
-            protocol_name="preprocessed_with_adapter_contamination",
-            lab_source="Partially processed ribosome profiling reads",
-            umi_positions=[],
-            barcode_positions=[],
-            adapter_sequences=["AGATCGGAAGAGCAC"],
-            rpf_start=0,
-            rpf_end=-1,
-            expected_rpf_length=(25, 40),
-            quality_markers={"adapter_match_threshold": 0.2}
-        )
-        
-        err605046_style = ReadArchitecture(
-            protocol_name="err605046_stau1_riboseq",
-            lab_source="ERR605046 STAU1 ribosome profiling dataset",
-            umi_positions=[], 
-            barcode_positions=[], 
-            adapter_sequences=["AGATCGGAAGAGC", "GATCGGAAGAGC"], 
-            rpf_start=1, 
-            rpf_end=-1, 
-            expected_rpf_length=(15, 45), 
-            quality_markers={"adapter_match_threshold": 0.2} 
-        )
-        
-        ena_riboseq = ReadArchitecture(
-            protocol_name="ena_riboseq_standard",
-            lab_source="ENA ribosome profiling dataset ERR10323209",
-            umi_positions=[], 
-            barcode_positions=[], 
-            adapter_sequences=["GGAATTCTCGGGTGCCAAGG", "TGGAATTCTCGGGTGCCAAGG"], 
-            rpf_start=0, 
-            rpf_end=-1, 
-            expected_rpf_length=(25, 80), 
-            quality_markers={"adapter_match_threshold": 0.5} 
-        )
-        
-        self.architectures = [err605046_style, ena_riboseq, preprocessed, mcglincy_2017, ingolia_2009, generic_umi]
-        
-        # Add comprehensive adapter check
-        all_adapters = sorted(list(set(KNOWN_ADAPTERS.values())), key=len, reverse=True)
-        comprehensive = ReadArchitecture(
-            protocol_name="comprehensive_adapter_check",
-            lab_source="Automated Comprehensive Adapter Scan",
-            umi_positions=[],
-            barcode_positions=[],
-            adapter_sequences=all_adapters,
-            rpf_start=0,
-            rpf_end=-1,
-            expected_rpf_length=(20, 40),
-            quality_markers={"adapter_match_threshold": 0.3}
-        )
-        self.architectures.insert(0, comprehensive)
+        """Initialize architectures from the internal package directory."""
+        try:
+            import importlib.resources
+            # For Python 3.9+, use files()
+            if hasattr(importlib.resources, 'files'):
+                arch_dir = importlib.resources.files('getRPF').joinpath('architectures')
+            else:
+                # Fallback maybe not needed if >=3.10 is required
+                raise ImportError("Requires Python 3.9+ for importlib.resources.files")
+                
+            self.load_from_seqspec_directory(arch_dir)
+            
+            # Ensure comprehensive check is first (if loaded)
+            comprehensive = next((a for a in self.architectures if a.protocol_name == "comprehensive_adapter_check"), None)
+            if comprehensive:
+                self.architectures.remove(comprehensive)
+                self.architectures.insert(0, comprehensive)
+                
+            logger.info(f"Initialized {len(self.architectures)} built-in architectures from package resources")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize built-in architectures: {e}")
+            self.architectures = []
 
-        logger.info(f"Initialized {len(self.architectures)} built-in architectures")
-        
         if self.seqspec_dir and self.seqspec_dir.exists():
             self.load_from_seqspec_directory(self.seqspec_dir)
             
-    def load_from_seqspec_directory(self, seqspec_dir: Path) -> int:
+    def load_from_seqspec_directory(self, seqspec_dir: Any) -> int:
         seqspec_architectures = self.seqspec_loader.load_from_directory(seqspec_dir)
         self.architectures.extend(seqspec_architectures)
         return len(seqspec_architectures)
@@ -356,14 +240,25 @@ class RPFExtractor:
                 from .adapter import AdapterDetector
                 
                 # Just use simple find for speed on the sample
-                for name, seq in list(KNOWN_ADAPTERS.items())[:20]:
+                # Use adapters from the 'comprehensive_adapter_check' architecture if available
+                comprehensive_arch = next((a for a in self.architecture_db.architectures if a.protocol_name == "comprehensive_adapter_check"), None)
+                adapter_list = []
+                if comprehensive_arch and comprehensive_arch.adapter_sequences:
+                    # Create list of (name, seq) tuples from the list
+                    # Since seqspec doesn't store names per adapter in list, we generate dummy names
+                    adapter_list = [(f"adapter_{i}", seq) for i, seq in enumerate(comprehensive_arch.adapter_sequences)]
+                else:
+                    # Fallback to empty if not found (should not happen with built-in)
+                    adapter_list = []
+
+                for name, seq in adapter_list[:30]: # Check top 30
                     count = sum(1 for r in sample_reads if seq in r)
                     if count > best_count:
                         best_count = count
                         best_adapter = (name, seq)
                 
                 if best_adapter and best_count > threshold:
-                    logger.info(f"Fallback Scan: Found adapter {best_adapter[0]} in {best_count} reads. Overriding HMM.")
+                    logger.info(f"Fallback Scan: Found adapter {best_adapter[1]} in {best_count} reads. Overriding HMM.")
                     adapter_seq = best_adapter[1]
                     
                     # Construct override architecture

@@ -1,0 +1,50 @@
+seqspec_version: "0.3.0"
+assay_id: "comprehensive_adapter_check"
+name: "Comprehensive Adapter Scan"
+description: "Automated check against 30+ known Ribo-seq adapters"
+library_kit: "Automated Comprehensive Adapter Scan"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 20
+    max_len: 40
+  - region_id: adapter_list
+    region_type: adapter
+    sequence_type: list
+    # Longest to shortest sort order is maintained by logic, but listed here for completeness
+    sequences:
+      - TGGAATTCTCGGGTGCCAAGG
+      - AGATCGGAAGAGCACACGTCT
+      - GTGTCAGTCACTTCCAGCGG
+      - TCGTATGCCGTCTTCTGCTT
+      - GATCGGAAGAGCACACGT
+      - CGCCTTGGCCGTACAGCAG
+      - ACAGGTTCAGAGTTCTA
+      - CTGTAGGCACCATCAAT
+      - TCGTATGCCGTCTTCTG
+      - CACTCGGGCACCAAGGA
+      - CCTTGGCACCCGAGAATT
+      - GATCGGAAGAGCGTCGT
+      - CTGATGGCGCGAGGGAG
+      - GATCGGAAGAGCACACG
+      - AATGATACGGCGACCAC
+      - GATCGGAAGAGCTCGTA
+      - CAAGCAGAAGACGGCAT
+      - TGATCGGAAGAGCACAC
+      - CTGTCTCTTATACACATCT
+      - ACAGGTTCAGAGTTCTA
+      - CAAGCAGAAGACGGCAT
+      - ACTCTTTCCCTACA
+      - GATCGGAAGAGCGGTT
+      - AGATCGGAAGAGCAC
+      - AGATCGGAAGAGC
+      - TGTAGGCACCATC
+      - GATCGTCGGACT
+      - CTGTCTCTTATA
+      - CGCCTTGGCCGT
+      - TGGAATTCTCGG
+      - AAAAAAAAAA
+quality_markers:
+  adapter_match_threshold: 0.3

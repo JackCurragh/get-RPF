@@ -1,0 +1,24 @@
+seqspec_version: "0.3.0"
+assay_id: "generic_umi_protocol"
+name: "Generic UMI Protocol"
+description: "Common generic structure with 6nt UMI"
+library_kit: "Common UMI-based protocol"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: umi
+    region_type: umi
+    sequence_type: random
+    min_len: 6
+    max_len: 6
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 25
+    max_len: 35
+  - region_id: adapter
+    region_type: adapter
+    sequence: TGGAATTCTCGGGTGCCAAGG
+    min_len: 21
+    max_len: 21
+quality_markers:
+  umi_complexity_min: 0.75

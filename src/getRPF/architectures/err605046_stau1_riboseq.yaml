@@ -1,0 +1,28 @@
+seqspec_version: "0.3.0"
+assay_id: "err605046_stau1_riboseq"
+name: "ERR605046 STAU1"
+description: "Specific STAU1 ribosome profiling dataset (ERR605046)"
+library_kit: "ERR605046 STAU1 ribosome profiling dataset"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: prefix
+    region_type: unknown
+    min_len: 1
+    max_len: 1
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 15
+    max_len: 45
+  - region_id: adapter_1
+    region_type: adapter
+    sequence: AGATCGGAAGAGC
+    min_len: 13
+    max_len: 13
+  - region_id: adapter_2
+    region_type: adapter
+    sequence: GATCGGAAGAGC
+    min_len: 12
+    max_len: 12
+quality_markers:
+  adapter_match_threshold: 0.2

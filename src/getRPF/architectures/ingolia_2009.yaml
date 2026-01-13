@@ -1,0 +1,19 @@
+seqspec_version: "0.3.0"
+assay_id: "ingolia_2009"
+name: "Ingolia 2009 Protocol"
+description: "Original Ingolia et al. Science 2009 yeast protocol"
+library_kit: "Ingolia et al. Science 2009"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 28
+    max_len: 35
+  - region_id: adapter
+    region_type: adapter
+    sequence: CTGTAGGCACCATCAAT
+    min_len: 17
+    max_len: 17
+quality_markers:
+  adapter_match_threshold: 0.85

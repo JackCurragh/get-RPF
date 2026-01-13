@@ -42,22 +42,35 @@ class SeqSpecArchitectureLoader:
     def __init__(self):
         self.loaded_architectures = []
     
-    def load_from_directory(self, seqspec_dir: Path) -> List[ReadArchitecture]:
-        """Load all seqspec files from a directory."""
-        
-        seqspec_files = list(seqspec_dir.glob("*.yaml")) + list(seqspec_dir.glob("*.yml"))
-        
-        logger.info(f"Found {len(seqspec_files)} seqspec files in {seqspec_dir}")
+    def load_from_directory(self, seqspec_dir: Any) -> List[ReadArchitecture]:
+        """Load all seqspec files from a directory (Path or Traversable)."""
         
         architectures = []
-        for seqspec_file in seqspec_files:
-            try:
-                arch = self.load_from_seqspec(seqspec_file)
-                if arch:
-                    architectures.append(arch)
-                    logger.info(f"Loaded architecture: {arch.protocol_name}")
-            except Exception as e:
-                logger.warning(f"Failed to load {seqspec_file}: {e}")
+        try:
+            # Handle both Path objects and Traversable (from importlib.resources)
+            if hasattr(seqspec_dir, 'iterdir'):
+                files = list(seqspec_dir.iterdir())
+            else:
+                s_dir = Path(seqspec_dir)
+                files = list(s_dir.glob("*.yaml")) + list(s_dir.glob("*.yml"))
+                
+            logger.info(f"Scanning {len(files)} files in {seqspec_dir}")
+
+            for file_path in files:
+                # Basic check for yaml extension if iterating blindly
+                if not file_path.name.endswith(('.yaml', '.yml')):
+                    continue
+                    
+                try:
+                    arch = self.load_from_seqspec(file_path)
+                    if arch:
+                        architectures.append(arch)
+                        logger.info(f"Loaded architecture: {arch.protocol_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to load {file_path}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error scanning directory {seqspec_dir}: {e}")
         
         self.loaded_architectures.extend(architectures)
         return architectures
@@ -68,8 +81,12 @@ class SeqSpecArchitectureLoader:
         logger.debug(f"Loading seqspec: {seqspec_file}")
         
         try:
-            with open(seqspec_file, 'r') as f:
-                content = f.read()
+            # Handle Traversable objects from importlib.resources
+            if hasattr(seqspec_file, 'read_text'):
+                content = seqspec_file.read_text(encoding='utf-8')
+            else:
+                with open(seqspec_file, 'r') as f:
+                    content = f.read()
             
             # Try to parse as YAML (ignoring custom tags for now)
             # This is a simplified parser - real seqspec parsing would be more complex
@@ -109,6 +126,8 @@ class SeqSpecArchitectureLoader:
                     if 'adapter' in region_type or 'adapter' in region_id:
                         if sequence:
                             adapter_sequences.append(sequence)
+                        elif region.get('sequence_type') == 'list' and 'sequences' in region:
+                             adapter_sequences.extend(region['sequences'])
                     elif 'umi' in region_type or 'umi' in region_id:
                         if region_length > 0:
                             umi_positions.append((current_pos, current_pos + region_length))

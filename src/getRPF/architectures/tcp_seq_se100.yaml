@@ -1,0 +1,33 @@
+seqspec_version: "0.3.0"
+assay_id: "tcp_seq_se100"
+name: "TCP-seq SE100"
+description: "TCP-seq protocol with split UMI (4nt 5' + 4nt 3') and Illumina adapter."
+library_kit: "Illumina TCP-seq"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: umi_5prime
+    region_type: umi
+    sequence_type: random
+    min_len: 4
+    max_len: 4
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 20
+    max_len: 80
+  - region_id: umi_3prime
+    region_type: umi
+    # 4 random nucleotides before the adapter.
+    # Note: getRPF adapter trimming might leave these attached to the 3' end of the RPF 
+    # if not pre-processed or handled by specific 3' trimming logic.
+    sequence_type: random
+    min_len: 4
+    max_len: 4
+  - region_id: adapter
+    region_type: adapter
+    sequence: TGGAATTCTCGGGTGCCAAGG
+    min_len: 21
+    max_len: 21
+quality_markers:
+  rpf_start: 4
+  rpf_end: -1

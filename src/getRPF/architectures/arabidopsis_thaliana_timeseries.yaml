@@ -1,0 +1,27 @@
+seqspec_version: "0.3.0"
+assay_id: "arabidopsis_thaliana_timeseries_2024"
+name: "Arabidopsis Thaliana Time-Series Protocol"
+description: "Ribo-seq protocol with 5nt 3' UMI, custom adapter, and optional 5' random trimming"
+library_kit: "Custom Protocol (Chen et al., 2018; Smith et al., 2017)"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: rpf_start
+    region_type: cdna
+    sequence_type: joined
+    min_len: 20
+    max_len: 35
+  - region_id: umi_3prime
+    region_type: umi
+    sequence_type: random
+    min_len: 5
+    max_len: 5
+  - region_id: adapter
+    region_type: adapter
+    sequence: AGCTAAGATCGGAAGAGCACACGTCTGAA
+    min_len: 29
+    max_len: 29
+quality_markers:
+  # Protocol mentions "one or two random nucleotides may be added to the 5′ end"
+  # This implies a variable 5' trim might be needed.
+  adapter_match_threshold: 0.8
+  variable_5prime_trim_expected: true

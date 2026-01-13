@@ -1,0 +1,24 @@
+seqspec_version: "0.3.0"
+assay_id: "ena_riboseq_standard"
+name: "ENA Standard RiboSeq"
+description: "Standard ENA dataset (ERR10323209)"
+library_kit: "ENA ribosome profiling dataset ERR10323209"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 25
+    max_len: 80
+  - region_id: adapter_1
+    region_type: adapter
+    sequence: GGAATTCTCGGGTGCCAAGG
+    min_len: 20
+    max_len: 20
+  - region_id: adapter_2
+    region_type: adapter
+    sequence: TGGAATTCTCGGGTGCCAAGG
+    min_len: 21
+    max_len: 21
+quality_markers:
+  adapter_match_threshold: 0.5

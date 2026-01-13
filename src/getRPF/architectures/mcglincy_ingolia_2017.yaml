@@ -1,0 +1,41 @@
+seqspec_version: "0.3.0"
+assay_id: "mcglincy_ingolia_2017"
+name: "McGlincy & Ingolia 2017 Protocol"
+description: "McGlincy & Ingolia (2017) protocol with 5nt UMI and 5nt Barcode (3' Linker). Includes 8 specific barcoded linkers."
+library_kit: "Ingolia Lab - Nature Protocols 2017"
+modalities: ["rna"]
+sequence_spec:
+  - region_id: rpf
+    region_type: cdna
+    sequence_type: joined
+    min_len: 26
+    max_len: 34
+    onlist: null
+  - region_id: umi
+    region_type: umi
+    sequence_type: random
+    min_len: 5
+    max_len: 5
+  - region_id: barcode
+    region_type: barcode
+    sequence_type: fixed
+    min_len: 5
+    max_len: 5
+  - region_id: adapter
+    region_type: adapter
+    # Listing all 8 barcoded linkers (Barcode + Constant Adapter)
+    # The 5nt UMI (NNNNN) precedes these.
+    sequence_type: list
+    sequences:
+      - ATCGTAGATCGGAAGAGCACACGTCTGAA
+      - AGCTAAGATCGGAAGAGCACACGTCTGAA
+      - CGTAAAGATCGGAAGAGCACACGTCTGAA
+      - CTAGAAGATCGGAAGAGCACACGTCTGAA
+      - GATCAAGATCGGAAGAGCACACGTCTGAA
+      - GCATAAGATCGGAAGAGCACACGTCTGAA
+      - TAGACAGATCGGAAGAGCACACGTCTGAA
+      - TCTAGAGATCGGAAGAGCACACGTCTGAA
+quality_markers:
+  umi_complexity_min: 0.8
+  rpf_start: 0
+  rpf_end: -1

@@ -57,61 +57,40 @@ class ArchitectureMatcher:
         return best_result
 
     def _evaluate_architecture(self, stats: SignalStats, arch: ReadArchitecture) -> MatchResult:
-        """Evaluate a single architecture against the signals."""
+        """Evaluate a single architecture against the signals.
+
+        This matcher uses composition-based fuzzy matching strategy:
+        - UMI detection via entropy profiles (high entropy = random sequence)
+        - Adapter detection via nucleotide composition consensus (matches adapter bases at 3' end)
+
+        Note: This approach works with SignalStats (no raw reads needed) but requires
+        untrimmed data for adapter detection. Pre-trimmed data will not match adapters.
+        """
         reasons = []
         score = 0.0
-        
-        # 1. Adapter Constraint (Critical)
-        # If an architecture specifies an adapter, we MUST see it.
-        # However, we don't have raw reads here, just stats.
-        # Wait - strict matching usually requires checking specific sequences in potential adapter regions.
-        # The SignalStats gives us entropy/composition. 
-        # Low entropy at specific positions suggests adapter.
-        # But to be robust, we probably need the raw reads for the adapter check 
-        # or we accept that the SignalProcessor 'entropy' drop is the proxy.
-        # BETTER: The Matcher should ideally have access to 'Adapter Presence' boolean 
-        # which might be calculated separately?
-        # OR: We keep the fuzzy adapter check as a pre-filter?
-        # NO, the plan said "Strict Matcher".
-        # Let's assume we pass in 'adapter_presence_score' computed externally?
-        # Actually, let's implement a targeted adapter check here if we can, 
-        # but we only have stats.
-        
-        # Checking UMI Profile (Entropy Check)
+
+        # Check UMI profile (entropy-based)
         umi_score = self._check_umi_profile(stats, arch, reasons)
-        
-        # Checking Length Distribution
-        # We don't have the length distribution in SignalStats directly (we have max len),
-        # but we can infer RPF length compatibility?
-        # Actually, SignalStats needs length distribution to be truly useful here.
-        # Let's assume we can get simple length checks from valid_reads passed elsewhere,
-        # or we update SignalStats.
-        # For this iteration, let's focus on the signals we HAVE.
-        
-        # Length check (placeholder logic based on SignalStats max_len unfortunately)
-        # Real implementation should probably pass length hist in SignalStats.
-        
-        # Let's implement the logic based on entropy profile matching.
-        
-        # Score Accumulation
-        # If UMI check failed (and UMI was expected), it's a hard reject.
+
+        # If UMI expected but not found, reject immediately
         if umi_score == 0.0 and arch.umi_positions:
             return MatchResult(arch, False, 0.0, reasons)
-            
+
         score += umi_score * 0.4
-        
-        # Adapter check needs to be handled. 
-        # Ideally, we'd check if specific adapter k-mers are overrepresented in the composition stats.
-        # e.g. if adapter is "AGATCGG", check if pos X has 'A', pos X+1 has 'G' etc.
-        # This is actually very robust!
+
+        # Check adapter composition (consensus-based)
+        # Strategy: Match adapter sequence bases against 3' composition stats
+        # This checks if the adapter "emerges" in the consensus sequence
         adapter_score = self._check_adapter_composition(stats, arch, reasons)
+
+        # If adapter expected but not found, reject
         if adapter_score == 0.0 and arch.adapter_sequences:
              return MatchResult(arch, False, 0.0, reasons)
-             
+
         score += adapter_score * 0.6
-        
+
         is_match = score >= self.threshold
-        
+
         return MatchResult(arch, is_match, score, reasons)
 
     def _check_umi_profile(self, stats: SignalStats, arch: ReadArchitecture, reasons: List[str]) -> float:

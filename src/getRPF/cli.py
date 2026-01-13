@@ -96,6 +96,7 @@ def cli():
     It provides access to various analysis tools for Ribo-seq data processing.
 
     The tool focuses on:
+        - RPF extraction with single-nucleotide precision
         - Quality assessment of RPF reads
         - Adapter sequence detection and analysis
         - Read length distribution analysis
@@ -104,6 +105,115 @@ def cli():
     For detailed documentation, visit: https://getRPF.readthedocs.io
     """
     pass
+
+
+@cli.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.argument('output_file', type=click.Path())
+@click.option('--star-index', required=True, type=click.Path(exists=True),
+              help='Path to STAR genome index directory')
+@click.option('--preserve-umi/--no-preserve-umi', default=False,
+              help='Detect and preserve UMI sequences in FASTQ headers')
+@click.option('--sample-size', default=10000, type=int,
+              help='Number of reads to sample for boundary detection (default: 10000)')
+@click.option('--no-adapter-report', is_flag=True,
+              help='Skip adapter scanning (faster but less informative)')
+@click.option('--threads', default=4, type=int,
+              help='Number of threads for STAR alignment (default: 4)')
+@click.option('--output-report', type=click.Path(),
+              help='Path for JSON report (default: <output>.extraction_report.json)')
+def extract(input_file, output_file, star_index, preserve_umi, sample_size,
+            no_adapter_report, threads, output_report):
+    """
+    Extract RPF using alignment-based method (RECOMMENDED).
+
+    This is the primary extraction method for getRPF. It aligns a subset of
+    reads to determine biological sequence boundaries, then extracts RPF from
+    all reads with single-nucleotide precision.
+
+    \b
+    Examples:
+        # Basic extraction
+        getRPF extract input.fastq rpf.fastq --star-index /path/to/index
+
+        # With UMI preservation
+        getRPF extract input.fastq rpf.fastq --star-index /path/to/index --preserve-umi
+
+        # Custom sample size
+        getRPF extract input.fastq rpf.fastq --star-index /path/to/index --sample-size 20000
+
+    \b
+    The tool will:
+      1. Sample reads for characterization
+      2. Scan for known adapters (informational)
+      3. Align subset with STAR
+      4. Analyze soft-clipping patterns per read length
+      5. Extract RPF with validated boundaries
+      6. Generate comprehensive report
+    """
+    import json
+    import logging
+    from pathlib import Path
+    from .core.processors.alignment_extractor import AlignmentBasedExtractor
+    from .utils.logging import setup_logging
+
+    setup_logging()
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.info("=" * 70)
+        logger.info("getRPF: Alignment-Based RPF Extraction")
+        logger.info("=" * 70)
+
+        # Initialize extractor
+        extractor = AlignmentBasedExtractor()
+
+        # Run extraction
+        result = extractor.extract(
+            input_file=Path(input_file),
+            output_file=Path(output_file),
+            star_index=Path(star_index),
+            preserve_umi=preserve_umi,
+            sample_size=sample_size,
+            report_adapters=not no_adapter_report,
+            star_threads=threads
+        )
+
+        # Write JSON report
+        if output_report:
+            report_path = Path(output_report)
+        else:
+            report_path = Path(output_file).with_suffix('.extraction_report.json')
+
+        with open(report_path, 'w') as f:
+            json.dump(result.to_dict(), f, indent=2)
+
+        # Print summary
+        click.echo("\n" + "=" * 70)
+        click.echo("✓ Extraction Complete!")
+        click.echo("=" * 70)
+        click.echo(f"Extracted: {result.extracted_rpfs:,} RPFs from {result.input_reads:,} reads")
+        click.echo(f"Extraction rate: {result.extraction_rate:.1%}")
+        click.echo(f"Trim boundaries: 5'={result.trim_boundaries.consensus_5p}nt, "
+                  f"3'={result.trim_boundaries.consensus_3p}nt")
+        click.echo(f"Overall confidence: {result.trim_boundaries.confidence}")
+
+        if result.adapter_info and result.adapter_info.top_adapter:
+            click.echo(f"Detected adapter: {result.adapter_info.top_adapter}")
+
+        if result.umi_info and result.umi_info.detected:
+            click.echo(f"UMI detected: positions {result.umi_info.positions}, "
+                      f"confidence: {result.umi_info.confidence}")
+
+        click.echo(f"\nOutput files:")
+        click.echo(f"  RPF sequences: {output_file}")
+        click.echo(f"  JSON report:   {report_path}")
+        click.echo("=" * 70)
+
+    except Exception as e:
+        logger.error(f"Extraction failed: {e}", exc_info=True)
+        click.echo(f"\n❌ Error: {e}", err=True)
+        raise click.Abort()
 
 
 @cli.command()

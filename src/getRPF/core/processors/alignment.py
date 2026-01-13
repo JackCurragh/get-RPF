@@ -55,7 +55,6 @@ class AlignmentResults:
             "trim_recommendations": self.trim_recommendations,
             "per_length_analysis": self.per_length_analysis,
             "detected_features": self.features,
-            "detected_features": self.features,
             "output_files": [str(f) for f in self.output_files if Path(f).exists()],
             "metadata": {
                 "soft_clipping_analysis_available": self.pysam_available

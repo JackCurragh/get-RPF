@@ -201,7 +201,7 @@ class STARAligner:
             "--outFileNamePrefix", str(temp_dir / "Aligned_"),
             "--outSAMtype", "BAM", "SortedByCoordinate",
             "--alignIntronMax", "1",  # No introns for most prokaryotes
-            "--alignEndsType", "EndToEnd",  # Require end-to-end alignment
+            "--alignEndsType", "Local",  # Allow soft-clipping for adapters
             "--outFilterMultimapNmax", "1",  # Only unique alignments
             "--outFilterMismatchNmax", "1",  # Allow 1 mismatch
             "--seedSearchStartLmax", "20",  # Shorter seed for short reads

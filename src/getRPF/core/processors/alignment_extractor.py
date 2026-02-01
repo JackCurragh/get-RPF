@@ -295,6 +295,7 @@ class AlignmentBasedExtractor:
             adapter_info=adapter_info,
             umi_info=umi_info,
             alignment_stats=alignment_result,
+            alignment_stats=alignment_result,
             method="alignment_based"
         )
 

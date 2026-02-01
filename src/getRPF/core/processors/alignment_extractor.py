@@ -476,7 +476,7 @@ class AlignmentBasedExtractor:
             'total_reads': len(reads),
             'aligned_reads': result.aligned_reads,
             'alignment_rate': result.alignment_rate,
-            'bam_file': result.output_files[0] if result.output_files else None
+            'bam_file': str(result.output_files[0]) if result.output_files else None
         }
 
     # ========================================================================

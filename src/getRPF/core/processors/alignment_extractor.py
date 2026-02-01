@@ -31,7 +31,7 @@ except ImportError:
 from Bio import SeqIO
 
 from .alignment import STARAligner
-from ...utils.file_utils import create_temp_file
+from ...utils.file_utils import create_temp_file, get_file_opener
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +248,9 @@ class AlignmentBasedExtractor:
 
         # 2b. STAR alignment (ground truth)
         logger.info("  → Aligning subset with STAR...")
-        alignment_result = self._align_subset(subset_reads, star_index, star_threads)
+        # Save BAM to predictable location for debugging and analysis
+        subset_bam_path = output_file.with_suffix('.subset.bam')
+        alignment_result = self._align_subset(subset_reads, star_index, star_threads, subset_bam_path)
         logger.info(f"    ✓ Aligned: {alignment_result['aligned_reads']}/{alignment_result['total_reads']} "
                    f"({alignment_result['alignment_rate']:.1%})")
 
@@ -314,12 +316,20 @@ class AlignmentBasedExtractor:
         reads = []
 
         # Detect format
-        if input_file.suffix in ['.fq', '.fastq']:
+        if input_file.suffix == '.gz':
+            # Check inner extension
+            stem = input_file.with_suffix('').suffix
+            if stem in ['.fq', '.fastq']:
+                format_type = 'fastq'
+            else:
+                format_type = 'fasta'
+        elif input_file.suffix in ['.fq', '.fastq']:
             format_type = 'fastq'
         else:
             format_type = 'fasta'
 
-        with open(input_file) as f:
+        opener = get_file_opener(input_file)
+        with opener(input_file, 'rt') as f:
             for i, record in enumerate(SeqIO.parse(f, format_type)):
                 if i >= sample_size:
                     break
@@ -429,7 +439,8 @@ class AlignmentBasedExtractor:
         self,
         reads: List[Tuple[str, str]],
         star_index: Path,
-        threads: int
+        threads: int,
+        save_bam_path: Path
     ) -> Dict:
         """
         Align subset of reads with STAR.
@@ -458,7 +469,7 @@ class AlignmentBasedExtractor:
         result = aligner.align_reads(
             input_file=temp_fastq,
             format='fastq',
-            save_bam_path=None  # Uses temp file
+            save_bam_path=save_bam_path  # Save to requested path
         )
 
         return {
@@ -651,12 +662,20 @@ class AlignmentBasedExtractor:
         extracted_rpfs = 0
 
         # Detect format
-        if input_file.suffix in ['.fq', '.fastq']:
+        if input_file.suffix == '.gz':
+            # Check inner extension
+            stem = input_file.with_suffix('').suffix
+            if stem in ['.fq', '.fastq']:
+                format_type = 'fastq'
+            else:
+                format_type = 'fasta'
+        elif input_file.suffix in ['.fq', '.fastq']:
             format_type = 'fastq'
         else:
             format_type = 'fasta'
 
-        with open(input_file) as f_in, open(output_file, 'w') as f_out:
+        opener = get_file_opener(input_file)
+        with opener(input_file, 'rt') as f_in, open(output_file, 'w') as f_out:
             for record in SeqIO.parse(f_in, format_type):
                 total_reads += 1
 

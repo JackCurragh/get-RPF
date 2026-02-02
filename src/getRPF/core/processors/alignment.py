@@ -205,6 +205,10 @@ class STARAligner:
             "--outFilterMultimapNmax", "1",  # Only unique alignments
             "--outFilterMismatchNmax", "1",  # Allow 1 mismatch
             "--seedSearchStartLmax", "20",  # Shorter seed for short reads
+            # Relaxed specific filters for RPF extraction
+            "--outFilterScoreMinOverLread", "0",
+            "--outFilterMatchNminOverLread", "0",
+            "--outFilterMatchNmin", "16",
         ]
 
         # Handle compressed input

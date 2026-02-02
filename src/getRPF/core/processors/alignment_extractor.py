@@ -253,12 +253,15 @@ class AlignmentBasedExtractor:
             
             if verified_result:
                 logger.info("  ✓ Trimmed alignment successful! Using this for analysis.")
+                logger.info(f"  [PROOF] Generated debug file: {output_prefix.with_suffix('.trimmed.fastq')}")
+                logger.info("  [METHODOLOGY] Proceeding with 'Trim-then-Align' strategy (Path 1).")
                 alignment_result = verified_result
                 bam_file = Path(alignment_result['bam_file'])
                 is_trimmed_alignment = True
 
         # PATH 2: Raw Alignment (Fallback)
         if not bam_file:
+            logger.info("  [METHODOLOGY] Falling back to 'Raw Alignment' strategy (Path 2).")
             logger.info("  Aligning raw subset with STAR...")
             subset_bam_path = output_file.with_suffix('.subset.bam')
             alignment_result = self._align_subset(
@@ -462,6 +465,80 @@ class AlignmentBasedExtractor:
     # =========================================================================
     # Phase 2b: STAR Alignment
     # =========================================================================
+
+    def _align_trimmed_subset(
+        self,
+        adapter_name: str,
+        reads: List[Tuple[str, str]],
+        star_index: Path,
+        threads: int,
+        output_prefix: Path
+    ) -> Optional[Dict]:
+        """
+        Trim adapter from subset and align to genome.
+        Returns alignment result dict if successful (rate > 40%), else None.
+        """
+        logger.info(f"  Testing adapter hypothesis: {adapter_name}")
+        adapter_seq = next(seq for name, seq in self.adapters if name == adapter_name)
+        
+        # 1. Trim subset using this adapter
+        trimmed_reads = []
+        
+        for read_id, seq in reads:
+            match = self._find_adapter_in_read(seq, adapter_seq)
+            if match:
+                # Trim at match start
+                trimmed_seq = seq[:match[0]]
+                if 20 <= len(trimmed_seq) <= 40:  # Valid RPF length
+                    trimmed_reads.append((read_id, trimmed_seq))
+            else:
+                # Keep original? No, for verification assume everything HAS adapter
+                pass
+                
+        if not trimmed_reads:
+            logger.warning("    No reads contained the adapter - hypothesis rejected")
+            return None
+            
+        logger.info(f"    Trimming found adapter in {len(trimmed_reads)}/{len(reads)} reads")
+        
+        # 2. Align trimmed reads
+        temp_trimmed = output_prefix.with_suffix('.trimmed.fastq')
+        if not temp_trimmed.parent.exists():
+            temp_trimmed.parent.mkdir(parents=True, exist_ok=True)
+            
+        with open(temp_trimmed, 'w') as f:
+            for read_id, seq in trimmed_reads:
+                f.write(f"@{read_id}\n{seq}\n+\n{'I' * len(seq)}\n")
+        
+        logger.info(f"    Saved trimmed subset for debugging to: {temp_trimmed}")
+        
+        bam_path = output_prefix.with_suffix('.trimmed.bam')
+        aligner = STARAligner(star_index=star_index, threads=threads)
+        try:
+            result = aligner.align_reads(
+                input_file=temp_trimmed,
+                format='fastq',
+                save_bam_path=bam_path
+            )
+        except Exception as e:
+            logger.warning(f"    Verification alignment failed: {e}")
+            return None
+            
+        # 3. Check alignment rate
+        align_rate = result.alignment_rate
+        logger.info(f"    Alignment rate of trimmed reads: {align_rate:.1%}")
+        
+        if align_rate > 0.40:
+            logger.info(f"    [DECISION] Adapter Verification PASSED: Alignment rate {align_rate:.1%} > 40.0% threshold.")
+            return {
+                'total_reads': len(trimmed_reads),
+                'aligned_reads': result.aligned_reads,
+                'alignment_rate': align_rate,
+                'bam_file': str(bam_path)
+            }
+            
+        logger.info(f"    [DECISION] Adapter Verification FAILED: Alignment rate {align_rate:.1%} <= 40.0% threshold.")
+        return None
 
     def _align_subset(
         self,

@@ -475,6 +475,8 @@ class AlignmentBasedExtractor:
         with open(temp_fastq, 'w') as f:
             for read_id, sequence in reads:
                 f.write(f"@{read_id}\n{sequence}\n+\n{'I' * len(sequence)}\n")
+        
+        logger.info(f"    Saved subset for alignment to: {temp_fastq}")
 
         aligner = STARAligner(
             star_index=star_index,

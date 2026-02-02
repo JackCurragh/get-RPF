@@ -235,25 +235,82 @@ class AlignmentBasedExtractor:
             else:
                 logger.info("    No known adapters detected")
 
-        # 2b. STAR alignment
-        logger.info("  Aligning subset with STAR...")
-        subset_bam_path = output_file.with_suffix('.subset.bam')
-        alignment_result = self._align_subset(
-            subset_reads, star_index, star_threads, subset_bam_path
-        )
-        logger.info(f"    Aligned: {alignment_result['aligned_reads']}/{alignment_result['total_reads']} "
-                   f"({alignment_result['alignment_rate']:.1%})")
+        bam_file = None
+        alignment_result = None
+        is_trimmed_alignment = False
 
-        # 2c. Analyze soft-clipping for boundaries
+        # PATH 1: Trim-then-Align (Prioritized)
+        # Verify adapter first to avoid alignment issues with long tails
+        if adapter_info and adapter_info.top_adapter:
+            logger.info("  Adapter detected - attempting to trim-then-align...")
+            verified_result = self._align_trimmed_subset(
+                adapter_name=adapter_info.top_adapter,
+                reads=subset_reads,
+                star_index=star_index,
+                threads=star_threads,
+                output_prefix=output_file
+            )
+            
+            if verified_result:
+                logger.info("  ✓ Trimmed alignment successful! Using this for analysis.")
+                alignment_result = verified_result
+                bam_file = Path(alignment_result['bam_file'])
+                is_trimmed_alignment = True
+
+        # PATH 2: Raw Alignment (Fallback)
+        if not bam_file:
+            logger.info("  Aligning raw subset with STAR...")
+            subset_bam_path = output_file.with_suffix('.subset.bam')
+            alignment_result = self._align_subset(
+                subset_reads, star_index, star_threads, subset_bam_path
+            )
+            bam_file = Path(alignment_result['bam_file'])
+            logger.info(f"    Aligned: {alignment_result['aligned_reads']}/{alignment_result['total_reads']} "
+                       f"({alignment_result['alignment_rate']:.1%})")
+
+        # Phase 2c. Analyze soft-clipping on the CHOSEN BAM
         logger.info("  Analyzing soft-clipping patterns...")
-        boundaries = self._analyze_soft_clipping(alignment_result['bam_file'])
+        boundaries = self._analyze_soft_clipping(bam_file)
         logger.info(f"    Consensus: 5'={boundaries.consensus_5p}nt, 3'={boundaries.consensus_3p}nt")
 
-        # Phase 3: Structure Learning (THE KEY IMPROVEMENT)
+        # Phase 3: Structure Learning
         logger.info("Phase 3/4: Learning read structure (per-position entropy)...")
-        learned_structure = self._learn_read_structure_reliable(
-            alignment_result['bam_file']
-        )
+        if is_trimmed_alignment:
+            # We aligned trimmed reads, so the 3' end should show NO soft-clips (ideally)
+            # We need to construct the structure manually to include the adapter we removed
+            
+            # Learn 5' structure from the BAM (it wasn't trimmed)
+            partial_structure = self._learn_read_structure_reliable(bam_file)
+            
+            # Construct verification-based 3' structure
+            # If soft-clipping found extra bases, boundaries.consensus_3p > 0
+            # But the MAIN adapter is what we checked
+            adapter_name = adapter_info.top_adapter
+            adapter_seq = next(seq for name, seq in self.adapters if name == adapter_name)
+            
+            three_prime = RegionClassification(
+                region_type='adapter',
+                length=0, # Variable
+                confidence=0.95,
+                consensus_sequence=adapter_seq,
+                adapter_name=adapter_name,
+                evidence={
+                    'method': 'alignment_verification', 
+                    'align_rate': alignment_result['alignment_rate'],
+                    'extra_soft_clip': boundaries.consensus_3p
+                }
+            )
+            
+            learned_structure = LearnedStructure(
+                five_prime=partial_structure.five_prime, # Trust 5' analysis
+                three_prime=three_prime, # Enforce validated adapter
+                rpf_length_distribution=partial_structure.rpf_length_distribution,
+                overall_confidence='high',
+                validation_warnings=[]
+            )
+        else:
+            # Standard path: Learn from raw soft-clips
+            learned_structure = self._learn_read_structure_reliable(bam_file)
 
         # Log structure details
         self._log_learned_structure(learned_structure)

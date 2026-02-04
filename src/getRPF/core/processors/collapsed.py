@@ -5,7 +5,8 @@ import gzip
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, TextIO, Tuple, Union
+from collections import Counter
+from typing import Dict, Optional, TextIO, Tuple, Union
 
 from getRPF.utils.file_utils import check_file_readability
 
@@ -45,7 +46,7 @@ def fasta_opener(file_path: Path) -> TextIO:
 class CollapsedHeaderParser:
     """Parser for extracting counts from collapsed FASTA headers based on custom formatting."""
 
-    def __init__(self, format: str = "read_{id}_{count}"):
+    def __init__(self, format: str = "seq{id}_x{count}"):
         """
         Initialize the parser with a custom header format.
 
@@ -98,7 +99,7 @@ class CollapsedHeaderParser:
 
 def parse_collapsed_fasta(
     file_path: Union[str, Path],
-    count_pattern: str = "read_{count}",
+    count_pattern: str = "seq{id}_x{count}",
     max_reads: Optional[int] = None,
 ) -> Tuple[dict, dict]:
     """Parse collapsed FASTA file with flexible header format.
@@ -185,7 +186,7 @@ class CollapsedFASTAProcessor:
         Args:
             count_pattern: Pattern for extracting counts from headers
         """
-        self.count_pattern = count_pattern or "read_{count}"
+        self.count_pattern = count_pattern or "seq{id}_x{count}"
         self.parser = CollapsedHeaderParser(self.count_pattern)
     
     def expand_to_fastq(
@@ -230,3 +231,59 @@ class CollapsedFASTAProcessor:
                 
                 if max_reads and total_written >= max_reads:
                     break
+
+
+def collapse_fastq_to_fasta(
+    input_file: Path,
+    output_file: Path,
+) -> Dict[str, int]:
+    """Collapse extracted RPF FASTQ into deduplicated FASTA with read counts.
+
+    Reads the FASTQ, groups identical sequences, and writes a collapsed FASTA
+    where each unique sequence appears once with its count in the header.
+
+    Output format:
+        >seq1_x500
+        ATCGATCG...
+
+    Where 500 is the number of times that sequence was observed.
+
+    Args:
+        input_file: Path to input FASTQ file (extracted RPFs)
+        output_file: Path for output collapsed FASTA file
+
+    Returns:
+        Dict with stats: unique_sequences, total_reads, output_path
+    """
+    seq_counts: Counter = Counter()
+
+    file_opener = gzip.open if str(input_file).endswith(".gz") else open
+    with file_opener(str(input_file), "rt") as fh:
+        for record in _iter_fastq(fh):
+            seq_counts[record] += 1
+
+    # Write collapsed FASTA sorted by count (most abundant first)
+    with open(output_file, "w") as fout:
+        for idx, (seq, count) in enumerate(seq_counts.most_common(), 1):
+            fout.write(f">seq{idx}_x{count}\n")
+            fout.write(f"{seq}\n")
+
+    logger.info(
+        f"Collapsed {sum(seq_counts.values())} reads into "
+        f"{len(seq_counts)} unique sequences -> {output_file}"
+    )
+
+    return {
+        "unique_sequences": len(seq_counts),
+        "total_reads": sum(seq_counts.values()),
+        "output_path": str(output_file),
+    }
+
+
+def _iter_fastq(handle) -> str:
+    """Yield uppercase sequences from a FASTQ file handle."""
+    line_num = 0
+    for line in handle:
+        line_num += 1
+        if line_num % 4 == 2:  # sequence line
+            yield line.strip().upper()

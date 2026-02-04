@@ -123,7 +123,7 @@ class CleanlinessChecker:
 
         if self.format == "collapsed":
             if count_pattern is None:
-                count_pattern = "read_{id}_{count}"
+                count_pattern = "seq{id}_x{count}"
 
             sequences, counts = parse_collapsed_fasta(
                 input_path, count_pattern, self.max_reads
@@ -252,13 +252,16 @@ class CleanlinessChecker:
     def _generate_reversed_from_file(self, input_path):
         """Generate reversed frequencies by re-reading the file."""
         reversed_nuc_freqs = {nt: [] for nt in "ACGT"}
-        
+
+        # Collapsed format is structurally FASTA, so use "fasta" for BioPython
+        bio_format = "fasta" if self.format == "collapsed" else self.format
+
         file_opener = get_file_opener(input_path)
         with file_opener(str(input_path), "rt") as handle:
             record_count = 0
             sequences = []
-            
-            for record in SeqIO.parse(handle, self.format):
+
+            for record in SeqIO.parse(handle, bio_format):
                 if self.max_reads is not None and record_count >= self.max_reads:
                     break
                 sequences.append(str(record.seq).upper())

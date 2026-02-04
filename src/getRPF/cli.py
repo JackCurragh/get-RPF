@@ -157,6 +157,7 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
     import logging
     from pathlib import Path
     from .core.processors.alignment_extractor import AlignmentBasedExtractor
+    from .core.processors.collapsed import collapse_fastq_to_fasta
     from .utils.logging import setup_logging
 
     setup_logging()
@@ -190,15 +191,24 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
         with open(report_path, 'w') as f:
             json.dump(result.to_dict(), f, indent=2)
 
+        # Collapse extracted RPFs into deduplicated FASTA
+        collapsed_path = Path(output_file).with_suffix('.collapsed.fa')
+        collapse_stats = collapse_fastq_to_fasta(
+            input_file=Path(output_file),
+            output_file=collapsed_path,
+        )
+
         # Print summary
         click.echo("\n" + "=" * 70)
-        click.echo("✓ Extraction Complete!")
+        click.echo("Extraction Complete!")
         click.echo("=" * 70)
         click.echo(f"Extracted: {result.extracted_rpfs:,} RPFs from {result.input_reads:,} reads")
         click.echo(f"Extraction rate: {result.extraction_rate:.1%}")
         click.echo(f"Trim boundaries: 5'={result.trim_boundaries.consensus_5p}nt, "
                   f"3'={result.trim_boundaries.consensus_3p}nt")
         click.echo(f"Overall confidence: {result.trim_boundaries.confidence}")
+        click.echo(f"Collapsed: {collapse_stats['total_reads']:,} reads -> "
+                  f"{collapse_stats['unique_sequences']:,} unique sequences")
 
         if result.adapter_info and result.adapter_info.top_adapter:
             click.echo(f"Detected adapter: {result.adapter_info.top_adapter}")
@@ -208,8 +218,9 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
                       f"confidence: {result.umi_info.confidence}")
 
         click.echo(f"\nOutput files:")
-        click.echo(f"  RPF sequences: {output_file}")
-        click.echo(f"  JSON report:   {report_path}")
+        click.echo(f"  RPF sequences (FASTQ): {output_file}")
+        click.echo(f"  RPF sequences (collapsed FASTA): {collapsed_path}")
+        click.echo(f"  JSON report: {report_path}")
         click.echo("=" * 70)
 
     except Exception as e:
@@ -235,6 +246,14 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
     required=True,
 )
 @click.option(
+    "--count-pattern",
+    "-p",
+    help="Pattern for extracting read count from collapsed FASTA headers. "
+    "Use {count} to mark where the count appears. "
+    'Examples: "seq{id}_x{count}", "read_{id}_{count}"',
+    default="seq{id}_x{count}",
+)
+@click.option(
     "--max-reads",
     "-n",
     type=int,
@@ -245,6 +264,7 @@ def check_cleanliness(
     input_file: Path,
     format: str,
     output: Path,
+    count_pattern: Optional[str] = None,
     max_reads: int = 1000,
 ):
     """Enhanced cleanliness checking with failure categorization.
@@ -286,7 +306,10 @@ def check_cleanliness(
     
     # Run sequence analysis
     checker = CleanlinessChecker(format=format, max_reads=max_reads)
-    sequence_results = checker.analyze_file(input_file)
+    sequence_results = checker.analyze_file(
+        input_file,
+        count_pattern=count_pattern if format == "collapsed" else None,
+    )
     
     # Run all cleanliness checks (enhanced version)
     check_results = run_all_cleanliness_checks(sequence_results)
@@ -346,7 +369,7 @@ def check_cleanliness(
     help="Pattern for extracting read count from collapsed FASTA headers. "
     "Use {count} to mark where the count appears. "
     'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
-    default="read_{count}",
+    default="seq{id}_x{count}",
 )
 @click.option(
     "--max-reads",
@@ -423,7 +446,7 @@ def check(
     help="Pattern for extracting read count from collapsed FASTA headers. "
     "Use {count} to mark where the count appears. "
     'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
-    default="read_{count}",
+    default="seq{id}_x{count}",
 )
 @click.option(
     "--max-reads",
@@ -520,7 +543,7 @@ def detect_adapter(
     help="Pattern for extracting read count from collapsed FASTA headers. "
     "Use {count} to mark where the count appears. "
     'Examples: "read_{count}", "read\\d+_x{count}", "{count}_seq"',
-    default="read_{count}",
+    default="seq{id}_x{count}",
 )
 @click.option(
     "--save-bam",

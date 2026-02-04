@@ -176,7 +176,8 @@ class AlignmentBasedExtractor:
     ENTROPY_RANDOM_THRESHOLD = 1.7    # Above this = random (UMI-like)
     ENTROPY_CONSERVED_THRESHOLD = 0.5  # Below this = conserved (adapter-like)
     DOMINANT_FREQ_THRESHOLD = 0.8      # Dominant base frequency for conserved
-    MIN_COVERAGE_PER_POSITION = 500    # Minimum reads to trust per-position stats
+    MIN_COVERAGE_FRACTION = 0.10       # Minimum fraction of aligned reads for classification
+    MIN_COVERAGE_FLOOR = 30            # Absolute minimum regardless of fraction
     ADAPTER_MATCH_THRESHOLD = 0.8      # Minimum identity for adapter database match
 
     def __init__(self, adapters: Optional[List[Tuple[str, str]]] = None):
@@ -250,11 +251,9 @@ class AlignmentBasedExtractor:
                 threads=star_threads,
                 output_prefix=output_file
             )
-            
+
             if verified_result:
-                logger.info("  ✓ Trimmed alignment successful! Using this for analysis.")
-                logger.info(f"  [PROOF] Generated debug file: {output_prefix.with_suffix('.trimmed.fastq')}")
-                logger.info("  [METHODOLOGY] Proceeding with 'Trim-then-Align' strategy (Path 1).")
+                logger.info("  Trimmed alignment successful! Using this for analysis.")
                 alignment_result = verified_result
                 bam_file = Path(alignment_result['bam_file'])
                 is_trimmed_alignment = True
@@ -331,6 +330,20 @@ class AlignmentBasedExtractor:
         # Phase 4: Extraction
         logger.info("Phase 4/4: Extracting RPFs using learned structure...")
         config = learned_structure.to_trimmer_config()
+
+        # Fallback: if structure learning didn't resolve the 3' adapter but the
+        # adapter scan clearly detected one, use the scan result directly.
+        if config.trim_3p_adapter is None and adapter_info and adapter_info.top_adapter:
+            top = adapter_info.detected_adapters[0]
+            if top['frequency'] > 0.50:
+                fallback_seq = top['sequence']
+                logger.warning(
+                    f"  Structure learning did not resolve 3' adapter, but adapter "
+                    f"scan detected '{top['name']}' in {top['frequency']:.0%} of reads. "
+                    f"Using scan result as fallback."
+                )
+                config.trim_3p_adapter = fallback_seq
+
         extraction_stats = self._extract_with_config(
             input_file, output_file, config, preserve_umi
         )
@@ -735,8 +748,16 @@ class AlignmentBasedExtractor:
                     clip_seq = seq[-clip_len:]
                     clips_3p_all.append(clip_seq)
 
+        # Compute coverage threshold proportional to aligned reads
+        total_aligned = sum(rpf_lengths.values())
+        min_coverage = max(
+            int(total_aligned * self.MIN_COVERAGE_FRACTION),
+            self.MIN_COVERAGE_FLOOR
+        )
+        logger.info(f"    {total_aligned} aligned reads, coverage threshold: {min_coverage}")
+
         # Step 2: Find dominant 5' clip length (need sufficient coverage)
-        dominant_5p_len = self._find_dominant_length(clips_5p_by_length)
+        dominant_5p_len = self._find_dominant_length(clips_5p_by_length, min_coverage)
 
         validation_warnings = []
 
@@ -744,13 +765,15 @@ class AlignmentBasedExtractor:
         five_prime = self._classify_region_5prime(
             clips_5p_by_length.get(dominant_5p_len, []),
             dominant_5p_len,
-            validation_warnings
+            validation_warnings,
+            min_coverage
         )
 
         # Step 4: Classify 3' region (aligned from 3' end - REVERSED)
         three_prime = self._classify_region_3prime(
             clips_3p_all,
-            validation_warnings
+            validation_warnings,
+            min_coverage
         )
 
         # Step 5: Determine overall confidence
@@ -778,7 +801,8 @@ class AlignmentBasedExtractor:
 
     def _find_dominant_length(
         self,
-        clips_by_length: Dict[int, List[str]]
+        clips_by_length: Dict[int, List[str]],
+        min_coverage: int = 30
     ) -> Optional[int]:
         """Find the most common clip length with sufficient coverage."""
         if not clips_by_length:
@@ -789,7 +813,7 @@ class AlignmentBasedExtractor:
         best_count = 0
 
         for length, sequences in clips_by_length.items():
-            if len(sequences) >= self.MIN_COVERAGE_PER_POSITION and len(sequences) > best_count:
+            if len(sequences) >= min_coverage and len(sequences) > best_count:
                 best_count = len(sequences)
                 best_len = length
 
@@ -799,7 +823,8 @@ class AlignmentBasedExtractor:
         self,
         sequences: List[str],
         length: Optional[int],
-        warnings: List[str]
+        warnings: List[str],
+        min_coverage: int = 30
     ) -> RegionClassification:
         """
         Classify 5' region using per-position entropy (aligned from 5' end).
@@ -819,8 +844,8 @@ class AlignmentBasedExtractor:
             )
 
         # Insufficient coverage
-        if len(sequences) < self.MIN_COVERAGE_PER_POSITION:
-            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {self.MIN_COVERAGE_PER_POSITION})")
+        if len(sequences) < min_coverage:
+            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {min_coverage})")
             return RegionClassification(
                 region_type='unknown',
                 length=length,
@@ -830,9 +855,10 @@ class AlignmentBasedExtractor:
 
         # Build per-position profiles (forward direction)
         profiles = []
+        min_bases_per_pos = max(min_coverage // 2, 10)
         for pos in range(length):
             bases = [seq[pos] for seq in sequences if len(seq) > pos]
-            if len(bases) >= self.MIN_COVERAGE_PER_POSITION // 2:
+            if len(bases) >= min_bases_per_pos:
                 profile = PositionProfile.from_bases(pos, bases)
                 profiles.append(profile)
 
@@ -841,7 +867,8 @@ class AlignmentBasedExtractor:
     def _classify_region_3prime(
         self,
         sequences: List[str],
-        warnings: List[str]
+        warnings: List[str],
+        min_coverage: int = 30
     ) -> RegionClassification:
         """
         Classify 3' region by trying BOTH orientations.
@@ -867,8 +894,8 @@ class AlignmentBasedExtractor:
             )
 
         # Insufficient coverage
-        if len(sequences) < self.MIN_COVERAGE_PER_POSITION:
-            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {self.MIN_COVERAGE_PER_POSITION})")
+        if len(sequences) < min_coverage:
+            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {min_coverage})")
             return RegionClassification(
                 region_type='unknown',
                 length=0,
@@ -882,7 +909,7 @@ class AlignmentBasedExtractor:
 
         # TRY FORWARD (5' end of clip): Assumes adapter at RPF boundary
         # This is most common for Ribo-seq: [RPF][ADAPTER]
-        forward_profiles = self._build_profiles_forward(sequences)
+        forward_profiles = self._build_profiles_forward(sequences, min_coverage)
         forward_result = self._classify_from_profiles(
             forward_profiles, dominant_length, f"{region_name} (forward)", sequences, []
         )
@@ -890,7 +917,7 @@ class AlignmentBasedExtractor:
         # TRY REVERSED (3' end of read): Assumes UMI at 3' end
         # Less common but possible: [RPF][linker][UMI]
         reversed_seqs = [seq[::-1] for seq in sequences]
-        reversed_profiles = self._build_profiles_forward(reversed_seqs)
+        reversed_profiles = self._build_profiles_forward(reversed_seqs, min_coverage)
         reversed_result = self._classify_from_profiles(
             reversed_profiles, dominant_length, f"{region_name} (reversed)", reversed_seqs, []
         )
@@ -926,13 +953,14 @@ class AlignmentBasedExtractor:
                 )
             return reversed_result
 
-    def _build_profiles_forward(self, sequences: List[str]) -> List[PositionProfile]:
+    def _build_profiles_forward(self, sequences: List[str], min_coverage: int = 30) -> List[PositionProfile]:
         """Build per-position profiles aligned from start of sequences."""
         max_len = max(len(s) for s in sequences) if sequences else 0
+        min_bases_per_pos = max(min_coverage // 2, 10)
         profiles = []
         for pos in range(min(max_len, 30)):  # Limit to first 30 positions
             bases = [seq[pos] for seq in sequences if len(seq) > pos]
-            if len(bases) >= self.MIN_COVERAGE_PER_POSITION // 2:
+            if len(bases) >= min_bases_per_pos:
                 profile = PositionProfile.from_bases(pos, bases)
                 profiles.append(profile)
         return profiles

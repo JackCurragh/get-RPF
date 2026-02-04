@@ -541,16 +541,20 @@ class AlignmentBasedExtractor:
         align_rate = result.alignment_rate
         logger.info(f"    Alignment rate of trimmed reads: {align_rate:.1%}")
         
-        if align_rate > 0.40:
-            logger.info(f"    [DECISION] Adapter Verification PASSED: Alignment rate {align_rate:.1%} > 40.0% threshold.")
+        # Ribo-seq data typically has 5-50% genome alignment rate due to
+        # rRNA contamination. A low threshold accepts this reality while
+        # still rejecting truly wrong adapters (which give ~0% alignment).
+        if align_rate > 0.02:
+            logger.info(f"    Adapter verification PASSED: {align_rate:.1%} alignment rate "
+                        f"({result.aligned_reads} reads)")
             return {
                 'total_reads': len(trimmed_reads),
                 'aligned_reads': result.aligned_reads,
                 'alignment_rate': align_rate,
                 'bam_file': str(bam_path)
             }
-            
-        logger.info(f"    [DECISION] Adapter Verification FAILED: Alignment rate {align_rate:.1%} <= 40.0% threshold.")
+
+        logger.info(f"    Adapter verification FAILED: {align_rate:.1%} alignment rate")
         return None
 
     def _align_subset(

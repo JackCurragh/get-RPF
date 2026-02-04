@@ -122,8 +122,6 @@ def cli():
               help='Number of threads for STAR alignment (default: 4)')
 @click.option('--output-report', type=click.Path(),
               help='Path for JSON report (default: <output>.extraction_report.json)')
-@click.option('--output-report', type=click.Path(),
-              help='Path for JSON report (default: <output>.extraction_report.json)')
 def extract(input_file, output_file, star_index, preserve_umi, sample_size,
             no_adapter_report, threads, output_report):
     """

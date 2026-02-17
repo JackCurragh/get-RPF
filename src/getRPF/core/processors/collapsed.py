@@ -178,106 +178,139 @@ def parse_collapsed_fasta(
 
 
 class CollapsedFASTAProcessor:
-    """Processor for collapsed FASTA format files."""
-    
+    """Legacy wrapper for backward compatibility."""
     def __init__(self, count_pattern: Optional[str] = None):
-        """Initialize processor with count pattern.
-        
-        Args:
-            count_pattern: Pattern for extracting counts from headers
-        """
+        self.collapser = TwoStageCollapser()
         self.count_pattern = count_pattern or "seq{id}_x{count}"
-        self.parser = CollapsedHeaderParser(self.count_pattern)
     
-    def expand_to_fastq(
+    def expand_to_fastq(self, input_file: Path, output_file: Path, max_reads: Optional[int] = None) -> None:
+        """Expand collapsed FASTA to FASTQ."""
+        raw_counts = self.collapser.collapse_raw(input_file, format="collapsed", max_reads=max_reads)
+        with open(output_file, 'w') as fout:
+            for idx, (seq, count) in enumerate(raw_counts.items(), 1):
+                for i in range(count):
+                    fout.write(f"@seq{idx}_c{i+1}\n{seq}\n+\n{'I' * len(seq)}\n")
+
+
+class TwoStageCollapser:
+    """High-performance collapser that implements Two-Stage Collapsing.
+    
+    Stage 1: Raw collapse (count unique raw reads)
+    Stage 2: Unique trimming (trim each unique sequence once)
+    Stage 3: Final merge (aggregate counts of identical trimmed sequences)
+    """
+
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    def collapse_raw(
         self, 
         input_file: Path, 
-        output_file: Path, 
+        format: str = "fastq", 
         max_reads: Optional[int] = None
-    ) -> None:
-        """Expand collapsed FASTA to individual FASTQ entries.
+    ) -> Counter:
+        """Stage 1: Extract and count raw sequences from file."""
+        counts: Counter = Counter()
+        processed = 0
         
-        Args:
-            input_file: Input collapsed FASTA file
-            output_file: Output FASTQ file
-            max_reads: Maximum reads to process
-        """
-        sequences, counts = parse_collapsed_fasta(
-            input_file, 
-            count_pattern=self.count_pattern, 
-            max_reads=max_reads
-        )
+        self.logger.info(f"Stage 1: Collapsing raw reads from {input_file}...")
         
-        total_written = 0
-        with open(output_file, 'w') as fout:
-            for header, sequence in sequences.items():
-                count = counts.get(header, 1)
+        file_opener = gzip.open if str(input_file).endswith(".gz") else open
+        with file_opener(str(input_file), "rt") as fh:
+            if format == "fastq":
+                iterator = _iter_fastq(fh)
+            elif format in ["fasta", "collapsed"]:
+                # For collapsed, we need to respect existing counts
+                iterator = self._iter_fasta_or_collapsed(fh, format == "collapsed")
+            else:
+                raise ValueError(f"Unsupported format: {format}")
+
+            for seq in iterator:
+                if isinstance(seq, tuple): # (sequence, count) from collapsed
+                    counts[seq[0]] += seq[1]
+                else:
+                    counts[seq] += 1
                 
-                # Write each sequence 'count' times
-                for i in range(count):
-                    if max_reads and total_written >= max_reads:
-                        break
-                        
-                    # Create unique FASTQ header
-                    fastq_header = f"@{header}_copy_{i+1}"
-                    quality = 'I' * len(sequence)  # High quality scores
-                    
-                    fout.write(f"{fastq_header}\n")
-                    fout.write(f"{sequence}\n")
-                    fout.write("+\n")
-                    fout.write(f"{quality}\n")
-                    
-                    total_written += 1
-                
-                if max_reads and total_written >= max_reads:
+                processed += 1
+                if max_reads and processed >= max_reads:
                     break
+                    
+        self.logger.info(f"  Processed {processed} reads -> {len(counts)} unique raw sequences")
+        return counts
+
+    def _iter_fasta_or_collapsed(self, fh, is_collapsed: bool):
+        """Internal iterator for FASTA/Collapsed FASTA."""
+        parser = CollapsedHeaderParser() if is_collapsed else None
+        current_seq = []
+        current_count = 1
+        
+        for line in fh:
+            line = line.strip()
+            if not line: continue
+            
+            if line.startswith(">"):
+                if current_seq:
+                    yield ("".join(current_seq).upper(), current_count)
+                
+                if is_collapsed:
+                    cnt = parser.extract_count(line[1:])
+                    current_count = cnt if cnt is not None else 1
+                current_seq = []
+            else:
+                current_seq.append(line)
+        
+        if current_seq:
+            yield ("".join(current_seq).upper(), current_count)
+
+    def apply_trimming(
+        self, 
+        raw_counts: Counter, 
+        trim_func: callable,
+        min_length: int = 20
+    ) -> Counter:
+        """Stage 2 & 3: Trim unique sequences and merge results."""
+        self.logger.info("Stage 2: Trimming unique sequences and merging...")
+        final_counts: Counter = Counter()
+        
+        for raw_seq, count in raw_counts.items():
+            trimmed_seq = trim_func(raw_seq)
+            if trimmed_seq and len(trimmed_seq) >= min_length:
+                final_counts[trimmed_seq] += count
+                
+        self.logger.info(f"  Post-trimming: {len(final_counts)} unique sequences")
+        return final_counts
+
+    def write_collapsed_fasta(
+        self, 
+        counts: Counter, 
+        output_file: Path,
+        prefix: str = "seq"
+    ) -> Dict[str, Union[int, str]]:
+        """Stage 4: Write final collapsed results to FASTA."""
+        with open(output_file, "w") as fout:
+            # Sort by count descending for better readability
+            for idx, (seq, count) in enumerate(counts.most_common(), 1):
+                fout.write(f">{prefix}{idx}_x{count}\n")
+                fout.write(f"{seq}\n")
+        
+        stats = {
+            "unique_sequences": len(counts),
+            "total_reads": sum(counts.values()),
+            "output_path": str(output_file)
+        }
+        self.logger.info(f"  Wrote {stats['unique_sequences']} sequences to {output_file}")
+        return stats
 
 
 def collapse_fastq_to_fasta(
     input_file: Path,
     output_file: Path,
-) -> Dict[str, int]:
-    """Collapse extracted RPF FASTQ into deduplicated FASTA with read counts.
-
-    Reads the FASTQ, groups identical sequences, and writes a collapsed FASTA
-    where each unique sequence appears once with its count in the header.
-
-    Output format:
-        >seq1_x500
-        ATCGATCG...
-
-    Where 500 is the number of times that sequence was observed.
-
-    Args:
-        input_file: Path to input FASTQ file (extracted RPFs)
-        output_file: Path for output collapsed FASTA file
-
-    Returns:
-        Dict with stats: unique_sequences, total_reads, output_path
-    """
-    seq_counts: Counter = Counter()
-
-    file_opener = gzip.open if str(input_file).endswith(".gz") else open
-    with file_opener(str(input_file), "rt") as fh:
-        for record in _iter_fastq(fh):
-            seq_counts[record] += 1
-
-    # Write collapsed FASTA sorted by count (most abundant first)
-    with open(output_file, "w") as fout:
-        for idx, (seq, count) in enumerate(seq_counts.most_common(), 1):
-            fout.write(f">seq{idx}_x{count}\n")
-            fout.write(f"{seq}\n")
-
-    logger.info(
-        f"Collapsed {sum(seq_counts.values())} reads into "
-        f"{len(seq_counts)} unique sequences -> {output_file}"
-    )
-
-    return {
-        "unique_sequences": len(seq_counts),
-        "total_reads": sum(seq_counts.values()),
-        "output_path": str(output_file),
-    }
+) -> Dict[str, Union[int, str]]:
+    """Legacy wrapper for backward compatibility using TwoStageCollapser."""
+    collapser = TwoStageCollapser()
+    raw_counts = collapser.collapse_raw(input_file, format="fastq")
+    # No trimming in this basic collapse function
+    return collapser.write_collapsed_fasta(raw_counts, output_file)
 
 
 def _iter_fastq(handle) -> str:

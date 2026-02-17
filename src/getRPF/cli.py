@@ -116,46 +116,20 @@ def cli():
               help='Detect and preserve UMI sequences in FASTQ headers')
 @click.option('--sample-size', default=10000, type=int,
               help='Number of reads to sample for boundary detection (default: 10000)')
-@click.option('--no-adapter-report', is_flag=True,
-              help='Skip adapter scanning (faster but less informative)')
-@click.option('--threads', default=4, type=int,
-              help='Number of threads for STAR alignment (default: 4)')
-@click.option('--output-report', type=click.Path(),
-              help='Path for JSON report (default: <output>.extraction_report.json)')
+@click.option('--collapse/--no-collapse', default=True,
+              help='Collapse output into unique reads (default: True)')
+@click.option('--collapsed-only', is_flag=True,
+              help='Skip writing large expanded FASTQ, only write collapsed FASTA')
 def extract(input_file, output_file, star_index, preserve_umi, sample_size,
-            no_adapter_report, threads, output_report):
+            no_adapter_report, threads, output_report, collapse, collapsed_only):
     """
     Extract RPF using alignment-based method (RECOMMENDED).
-
-    This is the primary extraction method for getRPF. It aligns a subset of
-    reads to determine biological sequence boundaries, then extracts RPF from
-    all reads with single-nucleotide precision.
-
-    \b
-    Examples:
-        # Basic extraction
-        getRPF extract input.fastq rpf.fastq --star-index /path/to/index
-
-        # With UMI preservation
-        getRPF extract input.fastq rpf.fastq --star-index /path/to/index --preserve-umi
-
-        # Custom sample size
-        getRPF extract input.fastq rpf.fastq --star-index /path/to/index --sample-size 20000
-
-    \b
-    The tool will:
-      1. Sample reads for characterization
-      2. Scan for known adapters (informational)
-      3. Align subset with STAR
-      4. Analyze soft-clipping patterns per read length
-      5. Extract RPF with validated boundaries
-      6. Generate comprehensive report
+    ...
     """
     import json
     import logging
     from pathlib import Path
     from .core.processors.alignment_extractor import AlignmentBasedExtractor
-    from .core.processors.collapsed import collapse_fastq_to_fasta
     from .utils.logging import setup_logging
 
     setup_logging()
@@ -177,7 +151,9 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
             preserve_umi=preserve_umi,
             sample_size=sample_size,
             report_adapters=not no_adapter_report,
-            star_threads=threads
+            star_threads=threads,
+            collapse_output=collapse,
+            collapsed_only=collapsed_only
         )
 
         # Write JSON report
@@ -187,37 +163,22 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
             report_path = Path(output_file).with_suffix('.extraction_report.json')
 
         with open(report_path, 'w') as f:
-            json.dump(result.to_dict(), f, indent=2)
-
-        # Collapse extracted RPFs into deduplicated FASTA
-        collapsed_path = Path(output_file).with_suffix('.collapsed.fa')
-        collapse_stats = collapse_fastq_to_fasta(
-            input_file=Path(output_file),
-            output_file=collapsed_path,
-        )
+            json.dump(result, f, indent=2)
 
         # Print summary
         click.echo("\n" + "=" * 70)
         click.echo("Extraction Complete!")
         click.echo("=" * 70)
-        click.echo(f"Extracted: {result.extracted_rpfs:,} RPFs from {result.input_reads:,} reads")
-        click.echo(f"Extraction rate: {result.extraction_rate:.1%}")
-        click.echo(f"Trim boundaries: 5'={result.trim_boundaries.consensus_5p}nt, "
-                  f"3'={result.trim_boundaries.consensus_3p}nt")
-        click.echo(f"Overall confidence: {result.trim_boundaries.confidence}")
-        click.echo(f"Collapsed: {collapse_stats['total_reads']:,} reads -> "
-                  f"{collapse_stats['unique_sequences']:,} unique sequences")
-
-        if result.adapter_info and result.adapter_info.top_adapter:
-            click.echo(f"Detected adapter: {result.adapter_info.top_adapter}")
-
-        if result.umi_info and result.umi_info.detected:
-            click.echo(f"UMI detected: positions {result.umi_info.positions}, "
-                      f"confidence: {result.umi_info.confidence}")
+        click.echo(f"Extracted: {result['extracted_rpfs']:,} RPFs from {result['total_reads']:,} reads")
+        click.echo(f"Extraction rate: {result['extraction_rate']:.1%}")
+        click.echo(f"Unique sequences: {result.get('unique_rpf', 0):,}")
 
         click.echo(f"\nOutput files:")
-        click.echo(f"  RPF sequences (FASTQ): {output_file}")
-        click.echo(f"  RPF sequences (collapsed FASTA): {collapsed_path}")
+        if not collapsed_only:
+            click.echo(f"  RPF sequences (FASTQ): {output_file}")
+        if collapse:
+            collapsed_path = Path(output_file).with_suffix('.collapsed.fa')
+            click.echo(f"  RPF sequences (collapsed FASTA): {collapsed_path}")
         click.echo(f"  JSON report: {report_path}")
         click.echo("=" * 70)
 
@@ -649,6 +610,10 @@ def align_detect(
     help="Threads for STAR verification",
     default=1,
 )
+@click.option('--collapse/--no-collapse', default=True,
+              help='Collapse output into unique reads (default: True)')
+@click.option('--collapsed-only', is_flag=True,
+              help='Skip writing large expanded FASTQ, only write collapsed FASTA')
 def extract_rpf(
     input_file: Path,
     output_file: Path,
@@ -660,17 +625,11 @@ def extract_rpf(
     max_reads: Optional[int] = None,
     star_index: Optional[Path] = None,
     star_threads: int = 1,
+    collapse: bool = True,
+    collapsed_only: bool = False
 ):
-    """Extract clean RPFs with architecture detection and alignment verification.
-
-    This is the master command for RPF isolation. It combines:
-    1. Pattern matching against known architectures
-    2. De novo probabilistic segmentation (HMM)
-    3. Optional STAR-based alignment verification (soft-clipping analysis)
-
-    If --star-index is provided, the tool performs a "whole shebang" analysis:
-    checking if the detected architecture boundaries agree with alignment soft-clipping patterns.
-    """
+    """Extract clean RPFs with architecture detection and alignment verification."""
+    from .core.handlers import handle_extract_rpf
     handle_extract_rpf(
         input_file=input_file,
         output_file=output_file,
@@ -682,6 +641,8 @@ def extract_rpf(
         max_reads=max_reads,
         star_index=star_index,
         star_threads=star_threads,
+        collapse_output=collapse,
+        collapsed_only=collapsed_only
     )
 
 

@@ -116,6 +116,12 @@ def cli():
               help='Detect and preserve UMI sequences in FASTQ headers')
 @click.option('--sample-size', default=10000, type=int,
               help='Number of reads to sample for boundary detection (default: 10000)')
+@click.option('--no-adapter-report', is_flag=True,
+              help='Skip adapter scanning (faster but less informative)')
+@click.option('--threads', default=4, type=int,
+              help='Number of threads for STAR alignment (default: 4)')
+@click.option('--output-report', type=click.Path(),
+              help='Path for JSON report (default: <output>.extraction_report.json)')
 @click.option('--collapse/--no-collapse', default=True,
               help='Collapse output into unique reads (default: True)')
 @click.option('--collapsed-only', is_flag=True,

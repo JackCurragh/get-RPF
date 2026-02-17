@@ -111,7 +111,9 @@ class RPFExtractor:
         output_file: Path,
         format: str = "fastq",
         max_reads: Optional[int] = None,
-        generate_seqspec: bool = False
+        generate_seqspec: bool = False,
+        collapse_output: bool = True,
+        collapsed_only: bool = False
     ) -> RPFExtractionResult:
         """Extract RPFs from input file."""
         logger.info(f"Starting RPF extraction from {input_file}")
@@ -314,7 +316,10 @@ class RPFExtractor:
                      pass
 
             extracted_count = self._extract_rpfs_from_reads(
-                input_file, output_file, extracted_segments, format, max_reads, adapters=adapters_to_trim
+                input_file, output_file, extracted_segments, format, max_reads, 
+                adapters=adapters_to_trim,
+                collapse_output=collapse_output,
+                collapsed_only=collapsed_only
             )
             
             return RPFExtractionResult(

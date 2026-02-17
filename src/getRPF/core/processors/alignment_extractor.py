@@ -120,6 +120,13 @@ class ExtractionResult:
     method: str = "structure_learning"
 
     def to_dict(self) -> Dict:
+        def serialize(obj):
+            if isinstance(obj, Path):
+                return str(obj)
+            if hasattr(obj, 'to_dict'):
+                return obj.to_dict()
+            return obj
+
         return {
             'extraction_summary': {
                 'input_reads': self.input_reads,
@@ -132,7 +139,7 @@ class ExtractionResult:
             'learned_structure': self.learned_structure.to_dict(),
             'adapter_scan': self.adapter_info.to_dict() if self.adapter_info else None,
             'umi_detection': self.umi_info.to_dict() if self.umi_info else None,
-            'alignment_statistics': self.alignment_stats
+            'alignment_statistics': {k: serialize(v) for k, v in self.alignment_stats.items()}
         }
 
 

@@ -287,7 +287,16 @@ class RPFExtractionResult:
     
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write extraction results to file."""
-        report_data = asdict(self)
+        def serialize_types(obj):
+            if isinstance(obj, dict):
+                return {k: serialize_types(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [serialize_types(x) for x in obj]
+            if isinstance(obj, Path):
+                return str(obj)
+            return obj
+
+        report_data = serialize_types(asdict(self))
         
         if format.lower() == "json":
             with open(output_path, 'w') as f:

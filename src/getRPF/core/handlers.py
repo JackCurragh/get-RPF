@@ -215,6 +215,8 @@ def handle_extract_rpf(
     max_reads: Optional[int] = None,
     star_index: Optional[Path] = None,
     star_threads: int = 1,
+    collapse_output: bool = True,
+    collapsed_only: bool = False
 ) -> None:
     """Handle the RPF extraction command workflow.
 
@@ -317,6 +319,8 @@ def handle_extract_rpf(
             format=format,
             max_reads=max_reads,
             generate_seqspec=generate_seqspec,
+            collapse_output=collapse_output,
+            collapsed_only=collapsed_only
         )
 
         # Seqspec generation is handled internally by the extractor

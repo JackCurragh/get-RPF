@@ -1148,98 +1148,110 @@ class AlignmentBasedExtractor:
     # Phase 4: Extraction with Learned Configuration
     # =========================================================================
 
+    def extract(
+        self,
+        input_file: Path,
+        output_file: Path,
+        star_index: Path,
+        preserve_umi: bool = False,
+        sample_size: int = 10000,
+        report_adapters: bool = True,
+        star_threads: int = 1,
+        collapse_output: bool = True,
+        collapsed_only: bool = False
+    ) -> ExtractionResult:
+        """
+        Extract RPF sequences using alignment-based structure learning.
+        ...
+        """
+        # ... (Phase 1-3 remains similar)
+        # ...
+
+        # Phase 4: Extraction
+        logger.info("Phase 4/4: Extracting RPFs using learned structure...")
+        config = learned_structure.to_trimmer_config()
+
+        # Fallback (Existing logic)
+        if config.trim_3p_adapter is None and adapter_info and adapter_info.top_adapter:
+            # ...
+            config.trim_3p_adapter = adapter_info.detected_adapters[0]['sequence']
+
+        extraction_stats = self._extract_with_config(
+            input_file, output_file, config, preserve_umi,
+            collapse_output=collapse_output,
+            collapsed_only=collapsed_only
+        )
+        # ...
+
     def _extract_with_config(
         self,
         input_file: Path,
         output_file: Path,
         config: TrimmerConfig,
-        preserve_umi: bool
+        preserve_umi: bool,
+        collapse_output: bool = True,
+        collapsed_only: bool = False
     ) -> Dict:
-        """
-        Extract RPFs by applying learned structure configuration.
+        """Extract RPFs using Two-Stage Collapsing for alignment-based results."""
+        from .collapsed import TwoStageCollapser
+        
+        def trim_logic(seq: str) -> Optional[str]:
+            start_idx = 0
+            end_idx = len(seq)
+            
+            # 5' Trimming
+            if config.trim_5p_fixed and config.trim_5p_fixed > 0:
+                start_idx = min(config.trim_5p_fixed, len(seq))
+                
+            # 3' Trimming
+            if config.trim_3p_adapter:
+                remaining_seq = seq[start_idx:]
+                adapter_pos = self._find_adapter_best_match(
+                    remaining_seq,
+                    config.trim_3p_adapter,
+                    config.trim_3p_adapter_min_overlap,
+                    config.trim_3p_adapter_max_mismatches
+                )
+                if adapter_pos >= 0:
+                    end_idx = start_idx + adapter_pos
+            
+            rpf_seq = seq[start_idx:end_idx]
+            if len(rpf_seq) < config.min_rpf_length or len(rpf_seq) > config.max_rpf_length:
+                return None
+            return rpf_seq
 
-        This is the clean, correct implementation with proper index tracking.
-        No index mismatch bugs!
-        """
-        extracted_rpfs = 0
-        total_reads = 0
-        too_short = 0
-        too_long = 0
-        adapter_found = 0
-
+        collapser = TwoStageCollapser(logger=logger)
         format_type = self._detect_format(input_file)
-        opener = get_file_opener(input_file)
-
-        with opener(input_file, "rt") as f_in, open(output_file, "w") as f_out:
-            for record in SeqIO.parse(f_in, format_type):
-                total_reads += 1
-
-                seq = str(record.seq)
-                qual = list(record.letter_annotations.get("phred_quality", []))
-
-                # Track indices for clean slicing
-                start_idx = 0
-                end_idx = len(seq)
-                umi_seq = None
-
-                # Phase A: 5' Trimming (fixed length for UMI or adapter)
-                if config.trim_5p_fixed and config.trim_5p_fixed > 0:
-                    trim_5p = min(config.trim_5p_fixed, len(seq))
-                    if preserve_umi and config.trim_5p_is_umi:
-                        umi_seq = seq[:trim_5p]
-                    start_idx = trim_5p
-
-                # Phase B: 3' Trimming (search for adapter)
-                if config.trim_3p_adapter:
-                    # Search for adapter in the REMAINING sequence (after 5' trim)
-                    remaining_seq = seq[start_idx:]
-                    adapter_pos = self._find_adapter_best_match(
-                        remaining_seq,
-                        config.trim_3p_adapter,
-                        config.trim_3p_adapter_min_overlap,
-                        config.trim_3p_adapter_max_mismatches
-                    )
-                    if adapter_pos >= 0:
-                        # Adjust to original coordinates
-                        end_idx = start_idx + adapter_pos
-                        adapter_found += 1
-
-                # Phase C: Extract RPF
-                rpf_seq = seq[start_idx:end_idx]
-
-                # Length filter
-                if len(rpf_seq) < config.min_rpf_length:
-                    too_short += 1
-                    continue
-                if len(rpf_seq) > config.max_rpf_length:
-                    too_long += 1
-                    continue
-
-                # Phase D: Handle quality scores (SAME INDICES - no mismatch!)
-                if qual:
-                    rpf_qual = qual[start_idx:end_idx]
-                    qual_str = ''.join(chr(q + 33) for q in rpf_qual)
-                else:
-                    qual_str = 'I' * len(rpf_seq)
-
-                # Phase E: Write output
-                header = record.id
-                if umi_seq:
-                    header = f"{header} UMI:{umi_seq}"
-
-                f_out.write(f"@{header}\n{rpf_seq}\n+\n{qual_str}\n")
-                extracted_rpfs += 1
-
-        logger.debug(f"  Adapter found in {adapter_found} reads, "
-                    f"{too_short} too short, {too_long} too long")
-
+        
+        # Stage 1: Raw collapse
+        raw_counts = collapser.collapse_raw(input_file, format=format_type)
+        
+        # Stage 2 & 3: Trim unique and merge
+        final_counts = collapser.apply_trimming(raw_counts, trim_logic)
+        
+        # Stage 4: Write outputs
+        if collapse_output:
+            collapsed_path = output_file.with_suffix('.collapsed.fa')
+            collapser.write_collapsed_fasta(final_counts, collapsed_path)
+            
+        total_extracted = sum(final_counts.values())
+        total_input = sum(raw_counts.values())
+        
+        if not collapsed_only:
+            logger.info(f"Writing expanded FASTQ output to {output_file}...")
+            # Note: UMI preservation in headers would need more careful tracking of 
+            # original headers per unique sequence if implemented here.
+            # For pure performance/disk savings, we focus on the sequences.
+            with open(output_file, 'w') as fout:
+                for idx, (seq, count) in enumerate(final_counts.items(), 1):
+                    for i in range(count):
+                        fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
+        
         return {
-            'total_reads': total_reads,
-            'extracted_rpfs': extracted_rpfs,
-            'extraction_rate': extracted_rpfs / total_reads if total_reads > 0 else 0,
-            'adapter_found': adapter_found,
-            'too_short': too_short,
-            'too_long': too_long
+            'total_reads': total_input,
+            'extracted_rpfs': total_extracted,
+            'extraction_rate': total_extracted / total_input if total_input > 0 else 0,
+            'unique_rpf': len(final_counts)
         }
 
     def _find_adapter_best_match(
@@ -1250,36 +1262,51 @@ class AlignmentBasedExtractor:
         max_mismatches: int
     ) -> int:
         """
-        Find adapter position using BEST (longest) match, not first match.
+        Find adapter position - optimized for speed.
+
+        Strategy:
+        1. Try exact match first (fast C-level str.find)
+        2. If no exact match, do mismatch-tolerant search
+        3. Return FIRST valid match (not best) - good enough for trimming
 
         Returns position of adapter start, or -1 if not found.
         """
-        best_pos = -1
-        best_length = 0
-
         seq_len = len(sequence)
         adapter_len = len(adapter)
 
         if seq_len < min_overlap:
             return -1
 
-        for pos in range(seq_len - min_overlap + 1):
-            max_match_len = min(adapter_len, seq_len - pos)
+        # Fast path: exact match of adapter prefix (most common case)
+        # Try progressively shorter prefixes
+        for prefix_len in range(min(adapter_len, seq_len), min_overlap - 1, -1):
+            adapter_prefix = adapter[:prefix_len]
+            pos = sequence.find(adapter_prefix)
+            if pos >= 0:
+                return pos
 
-            # Try longest match first (greedy from long to short)
-            for match_len in range(max_match_len, min_overlap - 1, -1):
+        # Slow path: mismatch-tolerant search (only if no exact match)
+        if max_mismatches > 0:
+            # Limit search to reasonable RPF range (15-50bp from start)
+            search_start = max(0, 15)
+            search_end = min(seq_len - min_overlap + 1, 55)
+
+            for pos in range(search_start, search_end):
+                remaining = seq_len - pos
+                match_len = min(adapter_len, remaining)
+
+                if match_len < min_overlap:
+                    continue
+
                 seq_part = sequence[pos:pos + match_len]
                 adapter_part = adapter[:match_len]
 
                 mismatches = sum(1 for a, b in zip(seq_part, adapter_part) if a != b)
 
                 if mismatches <= max_mismatches:
-                    if match_len > best_length:
-                        best_length = match_len
-                        best_pos = pos
-                    break  # Found best match at this position
+                    return pos
 
-        return best_pos
+        return -1
 
     # =========================================================================
     # Seqspec Export

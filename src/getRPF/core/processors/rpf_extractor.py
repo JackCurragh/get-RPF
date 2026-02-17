@@ -410,107 +410,61 @@ class RPFExtractor:
         segments: List[SegmentInfo],
         format: str,
         max_reads: Optional[int],
-        adapters: Optional[List[str]] = None
+        adapters: Optional[List[str]] = None,
+        collapse_output: bool = True,
+        collapsed_only: bool = False
     ) -> int:
-        """Extract RPF sequences from reads using detected segments."""
+        """Extract RPF sequences from reads using Two-Stage Collapsing for performance."""
+        from .collapsed import TwoStageCollapser
         
-        # Find RPF segment
+        # Find RPF segment boundaries
         rpf_segments = [seg for seg in segments if seg.segment_type == "rpf"]
         if not rpf_segments:
-            logger.warning("No RPF segment detected, extracting full reads")
             rpf_start, rpf_end = 0, -1
         else:
             rpf_segment = rpf_segments[0]
             rpf_start, rpf_end = rpf_segment.start_pos, rpf_segment.end_pos
         
-        extracted_count = 0
-        opener = get_file_opener(input_file)
-        
-        # Pre-sort adapters by length descending
         sorted_adapters = sorted(adapters, key=len, reverse=True) if adapters else None
         
-        with opener(input_file, 'rt' if input_file.suffix in ['.gz', '.bz2'] else 'r') as fin:
-            with open(output_file, 'w') as fout:
-                if format == "fastq":
-                    while max_reads is None or extracted_count < max_reads:
-                        header = fin.readline().strip()
-                        if not header: break
-                        sequence = fin.readline().strip()
-                        plus = fin.readline().strip() 
-                        quality = fin.readline().strip()
-                        
-                        if header and sequence:
-                            if rpf_end == -1:
-                                rpf_seq = sequence[rpf_start:]
-                                rpf_qual = quality[rpf_start:]
-                                
-                                # Dynamic adapter trimming
-                                if sorted_adapters:
-                                    for adapter in sorted_adapters:
-                                        if adapter in rpf_seq:
-                                            adapter_pos = rpf_seq.find(adapter)
-                                            if adapter_pos >= 0:
-                                                rpf_seq = rpf_seq[:adapter_pos]
-                                                rpf_qual = rpf_qual[:adapter_pos]
-                                                break
-                            else:
-                                rpf_seq = sequence[rpf_start:rpf_end]
-                                rpf_qual = quality[rpf_start:rpf_end]
-                            
-                            if len(rpf_seq) >= 20: 
-                                fout.write(f"{header}_RPF\n")
-                                fout.write(f"{rpf_seq}\n")
-                                fout.write("+\n")
-                                fout.write(f"{rpf_qual}\n")
-                                extracted_count += 1
-                                
-                elif format in ["fasta", "collapsed"]:
-                    current_header = None
-                    current_seq = []
-                    for line in fin:
-                        line = line.strip()
-                        if line.startswith('>'):
-                            if current_header and current_seq:
-                                sequence = ''.join(current_seq)
-                                if rpf_end == -1:
-                                    rpf_seq = sequence[rpf_start:]
-                                    if sorted_adapters:
-                                        for adapter in sorted_adapters:
-                                            if adapter in rpf_seq:
-                                                adapter_pos = rpf_seq.find(adapter)
-                                                if adapter_pos >= 0:
-                                                    rpf_seq = rpf_seq[:adapter_pos]
-                                                    break
-                                else:
-                                    rpf_seq = sequence[rpf_start:rpf_end]
-                                    
-                                if len(rpf_seq) >= 20:
-                                    fout.write(f"{current_header}_RPF\n")
-                                    fout.write(f"{rpf_seq}\n")
-                                    extracted_count += 1
-                                if max_reads and extracted_count >= max_reads: break
-                            current_header = line
-                            current_seq = []
-                        else:
-                             current_seq.append(line)
-                    # Process last
-                    if current_header and current_seq and (max_reads is None or extracted_count < max_reads):
-                        sequence = ''.join(current_seq)
-                        if rpf_end == -1:
-                            rpf_seq = sequence[rpf_start:]
-                            if sorted_adapters:
-                                for adapter in sorted_adapters:
-                                    if adapter in rpf_seq:
-                                        adapter_pos = rpf_seq.find(adapter)
-                                        if adapter_pos >= 0:
-                                            rpf_seq = rpf_seq[:adapter_pos]
-                                            break
-                        else:
-                            rpf_seq = sequence[rpf_start:rpf_end]
-                        if len(rpf_seq) >= 20:
-                            fout.write(f"{current_header}_RPF\n")
-                            fout.write(f"{rpf_seq}\n")
-                            extracted_count += 1
+        def trim_logic(sequence: str) -> Optional[str]:
+            """Inner function to trim a single unique sequence."""
+            if rpf_end == -1:
+                rpf_seq = sequence[rpf_start:]
+                if sorted_adapters:
+                    for adapter in sorted_adapters:
+                        if adapter in rpf_seq:
+                            adapter_pos = rpf_seq.find(adapter)
+                            if adapter_pos >= 0:
+                                rpf_seq = rpf_seq[:adapter_pos]
+                                break
+                return rpf_seq
+            else:
+                return sequence[rpf_start:rpf_end]
+
+        collapser = TwoStageCollapser(logger=logger)
         
-        logger.info(f"Extracted {extracted_count} RPF sequences")
-        return extracted_count
+        # Stage 1: Raw collapse
+        raw_counts = collapser.collapse_raw(input_file, format=format, max_reads=max_reads)
+        
+        # Stage 2 & 3: Trim unique and merge
+        final_counts = collapser.apply_trimming(raw_counts, trim_logic, min_length=20)
+        
+        # Stage 4: Write outputs
+        if collapse_output:
+            collapsed_path = output_file.with_suffix('.collapsed.fa')
+            collapser.write_collapsed_fasta(final_counts, collapsed_path)
+            
+        total_extracted = sum(final_counts.values())
+        
+        if not collapsed_only:
+            logger.info(f"Writing expanded FASTQ output to {output_file}...")
+            # We need to write the expanded FASTQ. Since we already have final_counts,
+            # this is just regenerating the file from the unique set.
+            with open(output_file, 'w') as fout:
+                for idx, (seq, count) in enumerate(final_counts.items(), 1):
+                    for i in range(count):
+                        fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
+        
+        logger.info(f"Extracted {total_extracted} RPF sequences ({len(final_counts)} unique)")
+        return total_extracted

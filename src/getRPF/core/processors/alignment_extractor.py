@@ -194,6 +194,8 @@ class AlignmentBasedExtractor:
         sample_size: int = 10000,
         report_adapters: bool = True,
         star_threads: int = 1,
+        collapse_output: bool = True,
+        collapsed_only: bool = False
     ) -> ExtractionResult:
         """
         Extract RPF sequences using alignment-based structure learning.
@@ -206,6 +208,8 @@ class AlignmentBasedExtractor:
             sample_size: Number of reads to analyze for boundaries
             report_adapters: Whether to scan for known adapters
             star_threads: Number of threads for STAR alignment
+            collapse_output: Whether to collapse the output (deduplicate)
+            collapsed_only: If True, skip writing FASTQ and only write collapsed FASTA
 
         Returns:
             ExtractionResult with statistics and metadata
@@ -345,7 +349,9 @@ class AlignmentBasedExtractor:
                 config.trim_3p_adapter = fallback_seq
 
         extraction_stats = self._extract_with_config(
-            input_file, output_file, config, preserve_umi
+            input_file, output_file, config, preserve_umi,
+            collapse_output=collapse_output,
+            collapsed_only=collapsed_only
         )
         logger.info(f"  Extracted {extraction_stats['extracted_rpfs']} RPFs from "
                    f"{extraction_stats['total_reads']} reads ({extraction_stats['extraction_rate']:.1%})")
@@ -1148,39 +1154,7 @@ class AlignmentBasedExtractor:
     # Phase 4: Extraction with Learned Configuration
     # =========================================================================
 
-    def extract(
-        self,
-        input_file: Path,
-        output_file: Path,
-        star_index: Path,
-        preserve_umi: bool = False,
-        sample_size: int = 10000,
-        report_adapters: bool = True,
-        star_threads: int = 1,
-        collapse_output: bool = True,
-        collapsed_only: bool = False
-    ) -> ExtractionResult:
-        """
-        Extract RPF sequences using alignment-based structure learning.
-        ...
-        """
-        # ... (Phase 1-3 remains similar)
-        # ...
-
-        # Phase 4: Extraction
-        logger.info("Phase 4/4: Extracting RPFs using learned structure...")
-        config = learned_structure.to_trimmer_config()
-
-        # Fallback (Existing logic)
-        if config.trim_3p_adapter is None and adapter_info and adapter_info.top_adapter:
-            # ...
-            config.trim_3p_adapter = adapter_info.detected_adapters[0]['sequence']
-
-        extraction_stats = self._extract_with_config(
-            input_file, output_file, config, preserve_umi,
-            collapse_output=collapse_output,
-            collapsed_only=collapsed_only
-        )
+# Deleted duplicated broken extract method.
         # ...
 
     def _extract_with_config(

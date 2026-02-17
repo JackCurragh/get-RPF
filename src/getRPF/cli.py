@@ -168,16 +168,22 @@ def extract(input_file, output_file, star_index, preserve_umi, sample_size,
         else:
             report_path = Path(output_file).with_suffix('.extraction_report.json')
 
+        result_dict = result.to_dict()
         with open(report_path, 'w') as f:
-            json.dump(result, f, indent=2)
+            json.dump(result_dict, f, indent=2)
 
         # Print summary
         click.echo("\n" + "=" * 70)
         click.echo("Extraction Complete!")
         click.echo("=" * 70)
-        click.echo(f"Extracted: {result['extracted_rpfs']:,} RPFs from {result['total_reads']:,} reads")
-        click.echo(f"Extraction rate: {result['extraction_rate']:.1%}")
-        click.echo(f"Unique sequences: {result.get('unique_rpf', 0):,}")
+        click.echo(f"Extracted: {result.extracted_rpfs:,} RPFs from {result.input_reads:,} reads")
+        click.echo(f"Extraction rate: {result.extraction_rate:.1%}")
+        
+        # Access unique RPF count from the internal stats if present
+        # In AlignmentBasedExtractor.extract, extraction_stats are what we want for 'unique'
+        # Currently ExtractionResult doesn't store the full extraction_stats dict, 
+        # but input_reads and extracted_rpfs are mirrored.
+        # Let's just report the core stats.
 
         click.echo(f"\nOutput files:")
         if not collapsed_only:

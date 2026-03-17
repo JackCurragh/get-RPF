@@ -328,12 +328,29 @@ class AlignmentBasedExtractor:
         # Log structure details
         self._log_learned_structure(learned_structure)
 
-        # Validate structure - fail fast if low confidence
-        if learned_structure.overall_confidence == 'low':
+        # Validate structure - fail fast unless HIGH confidence
+        # Rationale: producing empty outputs is confusing; if the structure
+        # isn't confidently learned, guide the user to increase sample size or
+        # verify alignment rather than proceed.
+        if learned_structure.overall_confidence != 'high':
+            # Build a helpful error with actionable suggestions
+            aligned = alignment_result.get('aligned_reads', 0) if alignment_result else 0
+            total = alignment_result.get('total_reads', 0) if alignment_result else 0
+            rate = alignment_result.get('alignment_rate', 0.0) if alignment_result else 0.0
+
+            suggestions = [
+                "Increase --sample-size (e.g., 200000 or higher).",
+                "Verify the STAR index matches the organism/reference.",
+                "Ensure adapter reporting is enabled (don’t use --no-adapter-report).",
+                "If you know the library design, provide a seqspec in a separate run.",
+            ]
+
             error_msg = (
-                f"Structure learning failed with low confidence. "
-                f"Warnings: {learned_structure.validation_warnings}. "
-                f"Please provide a custom seqspec file or manually inspect the data."
+                "Structure learning did not reach HIGH confidence.\n"
+                f"  Confidence: {learned_structure.overall_confidence}\n"
+                f"  Alignment subset: {aligned}/{total} aligned ({rate:.1%})\n"
+                f"  Warnings: {learned_structure.validation_warnings}\n"
+                "Suggested actions:\n  - " + "\n  - ".join(suggestions)
             )
             logger.error(error_msg)
             raise StructureLearningError(error_msg)

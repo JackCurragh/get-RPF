@@ -50,6 +50,9 @@ from .core.handlers import (
     handle_align_detect,
     handle_extract_rpf,
 )
+from .viz.hmm_plot import plot_hmm_entropy
+from .viz.softclip_plot import plot_softclips as render_softclips
+from .duckdb.ingest import ingest_all
 
 
 class InputFormat(str, Enum):
@@ -680,6 +683,96 @@ def decide_trim(input_file, star_index, format, output, max_reads):
         output=output,
         max_reads=max_reads
     )
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output PNG path",
+    required=True,
+)
+@click.option("--max-reads", "-n", type=int, default=20000, help="Max reads to sample")
+@click.option("--title", type=str, default=None, help="Optional plot title")
+@click.option("--show-segments/--no-show-segments", default=False, help="Overlay HMM segments")
+@click.option("--show-freq/--no-show-freq", default=True, help="Overlay A/C/G/T frequencies")
+@click.option("--show-posteriors/--no-show-posteriors", default=False, help="Overlay per-state posterior ribbons")
+def plot_hmm(input_file: Path, format: str, output: Path, max_reads: int, title: str, show_segments: bool, show_freq: bool, show_posteriors: bool):
+    """Plot per-position entropy with HMM segment overlays.
+
+    Example:
+        getRPF plot-hmm input.fastq -f fastq -o hmm.png -n 20000
+    """
+    try:
+        out = plot_hmm_entropy(input_file, format, output, max_reads=max_reads, title=title, show_segments=show_segments, show_freq=show_freq, show_posteriors=show_posteriors)
+        click.echo(f"✅ Wrote HMM entropy plot: {out}")
+    except Exception as e:
+        click.echo(f"❌ Plot failed: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("sample_id")
+@click.argument("db_path", type=click.Path(path_type=Path))
+@click.option("--source", type=click.Path(path_type=Path), required=True, help="Source FASTQ/FASTA path")
+@click.option("--clean-report", type=click.Path(exists=True, path_type=Path), help="check-cleanliness report .txt")
+@click.option("--align-json", type=click.Path(exists=True, path_type=Path), help="align-detect JSON report")
+@click.option("--extract-json", type=click.Path(exists=True, path_type=Path), help="extract/extract_rpf JSON")
+def ingest_duckdb(sample_id: str, db_path: Path, source: Path, clean_report: Path, align_json: Path, extract_json: Path):
+    """Ingest getRPF/STAR outputs into a DuckDB for QC review.
+
+    Example:
+        getRPF ingest-duckdb SAMPLE1 qc.db \
+            --source SRR.fastq.gz \
+            --clean-report reports/SRR_cleanliness_report.txt \
+            --align-json SRR_align.json \
+            --extract-json SRR.extraction_report.json
+    """
+    try:
+        out_db = ingest_all(
+            db_path=db_path,
+            sample_id=sample_id,
+            source_path=source,
+            cleanliness_report=clean_report,
+            alignment_json=align_json,
+            extraction_json=extract_json,
+        )
+        click.echo(f"✅ Ingested into DuckDB: {out_db}")
+        click.echo("   Tables: samples, getrpf_checks, alignment_stats, extraction_summary; view: qc_overview")
+    except Exception as e:
+        click.echo(f"❌ Ingest failed: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command(name="plot-softclips")
+@click.option("--align-json", type=click.Path(exists=True, path_type=Path), required=True, help="align-detect JSON report")
+@click.option("--bam", type=click.Path(exists=True, path_type=Path), help="Aligned BAM (optional for heatmap)")
+@click.option("--no-heatmap", is_flag=True, help="Disable heatmap even if BAM provided")
+@click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Output PNG path")
+@click.option("--title", type=str, default=None, help="Optional figure title")
+def plot_softclips(align_json: Path, bam: Path, no_heatmap: bool, output: Path, title: str):
+    """Plot alignment soft-clipping summary and optional heatmap.
+
+    Examples:
+      getRPF plot-softclips --align-json SRR_align.json -o softclips.png
+      getRPF plot-softclips --align-json SRR_align.json --bam subset.bam -o softclips_heat.png
+    """
+    try:
+        out = render_softclips(align_json, output, bam, not no_heatmap, title)
+        click.echo(f"✅ Wrote soft-clipping plot: {out}")
+    except Exception as e:
+        click.echo(f"❌ Soft-clipping plot failed: {e}", err=True)
+        raise click.Abort()
+
 
 if __name__ == "__main__":
     cli()

@@ -38,6 +38,7 @@ from .types import (
     LearnedStructure,
     TrimmerConfig,
     StructureLearningError,
+    ExtractionEmptyError,
 )
 from ...utils.file_utils import create_temp_file, get_file_opener
 
@@ -377,6 +378,18 @@ class AlignmentBasedExtractor:
             collapse_output=collapse_output,
             collapsed_only=collapsed_only
         )
+        if extraction_stats.get('extracted_rpfs', 0) == 0:
+            # Provide actionable context on likely causes
+            adapter_note = (
+                "Adapter not confidently detected; try increasing --sample-size, "
+                "or supply a known 3' adapter with a seqspec, or rerun without --collapsed-only to inspect reads."
+            )
+            raise ExtractionEmptyError(
+                "Extraction produced zero RPFs. "
+                "Likely causes: incorrect adapter, overly strict trim bounds, or poor alignment. "
+                f"Subset alignment rate: {alignment_result.get('alignment_rate', 0.0):.1%}. "
+                + adapter_note
+            )
         logger.info(f"  Extracted {extraction_stats['extracted_rpfs']} RPFs from "
                    f"{extraction_stats['total_reads']} reads ({extraction_stats['extraction_rate']:.1%})")
 

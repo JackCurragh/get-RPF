@@ -455,7 +455,7 @@ class RPFExtractor:
         # Stage 2 & 3: Trim unique and merge
         final_counts = collapser.apply_trimming(raw_counts, trim_logic, min_length=20)
         
-        # Stage 4: Write outputs
+        # Stage 4: Write outputs (skip empty)
         if collapse_output:
             collapsed_path = output_file.with_suffix('.collapsed.fa')
             collapser.write_collapsed_fasta(final_counts, collapsed_path)

@@ -239,6 +239,17 @@ class StructureLearningError(Exception):
     pass
 
 
+class ExtractionEmptyError(Exception):
+    """Raised when extraction produced zero RPF reads.
+
+    Used to fail fast (and clearly) when trimming and/or adapter detection
+    results in no sequences passing the RPF length window. Downstream tools
+    often assume non-empty inputs; surfacing this here prevents confusing
+    follow-on errors.
+    """
+    pass
+
+
 # =============================================================================
 # Original Types (Kept for Compatibility)
 # =============================================================================

@@ -35,10 +35,14 @@ STATE_NAMES = {
 class SegmenterConfig:
     """Configuration for HMM transition and emission probabilities."""
     # Priors
-    p_umi_start: float = 0.3    # Probability read starts with UMI
-    p_rpf_start: float = 0.6    # Probability read starts with RPF (no UMI)
-    p_umi_len_mu: float = 6.0   # Expected UMI length
-    p_rpf_len_mu: float = 30.0  # Expected RPF length
+    # Informative priors (can be overridden by adaptive start logic):
+    p_umi_start: float = 0.2     # Baseline prior for 5' UMI presence
+    p_rpf_start: float = 0.7     # Baseline prior for direct RPF start
+    p_adapter_start: float = 0.1 # Rare (short read or pre-trimmed tail)
+    p_umi_len_mu: float = 6.0    # Expected UMI length (if present)
+    p_rpf_len_mu: float = 30.0   # Expected RPF length
+    min_umi_len: int = 4         # Do not allow UMI->RPF before this many bases
+    min_rpf_len: int = 22        # (Advisory) minimal RPF before adapter
     
     # Emission profiles (Entropy means)
     mu_entropy_umi: float = 1.8   # High entropy
@@ -82,9 +86,17 @@ class ProbabilisticSegmenter:
         backpointer = [[0] * N for _ in range(T)]
         
         # Initialization (t=0)
-        # We can start in UMI, RPF, or rarely ADAPTER (if very short read)
-        viterbi[0][STATE_UMI] = math.log(self.config.p_umi_start) + self._log_emission(STATE_UMI, obs_seq[0])
-        viterbi[0][STATE_RPF] = math.log(self.config.p_rpf_start) + self._log_emission(STATE_RPF, obs_seq[0])
+        # Adaptive start prior: if early entropy is high, favor UMI; otherwise favor RPF.
+        # This keeps behavior sensible across protocols without a fixed bias.
+        early_k = min(5, len(obs_seq))
+        early_entropy = sum(o["entropy"] for o in obs_seq[:early_k]) / max(1, early_k)
+        # Map entropy (~0..2) → prior in [0.05, 0.95]
+        def sigmoid(x):
+            return 1.0 / (1.0 + math.exp(-x))
+        umi_prior = 0.05 + 0.90 * sigmoid((early_entropy - 1.3) / 0.3)
+        rpf_prior = max(1e-6, 1.0 - umi_prior)
+        viterbi[0][STATE_UMI] = math.log(umi_prior) + self._log_emission(STATE_UMI, obs_seq[0])
+        viterbi[0][STATE_RPF] = math.log(rpf_prior) + self._log_emission(STATE_RPF, obs_seq[0])
         # Allow barcode start? Let's treat Barcode same as UMI for now structure-wise or just after UMI.
         
         # Iteration
@@ -128,6 +140,65 @@ class ProbabilisticSegmenter:
         
         # Convert path to SegmentInfo
         return self._path_to_segments(best_path)
+
+    # --- New: Viterbi + Forward-Backward posteriors for visualization ---
+    def decode_with_posteriors(self, stats: SignalStats):
+        """Return Viterbi path, posterior state probabilities, and segments.
+
+        Produces per-position posteriors via forward-backward in log space,
+        useful for plotting what the HMM is doing beyond the hard path.
+        """
+        obs_seq = self._prepare_observations(stats)
+        if not obs_seq:
+            return [], [], []
+
+        T = len(obs_seq)
+        N = 6
+
+        # Emission log-probabilities
+        emit = [[self._log_emission(s, obs_seq[t]) for s in range(N)] for t in range(T)]
+
+        def logsumexp(vals):
+            m = max(vals)
+            if m == -float('inf'):
+                return m
+            return m + math.log(sum(math.exp(v - m) for v in vals))
+
+        # Forward (time-inhomogeneous transitions allowed via t)
+        fwd = [[-float('inf')] * N for _ in range(T)]
+        # init: START not explicit; allow UMI/RPF starts
+        fwd[0][STATE_UMI] = math.log(self.config.p_umi_start) + emit[0][STATE_UMI]
+        fwd[0][STATE_RPF] = math.log(self.config.p_rpf_start) + emit[0][STATE_RPF]
+
+        for t in range(1, T):
+            for s in range(N):
+                prevs = [fwd[t-1][ps] + self._log_transition(ps, s, t) for ps in range(N)]
+                fwd[t][s] = emit[t][s] + logsumexp(prevs)
+
+        logZ = logsumexp(fwd[-1])
+
+        # Backward
+        bwd = [[-float('inf')] * N for _ in range(T)]
+        for s in range(N):
+            bwd[T-1][s] = 0.0  # log(1)
+        for t in range(T-2, -1, -1):
+            for s in range(N):
+                nexts = [self._log_transition(s, ns, t+1) + emit[t+1][ns] + bwd[t+1][ns] for ns in range(N)]
+                bwd[t][s] = logsumexp(nexts)
+
+        # Posteriors gamma[t][s]
+        post = []
+        for t in range(T):
+            gammas = [math.exp(fwd[t][s] + bwd[t][s] - logZ) for s in range(N)]
+            # Normalize for numerical stability
+            ssum = sum(gammas) or 1.0
+            gammas = [g / ssum for g in gammas]
+            post.append(gammas)
+
+        # Viterbi path and segments for reference
+        segments = self.segment(stats)
+
+        return [max(range(N), key=lambda s: fwd[T-1][s])], post, segments
 
     def _prepare_observations(self, stats: SignalStats) -> List[Dict]:
         """Convert stats to observation sequence."""
@@ -183,24 +254,31 @@ class ProbabilisticSegmenter:
         # ADAPTER -> ADAPTER (stay)
         
         if prev_s == STATE_UMI:
+            # Enforce minimal UMI span before moving to RPF
             if curr_s == STATE_UMI:
-                return math.log(0.8) # Tend to stay
+                # Stronger self-loop before min_umi_len, weaker after
+                stay = 0.95 if t < self.config.min_umi_len else 0.6
+                return math.log(stay)
             elif curr_s == STATE_RPF:
-                return math.log(0.2)
+                if t < self.config.min_umi_len:
+                    return -float('inf')
+                return math.log(0.4)  # encourage transition once min length met
             else:
                 return -float('inf')
-                
+
         elif prev_s == STATE_RPF:
             if curr_s == STATE_RPF:
                 return math.log(0.95) # RPFs are long
             elif curr_s == STATE_ADAPTER:
+                # Soft encouragement to remain in RPF until emissions demand adapter
                 return math.log(0.05)
             else:
                 return -float('inf')
-                
+
         elif prev_s == STATE_ADAPTER:
+            # No transitions out of adapter; terminal region
             if curr_s == STATE_ADAPTER:
-                return math.log(0.99) # Stay in adapter till end
+                return math.log(0.999)
             else:
                 return -float('inf')
                 

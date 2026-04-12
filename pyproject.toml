@@ -26,6 +26,7 @@ dependencies = [
     "numpy>=1.21.0",
     "pyyaml>=6.0",
     "pysam>=0.19.0",
+    "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
@@ -98,4 +99,4 @@ biopython = "*"
 numpy = "*"
 pyyaml = "*"
 pysam = "*"
-
+matplotlib-base = "*"

@@ -53,7 +53,7 @@ from .core.handlers import (
 # NOTE: Plotting modules pull in heavy optional deps (matplotlib, seaborn).
 # Import them lazily inside the specific subcommands so that core commands
 # like `extract`, `check`, and `align-detect` do not require those packages.
-from .duckdb.ingest import ingest_all
+# Avoid importing DuckDB client at module import time; only needed by ingest-duckdb
 
 
 class InputFormat(str, Enum):
@@ -750,6 +750,13 @@ def ingest_duckdb(sample_id: str, db_path: Path, source: Path, clean_report: Pat
             --extract-json SRR.extraction_report.json
     """
     try:
+        try:
+            from .duckdb.ingest import ingest_all
+        except ModuleNotFoundError as e:
+            raise click.ClickException(
+                "ingest-duckdb requires the 'duckdb' package.\n"
+                "Install with: pip install duckdb  (or) conda install duckdb"
+            ) from e
         out_db = ingest_all(
             db_path=db_path,
             sample_id=sample_id,

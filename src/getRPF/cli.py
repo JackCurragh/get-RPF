@@ -50,8 +50,9 @@ from .core.handlers import (
     handle_align_detect,
     handle_extract_rpf,
 )
-from .viz.hmm_plot import plot_hmm_entropy
-from .viz.softclip_plot import plot_softclips as render_softclips
+# NOTE: Plotting modules pull in heavy optional deps (matplotlib, seaborn).
+# Import them lazily inside the specific subcommands so that core commands
+# like `extract`, `check`, and `align-detect` do not require those packages.
 from .duckdb.ingest import ingest_all
 
 
@@ -713,7 +714,18 @@ def plot_hmm(input_file: Path, format: str, output: Path, max_reads: int, title:
         getRPF plot-hmm input.fastq -f fastq -o hmm.png -n 20000
     """
     try:
-        out = plot_hmm_entropy(input_file, format, output, max_reads=max_reads, title=title, show_segments=show_segments, show_freq=show_freq, show_posteriors=show_posteriors)
+        try:
+            from .viz.hmm_plot import plot_hmm_entropy
+        except ModuleNotFoundError as e:
+            raise click.ClickException(
+                "plot-hmm requires optional visualization dependencies.\n"
+                "Install with: pip install getRPF[viz]  (or)  conda install matplotlib seaborn"
+            ) from e
+        out = plot_hmm_entropy(
+            input_file, format, output,
+            max_reads=max_reads, title=title,
+            show_segments=show_segments, show_freq=show_freq, show_posteriors=show_posteriors
+        )
         click.echo(f"✅ Wrote HMM entropy plot: {out}")
     except Exception as e:
         click.echo(f"❌ Plot failed: {e}", err=True)
@@ -767,6 +779,13 @@ def plot_softclips(align_json: Path, bam: Path, no_heatmap: bool, output: Path, 
       getRPF plot-softclips --align-json SRR_align.json --bam subset.bam -o softclips_heat.png
     """
     try:
+        try:
+            from .viz.softclip_plot import plot_softclips as render_softclips
+        except ModuleNotFoundError as e:
+            raise click.ClickException(
+                "plot-softclips requires optional visualization dependencies.\n"
+                "Install with: pip install getRPF[viz]  (or)  conda install matplotlib seaborn"
+            ) from e
         out = render_softclips(align_json, output, bam, not no_heatmap, title)
         click.echo(f"✅ Wrote soft-clipping plot: {out}")
     except Exception as e:

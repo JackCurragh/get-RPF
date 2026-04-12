@@ -287,6 +287,21 @@ class TwoStageCollapser:
         prefix: str = "seq"
     ) -> Dict[str, Union[int, str]]:
         """Stage 4: Write final collapsed results to FASTA."""
+        total_reads = sum(counts.values())
+        unique = len(counts)
+
+        # Avoid producing empty placeholder files that confuse downstream steps
+        if unique == 0 or total_reads == 0:
+            self.logger.warning(
+                "No RPFs to write (0 unique / 0 reads). Skipping creation of %s",
+                output_file,
+            )
+            return {
+                "unique_sequences": 0,
+                "total_reads": 0,
+                "output_path": None,
+            }
+
         with open(output_file, "w") as fout:
             # Sort by count descending for better readability
             for idx, (seq, count) in enumerate(counts.most_common(), 1):
@@ -294,8 +309,8 @@ class TwoStageCollapser:
                 fout.write(f"{seq}\n")
         
         stats = {
-            "unique_sequences": len(counts),
-            "total_reads": sum(counts.values()),
+            "unique_sequences": unique,
+            "total_reads": total_reads,
             "output_path": str(output_file)
         }
         self.logger.info(f"  Wrote {stats['unique_sequences']} sequences to {output_file}")

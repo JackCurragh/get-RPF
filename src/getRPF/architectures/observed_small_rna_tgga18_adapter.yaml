@@ -1,0 +1,33 @@
+# Auto-generated observed adapter/UMI structure.
+# Encodes protocol shape only; accession-level validation metadata is external to getRPF.
+# Adapter sequences are normalized to DNA alphabet (U -> T) for matching sequencing reads.
+seqspec_version: 0.3.0
+assay_id: observed_small_rna_tgga18_adapter
+name: Observed small-RNA TGGA 18 nt adapter
+description: Observed adapter/UMI structure from 4 matched public run(s); RPF length
+  intentionally broad.
+library_kit: Observed public Ribo-seq protocol cluster
+modalities:
+- rna
+sequence_spec:
+- region_id: rpf
+  region_type: cdna
+  sequence_type: joined
+  min_len: 15
+  max_len: 40
+- region_id: adapter_3p
+  region_type: adapter
+  sequence: TGGAATTCTCGGGTGCCA
+  min_len: 18
+  max_len: 18
+quality_markers:
+  confidence: observed_protocol
+  matched_run_count: 4
+  rpf_length_policy: broad_15_40_dynamic_boundaries_not_encoded
+  adapter_alphabet: DNA_normalized
+  example_gsms:
+  - GSM3563711
+  - GSM3563712
+  - GSM3563713
+  - GSM3563714
+  source_type: observed_public_run_cluster

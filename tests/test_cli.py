@@ -1,5 +1,7 @@
 """Test suite for getRPF CLI functionality."""
 
+import gzip
+
 import pytest
 from click.testing import CliRunner
 from getRPF.cli import cli
@@ -34,7 +36,7 @@ def test_version(runner):
     """Test CLI version command."""
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.2.0" in result.output
 
 
 def test_help(runner):
@@ -133,6 +135,32 @@ class TestAdapterDetection:
         content = output_file.read_text()
         assert "Adapter Contamination Summary" in content
         assert "contamination rate" in content.lower()
+
+    def test_gzipped_fastq_detection(self, runner, test_data, tmp_path):
+        """Test adapter detection on gzipped FASTQ input."""
+        gzipped_input = tmp_path / "test_data.fastq.gz"
+        gzipped_input.write_bytes(gzip.compress(test_data.read_bytes()))
+
+        output_file = tmp_path / "adapter_report.txt"
+        result = runner.invoke(
+            cli,
+            [
+                "detect-adapter",
+                str(gzipped_input),
+                "--format",
+                "fastq",
+                "--adapter",
+                "AGATCGGAAGAG",
+                "--output",
+                str(output_file),
+                "--max-reads",
+                "2",
+            ],
+        )
+
+        assert result.exit_code == 0
+        content = output_file.read_text()
+        assert "Overall contamination rate: 50.00%" in content
 
     def test_invalid_adapter(self, runner, test_data, tmp_path):
         """Test adapter detection with invalid adapter sequence."""

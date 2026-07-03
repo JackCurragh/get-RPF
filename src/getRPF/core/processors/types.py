@@ -292,9 +292,12 @@ class RPFExtractionResult:
     architecture_match: Optional[str]
     extraction_method: str  # "pattern_match" or "probabilistic_segmentation"
     segments: Dict[str, List[SegmentInfo]]
-    quality_metrics: Dict[str, float]
+    quality_metrics: Dict[str, Any]
     seqspec_data: Optional[Dict[str, Any]] = None
     trim_recommendations: Optional[Dict[str, Any]] = None
+    adapter_source: Optional[str] = None
+    adapter_conflict: Optional[Dict[str, Any]] = None
+    adapter_evidence_candidates: Optional[List[Dict[str, Any]]] = None
     
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write extraction results to file."""

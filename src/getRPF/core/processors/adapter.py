@@ -12,6 +12,7 @@ from typing import Dict, Optional, Tuple
 from Bio import SeqIO
 
 from ..processors.collapsed import parse_collapsed_fasta
+from ...utils.file_utils import get_file_opener
 
 
 @dataclass
@@ -183,19 +184,24 @@ class AdapterDetector:
 
         else:
             # Handle standard FASTQ/FASTA formats
-            for record in SeqIO.parse(str(input_path), self.format):
-                total_reads += 1
-                sequence = str(record.seq).upper()
+            opener = get_file_opener(input_path)
+            with opener(input_path, "rt", encoding="utf-8") as handle:
+                for record in SeqIO.parse(handle, self.format):
+                    if self.max_reads is not None and total_reads >= self.max_reads:
+                        break
 
-                # Find best adapter match
-                pos, length, variant = self._find_best_match(sequence)
+                    total_reads += 1
+                    sequence = str(record.seq).upper()
 
-                if pos is not None:
-                    contaminated_reads += 1
-                    positions[pos] = positions.get(pos, 0) + 1
-                    partial_matches[length] = partial_matches.get(length, 0) + 1
-                    if variant:
-                        variants[variant] = variants.get(variant, 0) + 1
+                    # Find best adapter match
+                    pos, length, variant = self._find_best_match(sequence)
+
+                    if pos is not None:
+                        contaminated_reads += 1
+                        positions[pos] = positions.get(pos, 0) + 1
+                        partial_matches[length] = partial_matches.get(length, 0) + 1
+                        if variant:
+                            variants[variant] = variants.get(variant, 0) + 1
 
         # Calculate contamination rate
         contamination_rate = (

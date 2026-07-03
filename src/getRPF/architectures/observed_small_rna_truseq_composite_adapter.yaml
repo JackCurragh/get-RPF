@@ -1,0 +1,39 @@
+# Auto-generated observed adapter/UMI structure.
+# Encodes protocol shape only; accession-level validation metadata is external to getRPF.
+# Adapter sequences are normalized to DNA alphabet (U -> T) for matching sequencing reads.
+seqspec_version: 0.3.0
+assay_id: observed_small_rna_truseq_composite_adapter
+name: Observed small-RNA TruSeq composite adapter
+description: Observed adapter/UMI structure from 20 matched public run(s); RPF length
+  intentionally broad.
+library_kit: Observed public Ribo-seq protocol cluster
+modalities:
+- rna
+sequence_spec:
+- region_id: rpf
+  region_type: cdna
+  sequence_type: joined
+  min_len: 15
+  max_len: 40
+- region_id: adapter_3p
+  region_type: adapter
+  sequence: TGGAATTCTCGGGTGCCAAGGAGATCGGAAGAGCGGTTCAGCAGGAATGCCGAGACCG
+  min_len: 58
+  max_len: 58
+quality_markers:
+  confidence: observed_protocol
+  matched_run_count: 20
+  rpf_length_policy: broad_15_40_dynamic_boundaries_not_encoded
+  adapter_alphabet: DNA_normalized
+  example_gsms:
+  - GSM3396990
+  - GSM3396991
+  - GSM3396992
+  - GSM3396993
+  - GSM3396994
+  - GSM3396995
+  - GSM3396996
+  - GSM3396997
+  - GSM3396998
+  - GSM3396999
+  source_type: observed_public_run_cluster

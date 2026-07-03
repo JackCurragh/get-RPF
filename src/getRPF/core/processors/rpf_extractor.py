@@ -12,19 +12,38 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass, asdict
+from collections import Counter
 
 from ...utils.file_utils import get_file_opener
 from ..seqspec_generator import SeqSpecGenerator
 from ..seqspec_loader import SeqSpecArchitectureLoader
 
 # Import types and components
-from .types import ReadArchitecture, SegmentInfo, RPFExtractionResult
+from .types import (
+    ExtractionEmptyError,
+    ReadArchitecture,
+    SegmentInfo,
+    RPFExtractionResult,
+)
 from .signals import SignalProcessor, SignalStats
 from .matcher import ArchitectureMatcher
 from .segmenter import ProbabilisticSegmenter
 from .reporting import Reporter
 
 logger = logging.getLogger(__name__)
+
+MIN_ADAPTER_PREFIX_OVERLAP = 10
+MIN_ADAPTER_EVIDENCE_FRACTION = 0.10
+LOW_ADAPTER_EVIDENCE_FRACTION = 0.05
+MAX_ADAPTER_EVIDENCE_CANDIDATES = 5
+MIN_RPF_LENGTH = 20
+MAX_RPF_LENGTH = 40
+FOOTPRINT_CORE_MIN = 26
+FOOTPRINT_CORE_MAX = 34
+MIN_PRETRIMMED_RPF_FRACTION = 0.80
+MIN_PRETRIMMED_CORE_FRACTION = 0.50
+MIN_RETAINED_FRACTION_WARN = 0.05
+MIN_EXTRACTED_CORE_FRACTION_WARN = 0.10
 
 
 
@@ -124,6 +143,9 @@ class RPFExtractor:
         # 2. Generate Signals (Entropy, Composition)
         logger.info("Generating signal metrics...")
         signals = self.signal_processor.process_reads(sample_reads)
+        raw_length_profile = self._length_profile(sample_reads)
+        adapter_evidence = self._score_adapter_evidence(sample_reads)
+        best_adapter_evidence = adapter_evidence[0] if adapter_evidence else None
         
         # 3. Match against known architectures
         logger.info("Matching architectures...")
@@ -145,6 +167,52 @@ class RPFExtractor:
             extracted_segments = self._arch_to_segments(final_architecture)
             
         else:
+            if (
+                best_adapter_evidence
+                and best_adapter_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION
+            ):
+                final_architecture = best_adapter_evidence["architecture"]
+                extracted_segments = self._arch_to_segments(final_architecture)
+                method = "adapter_evidence_match"
+                trace_log.append(
+                    "Selected architecture by adapter evidence: "
+                    f"{final_architecture.protocol_name} "
+                    f"({best_adapter_evidence['hit_fraction']:.1%} of sampled reads)."
+                )
+
+            if final_architecture is not None:
+                logger.info(
+                    "Matched architecture by adapter evidence: "
+                    f"{final_architecture.protocol_name}"
+                )
+
+        if final_architecture is None and self._looks_pretrimmed(raw_length_profile):
+            logger.info(
+                "No dominant adapter evidence and reads are already footprint-like. "
+                "Using conservative length-filter extraction."
+            )
+            method = "pretrimmed_length_filter"
+            final_architecture = ReadArchitecture(
+                protocol_name="pretrimmed_no_dominant_adapter",
+                lab_source="Length-filtered raw reads",
+                umi_positions=[],
+                barcode_positions=[],
+                adapter_sequences=[],
+                rpf_start=0,
+                rpf_end=-1,
+                expected_rpf_length=(MIN_RPF_LENGTH, MAX_RPF_LENGTH),
+                quality_markers={
+                    "pretrimmed_rpf_fraction": raw_length_profile["frac_20_40"],
+                    "pretrimmed_core_fraction": raw_length_profile["frac_26_34"],
+                },
+            )
+            extracted_segments = [SegmentInfo("rpf", 0, -1, 0.8)]
+            trace_log.append(
+                "Reads are mostly within the RPF length window and no adapter "
+                "candidate is strongly supported; extracted by length filter only."
+            )
+
+        if final_architecture is None:
             # Fallback to Probabilistic Segmentation
             logger.info("No strict architecture match found. Attempting probabilistic segmentation...")
             method = "probabilistic_hmm"
@@ -234,38 +302,20 @@ class RPFExtractor:
                 # We need to import AdapterDetector here or implementing a quick check
                 # A quick check is better given we have loaded Sample Reads
                 
-                best_adapter = None
-                best_count = 0
-                threshold = len(sample_reads) * 0.1 # 10% of reads
-                
-                # Check top 20 adapters (common) to be fast
-                from .adapter import AdapterDetector
-                
-                # Just use simple find for speed on the sample
-                # Use adapters from the 'comprehensive_adapter_check' architecture if available
-                comprehensive_arch = next((a for a in self.architecture_db.architectures if a.protocol_name == "comprehensive_adapter_check"), None)
-                adapter_list = []
-                if comprehensive_arch and comprehensive_arch.adapter_sequences:
-                    # Create list of (name, seq) tuples from the list
-                    # Since seqspec doesn't store names per adapter in list, we generate dummy names
-                    adapter_list = [(f"adapter_{i}", seq) for i, seq in enumerate(comprehensive_arch.adapter_sequences)]
-                else:
-                    # Fallback to empty if not found (should not happen with built-in)
-                    adapter_list = []
-
-                for name, seq in adapter_list[:30]: # Check top 30
-                    count = sum(1 for r in sample_reads if seq in r)
-                    if count > best_count:
-                        best_count = count
-                        best_adapter = (name, seq)
-                
-                if best_adapter and best_count > threshold:
-                    logger.info(f"Fallback Scan: Found adapter {best_adapter[1]} in {best_count} reads. Overriding HMM.")
-                    adapter_seq = best_adapter[1]
+                if (
+                    best_adapter_evidence
+                    and best_adapter_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION
+                ):
+                    logger.info(
+                        "Fallback Scan: Found adapter "
+                        f"{best_adapter_evidence['adapter']} in "
+                        f"{best_adapter_evidence['hit_count']} reads. Overriding HMM."
+                    )
+                    adapter_seq = best_adapter_evidence["adapter"]
                     
                     # Construct override architecture
                     final_architecture = ReadArchitecture(
-                        protocol_name=f"fallback_detected_{best_adapter[0]}",
+                        protocol_name=f"fallback_detected_{best_adapter_evidence['protocol_name']}",
                         lab_source="Brute-force Scan Fallback",
                         umi_positions=[],
                         barcode_positions=[],
@@ -280,7 +330,10 @@ class RPFExtractor:
                         SegmentInfo("rpf", 0, -1, 0.99), # Placeholder
                         SegmentInfo("adapter", -1, -1, 0.99) # Placeholder
                     ]
-                    trace_log.append(f"Override: Found dominant adapter {best_adapter[0]}.")
+                    trace_log.append(
+                        "Override: Found dominant adapter "
+                        f"{best_adapter_evidence['protocol_name']}."
+                    )
         
         # 4. Generate Reports
         if final_architecture and extracted_segments:
@@ -315,24 +368,62 @@ class RPFExtractor:
                  if final_architecture.rpf_end == -1 and not adapters_to_trim:
                      pass
 
-            extracted_count = self._extract_rpfs_from_reads(
+            extraction_stats = self._extract_rpfs_from_reads(
                 input_file, output_file, extracted_segments, format, max_reads, 
                 adapters=adapters_to_trim,
                 collapse_output=collapse_output,
                 collapsed_only=collapsed_only
             )
             
+            adapter_report = self._adapter_reporting(
+                final_architecture,
+                method,
+                adapter_evidence,
+            )
+            adapter_quality = self._adapter_quality_metrics(best_adapter_evidence)
+            confidence = 0.95
+            if adapter_report["adapter_source"] == "no_dominant_adapter":
+                confidence = 0.5
+                adapter_quality["architecture_confidence_note"] = (
+                    "No dominant adapter evidence in raw reads; sample may already "
+                    "be footprint-like, pretrimmed, or mixed-length."
+                )
+            if method == "pretrimmed_length_filter":
+                confidence = 0.75
+                adapter_quality["architecture_confidence_note"] = (
+                    "No seqspec was inferred. Reads were treated as already "
+                    "footprint-like and only the broad RPF length window was applied."
+                )
+            extraction_warnings = self._extraction_warnings(extraction_stats)
+            extraction_class = self._extraction_class(
+                method,
+                adapter_report,
+                extraction_warnings,
+            )
+
             return RPFExtractionResult(
-                input_reads=extracted_count, # Simplified
-                processed_reads=extracted_count,
-                extracted_rpfs=extracted_count,
+                input_reads=extraction_stats["input_reads"],
+                processed_reads=extraction_stats["input_reads"],
+                extracted_rpfs=extraction_stats["extracted_rpfs"],
                 failed_extractions=0,
                 architecture_match=final_architecture.protocol_name,
                 extraction_method=method,
                 segments={"detected": extracted_segments},
-                quality_metrics={"confidence": 0.95},
+                quality_metrics={
+                    "confidence": confidence,
+                    **adapter_quality,
+                    "raw_length_profile": raw_length_profile,
+                    "extracted_length_profile": extraction_stats["extracted_length_profile"],
+                    "retained_fraction": extraction_stats["retained_fraction"],
+                    "unique_extracted_sequences": extraction_stats["unique_extracted_sequences"],
+                    "extraction_class": extraction_class,
+                    "extraction_warnings": extraction_warnings,
+                },
                 seqspec_data=seqspec_data,
-                trim_recommendations=self._derive_trim_recommendations(extracted_segments)
+                trim_recommendations=self._derive_trim_recommendations(extracted_segments),
+                adapter_source=adapter_report["adapter_source"],
+                adapter_conflict=adapter_report["adapter_conflict"],
+                adapter_evidence_candidates=adapter_report["adapter_evidence_candidates"],
             )
             
         else:
@@ -365,7 +456,263 @@ class RPFExtractor:
             "recommended_3prime_trim": 0, 
             "note": "Use detected adapter sequences for 3' trimming"
         }
-    
+
+    def _score_adapter_evidence(self, reads: List[str]) -> List[Dict[str, Any]]:
+        """Score observed adapter-prefix evidence for every loaded architecture."""
+        if not reads:
+            return []
+
+        scored = []
+        seen = set()
+        for arch in self.architecture_db.architectures:
+            for adapter in arch.adapter_sequences:
+                adapter = adapter.upper()
+                if not adapter:
+                    continue
+
+                key = (arch.protocol_name, adapter)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                hit_count = sum(
+                    1
+                    for read in reads
+                    if self._find_adapter_prefix(read.upper(), adapter) is not None
+                )
+                if hit_count == 0:
+                    continue
+
+                scored.append(
+                    {
+                        "architecture": arch,
+                        "protocol_name": arch.protocol_name,
+                        "adapter": adapter,
+                        "hit_count": hit_count,
+                        "hit_fraction": hit_count / len(reads),
+                    }
+                )
+
+        scored.sort(
+            key=lambda item: (
+                item["hit_count"],
+                item["hit_fraction"],
+                item["protocol_name"] != "comprehensive_adapter_check",
+                len(item["adapter"]),
+                item["protocol_name"],
+            ),
+            reverse=True,
+        )
+        return scored
+
+    def _adapter_quality_metrics(
+        self, best_adapter_evidence: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Return serializable quality metrics for adapter-evidence reporting."""
+        if not best_adapter_evidence:
+            return {
+                "adapter_evidence_protocol": None,
+                "adapter_evidence_sequence": None,
+                "adapter_evidence_hit_count": 0,
+                "adapter_evidence_hit_fraction": 0.0,
+            }
+
+        return {
+            "adapter_evidence_protocol": best_adapter_evidence["protocol_name"],
+            "adapter_evidence_sequence": best_adapter_evidence["adapter"],
+            "adapter_evidence_hit_count": best_adapter_evidence["hit_count"],
+            "adapter_evidence_hit_fraction": best_adapter_evidence["hit_fraction"],
+        }
+
+    def _looks_pretrimmed(self, length_profile: Dict[str, Any]) -> bool:
+        """Return True when sampled reads are already mostly plausible RPFs."""
+        return (
+            length_profile["frac_20_40"] >= MIN_PRETRIMMED_RPF_FRACTION
+            and length_profile["frac_26_34"] >= MIN_PRETRIMMED_CORE_FRACTION
+        )
+
+    def _length_profile(self, reads: List[str]) -> Dict[str, Any]:
+        """Summarize sampled read lengths for reporting and extraction policy."""
+        counts = Counter(len(read) for read in reads)
+        return self._length_profile_from_length_counts(counts)
+
+    def _length_profile_from_sequence_counts(self, sequence_counts: Counter) -> Dict[str, Any]:
+        """Summarize sequence length distribution from collapsed sequence counts."""
+        counts = Counter()
+        for sequence, count in sequence_counts.items():
+            counts[len(sequence)] += count
+        return self._length_profile_from_length_counts(counts)
+
+    def _length_profile_from_length_counts(self, counts: Counter) -> Dict[str, Any]:
+        """Summarize a weighted length-count mapping."""
+        total = sum(counts.values())
+
+        def fraction(min_len: int, max_len: Optional[int] = None) -> float:
+            if total == 0:
+                return 0.0
+            if max_len is None:
+                n = sum(count for length, count in counts.items() if length >= min_len)
+            else:
+                n = sum(
+                    count
+                    for length, count in counts.items()
+                    if min_len <= length <= max_len
+                )
+            return n / total
+
+        mode_length = None
+        mode_count = 0
+        if counts:
+            mode_length, mode_count = counts.most_common(1)[0]
+
+        return {
+            "reads_scanned": total,
+            "mode_length": mode_length,
+            "mode_count": mode_count,
+            "frac_20_40": fraction(MIN_RPF_LENGTH, MAX_RPF_LENGTH),
+            "frac_26_34": fraction(FOOTPRINT_CORE_MIN, FOOTPRINT_CORE_MAX),
+            "frac_35_40": fraction(35, MAX_RPF_LENGTH),
+            "frac_gt40": fraction(MAX_RPF_LENGTH + 1),
+            "top_lengths": [
+                {"length": length, "count": count}
+                for length, count in counts.most_common(10)
+            ],
+        }
+
+    def _adapter_reporting(
+        self,
+        final_architecture: ReadArchitecture,
+        method: str,
+        adapter_evidence: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Summarize adapter evidence and conflicts for JSON reports."""
+        candidates = [
+            self._serialize_adapter_candidate(item)
+            for item in adapter_evidence[:MAX_ADAPTER_EVIDENCE_CANDIDATES]
+        ]
+        selected_evidence = self._selected_adapter_evidence(
+            final_architecture, adapter_evidence
+        )
+        best_evidence = adapter_evidence[0] if adapter_evidence else None
+        selected_fraction = (
+            selected_evidence["hit_fraction"] if selected_evidence else 0.0
+        )
+
+        if method in {"adapter_evidence_match", "fallback_adapter_scan"}:
+            adapter_source = "raw_adapter_evidence"
+        elif method == "pretrimmed_length_filter":
+            adapter_source = "no_dominant_adapter"
+        elif (
+            best_evidence is None
+            or best_evidence["hit_fraction"] < MIN_ADAPTER_EVIDENCE_FRACTION
+        ) and final_architecture.protocol_name == "de_novo_inferred":
+            adapter_source = "no_dominant_adapter"
+        elif method == "strict_pattern_match":
+            adapter_source = "architecture_match"
+        else:
+            adapter_source = "de_novo_inferred"
+
+        conflict = {
+            "has_conflict": False,
+            "type": None,
+            "selected_protocol": final_architecture.protocol_name,
+            "selected_hit_fraction": selected_fraction,
+            "best_supported_protocol": best_evidence["protocol_name"] if best_evidence else None,
+            "best_supported_hit_fraction": best_evidence["hit_fraction"] if best_evidence else 0.0,
+            "message": None,
+        }
+        if (
+            adapter_source == "architecture_match"
+            and best_evidence
+            and best_evidence["protocol_name"] != final_architecture.protocol_name
+            and best_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION
+            and selected_fraction < LOW_ADAPTER_EVIDENCE_FRACTION
+        ):
+            conflict.update(
+                {
+                    "has_conflict": True,
+                    "type": "selected_architecture_unsupported",
+                    "message": (
+                        "Selected architecture has low/no raw adapter support, "
+                        "while another adapter candidate is strongly supported."
+                    ),
+                }
+            )
+
+        return {
+            "adapter_source": adapter_source,
+            "adapter_conflict": conflict,
+            "adapter_evidence_candidates": candidates,
+        }
+
+    def _extraction_warnings(self, extraction_stats: Dict[str, Any]) -> List[str]:
+        """Return stable quality warnings for downstream gating."""
+        warnings = []
+        if extraction_stats["retained_fraction"] < MIN_RETAINED_FRACTION_WARN:
+            warnings.append("low_retained_fraction")
+        extracted_profile = extraction_stats.get("extracted_length_profile") or {}
+        if extracted_profile.get("frac_26_34", 0.0) < MIN_EXTRACTED_CORE_FRACTION_WARN:
+            warnings.append("low_26_34_fraction")
+        return warnings
+
+    def _extraction_class(
+        self,
+        method: str,
+        adapter_report: Dict[str, Any],
+        extraction_warnings: Optional[List[str]] = None,
+    ) -> str:
+        """Return a stable high-level class for downstream QC gating."""
+        extraction_warnings = extraction_warnings or []
+        if "low_retained_fraction" in extraction_warnings:
+            return "adapter_supported_low_yield"
+        if "low_26_34_fraction" in extraction_warnings:
+            return "extracted_rpf_length_suspicious"
+        conflict = adapter_report.get("adapter_conflict") or {}
+        if conflict.get("has_conflict"):
+            return "adapter_conflict_raw_adapter_wins"
+        if method == "pretrimmed_length_filter":
+            return "pretrimmed_rpf_length_filter"
+        if method in {"adapter_evidence_match", "fallback_adapter_scan"}:
+            return "raw_adapter_supported_trimmed"
+        if adapter_report.get("adapter_source") == "no_dominant_adapter":
+            return "no_dominant_adapter_low_confidence"
+        return "architecture_inferred"
+
+    def _selected_adapter_evidence(
+        self,
+        final_architecture: ReadArchitecture,
+        adapter_evidence: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        for item in adapter_evidence:
+            if item["protocol_name"] == final_architecture.protocol_name:
+                return item
+        return None
+
+    def _adapter_evidence_for_protocol(
+        self, protocol_name: str, adapter_evidence: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        for item in adapter_evidence:
+            if item["protocol_name"] == protocol_name:
+                return item
+        return None
+
+    def _serialize_adapter_candidate(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        arch = item["architecture"]
+        return {
+            "protocol_name": item["protocol_name"],
+            "adapter": item["adapter"],
+            "hit_count": item["hit_count"],
+            "hit_fraction": item["hit_fraction"],
+            "adapter_source": self._architecture_source(arch),
+        }
+
+    def _architecture_source(self, arch: ReadArchitecture) -> str:
+        if arch.protocol_name.startswith("observed_"):
+            return "observed_protocol_catalog"
+        if arch.protocol_name == "comprehensive_adapter_check":
+            return "generic_adapter_catalog"
+        return "known_architecture"
+
     def _load_sample_reads(self, input_file: Path, format: str, sample_size: int = 50000) -> Tuple[List[str], List[str]]:
         """Load sample reads and headers."""
         reads = []
@@ -418,7 +765,7 @@ class RPFExtractor:
         adapters: Optional[List[str]] = None,
         collapse_output: bool = True,
         collapsed_only: bool = False
-    ) -> int:
+    ) -> Dict[str, Any]:
         """Extract RPF sequences from reads using Two-Stage Collapsing for performance."""
         from .collapsed import TwoStageCollapser
         
@@ -438,11 +785,10 @@ class RPFExtractor:
                 rpf_seq = sequence[rpf_start:]
                 if sorted_adapters:
                     for adapter in sorted_adapters:
-                        if adapter in rpf_seq:
-                            adapter_pos = rpf_seq.find(adapter)
-                            if adapter_pos >= 0:
-                                rpf_seq = rpf_seq[:adapter_pos]
-                                break
+                        adapter_pos = self._find_adapter_prefix(rpf_seq, adapter)
+                        if adapter_pos is not None:
+                            rpf_seq = rpf_seq[:adapter_pos]
+                            break
                 return rpf_seq
             else:
                 return sequence[rpf_start:rpf_end]
@@ -453,7 +799,12 @@ class RPFExtractor:
         raw_counts = collapser.collapse_raw(input_file, format=format, max_reads=max_reads)
         
         # Stage 2 & 3: Trim unique and merge
-        final_counts = collapser.apply_trimming(raw_counts, trim_logic, min_length=20)
+        final_counts = collapser.apply_trimming(
+            raw_counts,
+            trim_logic,
+            min_length=MIN_RPF_LENGTH,
+            max_length=MAX_RPF_LENGTH,
+        )
         
         # Stage 4: Write outputs (skip empty)
         if collapse_output:
@@ -461,6 +812,7 @@ class RPFExtractor:
             collapser.write_collapsed_fasta(final_counts, collapsed_path)
             
         total_extracted = sum(final_counts.values())
+        raw_total = sum(raw_counts.values())
         
         if not collapsed_only:
             logger.info(f"Writing expanded FASTQ output to {output_file}...")
@@ -472,4 +824,30 @@ class RPFExtractor:
                         fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
         
         logger.info(f"Extracted {total_extracted} RPF sequences ({len(final_counts)} unique)")
-        return total_extracted
+        if total_extracted == 0:
+            raise ExtractionEmptyError(
+                "Extraction produced zero RPF reads after trimming and "
+                f"{MIN_RPF_LENGTH}-{MAX_RPF_LENGTH} nt length filtering."
+            )
+        return {
+            "input_reads": raw_total,
+            "extracted_rpfs": total_extracted,
+            "retained_fraction": total_extracted / raw_total if raw_total else 0.0,
+            "unique_extracted_sequences": len(final_counts),
+            "extracted_length_profile": self._length_profile_from_sequence_counts(final_counts),
+        }
+
+    @staticmethod
+    def _find_adapter_prefix(sequence: str, adapter: str) -> Optional[int]:
+        """Return first position matching an adapter prefix of sufficient length."""
+        max_k = min(len(adapter), len(sequence))
+        best_pos = None
+        best_k = 0
+        for k in range(max_k, MIN_ADAPTER_PREFIX_OVERLAP - 1, -1):
+            pos = sequence.find(adapter[:k])
+            if pos >= 0 and (
+                best_pos is None or pos < best_pos or (pos == best_pos and k > best_k)
+            ):
+                best_pos = pos
+                best_k = k
+        return best_pos

@@ -266,7 +266,8 @@ class TwoStageCollapser:
         self, 
         raw_counts: Counter, 
         trim_func: callable,
-        min_length: int = 20
+        min_length: int = 20,
+        max_length: Optional[int] = None,
     ) -> Counter:
         """Stage 2 & 3: Trim unique sequences and merge results."""
         self.logger.info("Stage 2: Trimming unique sequences and merging...")
@@ -274,7 +275,9 @@ class TwoStageCollapser:
         
         for raw_seq, count in raw_counts.items():
             trimmed_seq = trim_func(raw_seq)
-            if trimmed_seq and len(trimmed_seq) >= min_length:
+            if trimmed_seq and len(trimmed_seq) >= min_length and (
+                max_length is None or len(trimmed_seq) <= max_length
+            ):
                 final_counts[trimmed_seq] += count
                 
         self.logger.info(f"  Post-trimming: {len(final_counts)} unique sequences")

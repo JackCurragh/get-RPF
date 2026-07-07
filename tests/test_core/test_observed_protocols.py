@@ -25,6 +25,23 @@ def test_observed_protocols_load_as_builtin_architectures():
     }
 
 
+def test_observed_dual_ligation_loader_keeps_5p_adapter_out_of_trim_targets():
+    db = ArchitectureDatabase()
+    dual = next(
+        arch
+        for arch in db.architectures
+        if arch.protocol_name == "observed_dual_ligation_adapter_pair"
+    )
+
+    assert dual.rpf_start == len("GTTCAGAGTTCTACAGTCCGACGATC")
+    assert dual.rpf_end == -1
+    assert dual.adapter_sequences == [
+        "GTTCAGAGTTCTACAGTCCGACGATC",
+        "TCGTATGCCGTCTTCTGCTTG",
+    ]
+    assert dual.trim_adapter_sequences == ["TCGTATGCCGTCTTCTGCTTG"]
+
+
 def test_external_validation_manifest_is_not_packaged_with_getrpf():
     packaged_manifest = (
         importlib.resources.files("getRPF")

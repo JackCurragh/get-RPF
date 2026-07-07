@@ -149,6 +149,8 @@ class Reporter:
         """Render simple CSS bars for the plot."""
         bars = ""
         max_val = max(data) if data else 1
+        if max_val <= 0:
+            max_val = 1
         width_pct = 100 / len(data) if data else 0
         
         for i, val in enumerate(data):

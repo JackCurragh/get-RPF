@@ -267,6 +267,7 @@ class ReadArchitecture:
     rpf_end: int
     expected_rpf_length: Tuple[int, int]
     quality_markers: Dict[str, Any]
+    trim_adapter_sequences: Optional[List[str]] = None
     confidence: float = 1.0
 
 

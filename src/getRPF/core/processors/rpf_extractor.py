@@ -320,6 +320,7 @@ class RPFExtractor:
                         umi_positions=[],
                         barcode_positions=[],
                         adapter_sequences=[adapter_seq],
+                        trim_adapter_sequences=[adapter_seq],
                         rpf_start=0,
                         rpf_end= -1, # Let dynamic trimming handle it
                         expected_rpf_length=(20, 40),
@@ -364,7 +365,16 @@ class RPFExtractor:
             # Setup adapters for dynamic trimming
             adapters_to_trim = None
             if final_architecture:
-                 adapters_to_trim = final_architecture.adapter_sequences
+                 trim_adapters = getattr(
+                     final_architecture,
+                     "trim_adapter_sequences",
+                     None,
+                 )
+                 adapters_to_trim = (
+                     trim_adapters
+                     if trim_adapters is not None
+                     else final_architecture.adapter_sequences
+                 )
                  if final_architecture.rpf_end == -1 and not adapters_to_trim:
                      pass
 
@@ -840,14 +850,33 @@ class RPFExtractor:
     @staticmethod
     def _find_adapter_prefix(sequence: str, adapter: str) -> Optional[int]:
         """Return first position matching an adapter prefix of sufficient length."""
+        sequence = sequence.upper()
+        adapter = adapter.upper()
         max_k = min(len(adapter), len(sequence))
+        min_overlap = min(MIN_ADAPTER_PREFIX_OVERLAP, len(adapter))
         best_pos = None
         best_k = 0
-        for k in range(max_k, MIN_ADAPTER_PREFIX_OVERLAP - 1, -1):
-            pos = sequence.find(adapter[:k])
+        for k in range(max_k, min_overlap - 1, -1):
+            adapter_prefix = adapter[:k]
+            if "N" in adapter_prefix:
+                pos = RPFExtractor._find_iupac_prefix(sequence, adapter_prefix)
+            else:
+                pos = sequence.find(adapter_prefix)
             if pos >= 0 and (
                 best_pos is None or pos < best_pos or (pos == best_pos and k > best_k)
             ):
                 best_pos = pos
                 best_k = k
         return best_pos
+
+    @staticmethod
+    def _find_iupac_prefix(sequence: str, adapter_prefix: str) -> int:
+        """Find a prefix where N in the adapter can match any read base."""
+        prefix_len = len(adapter_prefix)
+        for pos in range(0, len(sequence) - prefix_len + 1):
+            for idx, expected in enumerate(adapter_prefix):
+                if expected != "N" and sequence[pos + idx] != expected:
+                    break
+            else:
+                return pos
+        return -1

@@ -92,7 +92,7 @@ class InputFormat(str, Enum):
 
 
 @click.group()
-@click.version_option(version="0.2.0")
+@click.version_option(version="0.2.1")
 def cli():
     """getRPF - Comprehensive Ribosome Protected Fragment Analysis.
 

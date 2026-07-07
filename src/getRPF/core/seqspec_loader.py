@@ -21,6 +21,7 @@ class ReadArchitecture:
     umi_positions: List[tuple] = None
     barcode_positions: List[tuple] = None
     adapter_sequences: List[str] = None
+    trim_adapter_sequences: List[str] = None
     rpf_start: int = 0
     rpf_end: int = -1
     expected_rpf_length: tuple = (20, 40)
@@ -33,6 +34,8 @@ class ReadArchitecture:
             self.barcode_positions = []
         if self.adapter_sequences is None:
             self.adapter_sequences = []
+        if self.trim_adapter_sequences is None:
+            self.trim_adapter_sequences = []
         if self.quality_markers is None:
             self.quality_markers = {}
 
@@ -106,6 +109,7 @@ class SeqSpecArchitectureLoader:
             sequence_spec = data.get('sequence_spec', [])
             
             adapter_sequences = []
+            trim_adapter_sequences = []
             umi_positions = []
             barcode_positions = []
             rpf_regions = []
@@ -119,15 +123,28 @@ class SeqSpecArchitectureLoader:
                     sequence = region.get('sequence', '')
                     min_len = region.get('min_len', 0)
                     max_len = region.get('max_len', min_len)
+                    sequences = []
+                    if region.get('sequence_type') == 'list' and 'sequences' in region:
+                        sequences = region['sequences']
                     
-                    region_length = max(min_len, max_len, len(sequence)) if sequence else max_len
+                    if sequences:
+                        region_length = max(
+                            [min_len, max_len] + [len(seq) for seq in sequences]
+                        )
+                    else:
+                        region_length = max(min_len, max_len, len(sequence)) if sequence else max_len
                     
                     # Categorize regions
                     if 'adapter' in region_type or 'adapter' in region_id:
+                        adapter_start = current_pos
                         if sequence:
                             adapter_sequences.append(sequence)
+                            if rpf_regions and adapter_start >= rpf_regions[-1][1]:
+                                trim_adapter_sequences.append(sequence)
                         elif region.get('sequence_type') == 'list' and 'sequences' in region:
-                             adapter_sequences.extend(region['sequences'])
+                            adapter_sequences.extend(region['sequences'])
+                            if rpf_regions and adapter_start >= rpf_regions[-1][1]:
+                                trim_adapter_sequences.extend(region['sequences'])
                     elif 'umi' in region_type or 'umi' in region_id:
                         if region_length > 0:
                             umi_positions.append((current_pos, current_pos + region_length))
@@ -144,8 +161,15 @@ class SeqSpecArchitectureLoader:
                 rpf_min = min(region[2] for region in rpf_regions)
                 rpf_max = max(region[3] for region in rpf_regions)
                 expected_rpf_length = (rpf_min, rpf_max)
+                rpf_start = rpf_regions[0][0]
+                rpf_end = rpf_regions[0][1]
             else:
                 expected_rpf_length = (20, 40)  # Default
+                rpf_start = 0
+                rpf_end = -1
+
+            if rpf_regions and expected_rpf_length[0] != expected_rpf_length[1]:
+                rpf_end = -1
             
             # Create architecture
             architecture = ReadArchitecture(
@@ -154,8 +178,9 @@ class SeqSpecArchitectureLoader:
                 umi_positions=umi_positions,
                 barcode_positions=barcode_positions,
                 adapter_sequences=adapter_sequences,
-                rpf_start=0,  # Will be calculated based on positions
-                rpf_end=-1,   # Will be calculated based on adapters
+                trim_adapter_sequences=trim_adapter_sequences,
+                rpf_start=rpf_start,
+                rpf_end=rpf_end,
                 expected_rpf_length=expected_rpf_length,
                 quality_markers={
                     "adapter_match_threshold": 0.3,  # Conservative for user-defined

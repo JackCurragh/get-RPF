@@ -44,6 +44,20 @@ def test_adapter_prefix_match_requires_minimum_overlap():
     assert RPFExtractor._find_adapter_prefix(sequence, adapter) is None
 
 
+def test_adapter_prefix_match_supports_short_observed_adapter():
+    sequence = "A" * 29 + "AGATCGGAG" + "C" * 20
+    adapter = "AGATCGGAG"
+
+    assert RPFExtractor._find_adapter_prefix(sequence, adapter) == 29
+
+
+def test_adapter_prefix_match_treats_adapter_n_as_wildcard():
+    sequence = "A" * 30 + "GATTACCACTCGGGCACCAAGGA"
+    adapter = "NNNNNNCACTCGGGCACCAAGGA"
+
+    assert RPFExtractor._find_adapter_prefix(sequence, adapter) == 30
+
+
 def test_adapter_evidence_prefers_observed_protocol_over_generic_catalog():
     extractor = RPFExtractor()
     adapter = "AGATCGGAAGAGCACACGTCT"
@@ -196,6 +210,40 @@ def test_extract_rpfs_reports_pretrimmed_length_filter_without_seqspec(tmp_path)
     assert result.quality_metrics["extraction_class"] == "pretrimmed_rpf_length_filter"
     assert result.quality_metrics["raw_length_profile"]["frac_gt40"] == 0.15
     assert result.quality_metrics["extracted_length_profile"]["frac_20_40"] == 1.0
+
+
+def test_extract_rpfs_trims_only_post_rpf_adapter_for_dual_ligation(tmp_path):
+    input_file = tmp_path / "dual.fastq"
+    five_prime_adapter = "GTTCAGAGTTCTACAGTCCGACGATC"
+    three_prime_adapter = "TCGTATGCCGTCTTCTGCTTG"
+    rpf = "ACGTACGTACGTACGTACGTACGTACGT"
+    reads = []
+    for i in range(20):
+        seq = f"{five_prime_adapter}{rpf}{three_prime_adapter}"
+        reads.append(f"@dual{i}\n{seq}\n+\n{'I' * len(seq)}\n")
+    input_file.write_text("".join(reads))
+
+    extractor = RPFExtractor()
+    dual = next(
+        arch
+        for arch in extractor.architecture_db.architectures
+        if arch.protocol_name == "observed_dual_ligation_adapter_pair"
+    )
+    extractor.architecture_db.architectures = [dual]
+    output_file = tmp_path / "out.fastq"
+
+    result = extractor.extract_rpfs(
+        input_file,
+        output_file,
+        format="fastq",
+        collapsed_only=True,
+    )
+
+    assert result.architecture_match == "observed_dual_ligation_adapter_pair"
+    assert result.extraction_method in {"strict_pattern_match", "adapter_evidence_match"}
+    assert result.extracted_rpfs == 20
+    assert result.quality_metrics["unique_extracted_sequences"] == 1
+    assert (tmp_path / "out.collapsed.fa").read_text().splitlines()[1] == rpf
 
 
 def test_pretrimmed_length_filter_has_no_adapter_conflict():

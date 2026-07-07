@@ -16,7 +16,7 @@ RUN pixi install && \
 
 # Add the pixi environment to PATH so Nextflow can find the executable
 ENV PATH="/app/.pixi/envs/default/bin:$PATH"
-ENV PYTHONPATH="/app/src:$PYTHONPATH"
+ENV PYTHONPATH="/app/src"
 
 # Default command
 CMD ["getRPF", "--help"]

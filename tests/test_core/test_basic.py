@@ -205,11 +205,14 @@ def test_extract_rpfs_reports_pretrimmed_length_filter_without_seqspec(tmp_path)
     assert result.extraction_method == "pretrimmed_length_filter"
     assert result.adapter_source == "no_dominant_adapter"
     assert result.input_reads == 100
-    assert result.extracted_rpfs == 85
-    assert result.quality_metrics["retained_fraction"] == 0.85
+    assert result.extracted_rpfs == 100
+    assert result.quality_metrics["retained_fraction"] == 1.0
+    assert result.quality_metrics["rpf_length_gated_reads"] == 85
+    assert result.quality_metrics["rpf_length_gated_fraction"] == 0.85
     assert result.quality_metrics["extraction_class"] == "pretrimmed_rpf_length_filter"
     assert result.quality_metrics["raw_length_profile"]["frac_gt40"] == 0.15
-    assert result.quality_metrics["extracted_length_profile"]["frac_20_40"] == 1.0
+    assert result.quality_metrics["extracted_length_profile"]["frac_20_40"] == 0.85
+    assert result.quality_metrics["rpf_length_profile"]["frac_20_40"] == 1.0
 
 
 def test_extract_rpfs_trims_only_post_rpf_adapter_for_dual_ligation(tmp_path):
@@ -299,28 +302,27 @@ def test_extraction_class_flags_low_yield_before_success_class():
     )
 
 
-def test_extract_rpfs_raises_when_no_rpfs_survive(tmp_path):
-    input_file = tmp_path / "no_rpfs.fastq"
+def test_extract_rpfs_preserves_trimmed_reads_outside_rpf_window(tmp_path):
+    input_file = tmp_path / "long_trimmed.fastq"
     seq = "A" * 60
     input_file.write_text("".join(f"@r{i}\n{seq}\n+\n{'I' * len(seq)}\n" for i in range(20)))
 
     extractor = RPFExtractor()
     extractor.architecture_db.architectures = []
 
-    try:
-        extractor._extract_rpfs_from_reads(
-            input_file=input_file,
-            output_file=tmp_path / "out.fastq",
-            segments=[],
-            format="fastq",
-            max_reads=None,
-            adapters=[],
-            collapsed_only=True,
-        )
-    except ExtractionEmptyError as exc:
-        assert "zero RPF reads" in str(exc)
-    else:
-        raise AssertionError("Expected ExtractionEmptyError")
+    stats = extractor._extract_rpfs_from_reads(
+        input_file=input_file,
+        output_file=tmp_path / "out.fastq",
+        segments=[],
+        format="fastq",
+        max_reads=None,
+        adapters=[],
+        collapsed_only=True,
+    )
+
+    assert stats["extracted_rpfs"] == 20
+    assert stats["rpf_length_gated_reads"] == 0
+    assert (tmp_path / "out.collapsed.fa").exists()
 
 
 def test_adapter_evidence_selection_has_no_external_prior_conflict():

@@ -36,7 +36,7 @@ def test_version(runner):
     """Test CLI version command."""
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.2.2" in result.output
+    assert "0.2.3" in result.output
 
 
 def test_help(runner):
@@ -46,6 +46,19 @@ def test_help(runner):
     assert "getRPF" in result.output
     assert "check" in result.output
     assert "detect-adapter" in result.output
+
+
+def test_extract_help_accepts_pipeline_flags(runner):
+    """The pipeline calls getRPF extract with these options."""
+    result = runner.invoke(cli, ["extract", "--help"])
+
+    assert result.exit_code == 0
+    assert "--format" in result.output
+    assert "--generate-seqspec" in result.output
+    assert "--output-format" in result.output
+    assert "--star-index" in result.output
+    assert "--star-threads" in result.output
+    assert "--collapsed-only" in result.output
 
 
 class TestQualityCheck:

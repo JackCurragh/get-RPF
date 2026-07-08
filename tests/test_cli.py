@@ -36,7 +36,7 @@ def test_version(runner):
     """Test CLI version command."""
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.2.3" in result.output
+    assert "0.2.4" in result.output
 
 
 def test_help(runner):
@@ -51,6 +51,21 @@ def test_help(runner):
 def test_extract_help_accepts_pipeline_flags(runner):
     """The pipeline calls getRPF extract with these options."""
     result = runner.invoke(cli, ["extract", "--help"])
+
+    assert result.exit_code == 0
+    assert "--format" in result.output
+    assert "--generate-seqspec" in result.output
+    assert "--output-format" in result.output
+    assert "--star-index" in result.output
+    assert "--star-threads" in result.output
+    assert "--collapsed-only" in result.output
+
+
+def test_extract_rpf_is_extract_alias(runner):
+    """extract-rpf is a compatibility alias, not a second implementation."""
+    assert cli.commands["extract"].callback is cli.commands["extract-rpf"].callback
+
+    result = runner.invoke(cli, ["extract-rpf", "--help"])
 
     assert result.exit_code == 0
     assert "--format" in result.output

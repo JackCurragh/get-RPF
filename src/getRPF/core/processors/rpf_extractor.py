@@ -426,6 +426,10 @@ class RPFExtractor:
                     "extracted_length_profile": extraction_stats["extracted_length_profile"],
                     "retained_fraction": extraction_stats["retained_fraction"],
                     "unique_extracted_sequences": extraction_stats["unique_extracted_sequences"],
+                    "rpf_length_gated_reads": extraction_stats["rpf_length_gated_reads"],
+                    "rpf_length_gated_unique_sequences": extraction_stats["rpf_length_gated_unique_sequences"],
+                    "rpf_length_gated_fraction": extraction_stats["rpf_length_gated_fraction"],
+                    "rpf_length_profile": extraction_stats["rpf_length_profile"],
                     "extraction_class": extraction_class,
                     "extraction_warnings": extraction_warnings,
                 },
@@ -808,12 +812,20 @@ class RPFExtractor:
         # Stage 1: Raw collapse
         raw_counts = collapser.collapse_raw(input_file, format=format, max_reads=max_reads)
         
-        # Stage 2 & 3: Trim unique and merge
+        # Stage 2 & 3: Trim unique and merge. Do not apply the RPF length gate
+        # here; callers/workflows should decide which trimmed reads are released.
         final_counts = collapser.apply_trimming(
             raw_counts,
             trim_logic,
-            min_length=MIN_RPF_LENGTH,
-            max_length=MAX_RPF_LENGTH,
+            min_length=1,
+            max_length=None,
+        )
+        rpf_length_counts = Counter(
+            {
+                seq: count
+                for seq, count in final_counts.items()
+                if MIN_RPF_LENGTH <= len(seq) <= MAX_RPF_LENGTH
+            }
         )
         
         # Stage 4: Write outputs (skip empty)
@@ -836,8 +848,7 @@ class RPFExtractor:
         logger.info(f"Extracted {total_extracted} RPF sequences ({len(final_counts)} unique)")
         if total_extracted == 0:
             raise ExtractionEmptyError(
-                "Extraction produced zero RPF reads after trimming and "
-                f"{MIN_RPF_LENGTH}-{MAX_RPF_LENGTH} nt length filtering."
+                "Extraction produced zero reads after architecture trimming."
             )
         return {
             "input_reads": raw_total,
@@ -845,6 +856,12 @@ class RPFExtractor:
             "retained_fraction": total_extracted / raw_total if raw_total else 0.0,
             "unique_extracted_sequences": len(final_counts),
             "extracted_length_profile": self._length_profile_from_sequence_counts(final_counts),
+            "rpf_length_gated_reads": sum(rpf_length_counts.values()),
+            "rpf_length_gated_unique_sequences": len(rpf_length_counts),
+            "rpf_length_gated_fraction": (
+                sum(rpf_length_counts.values()) / total_extracted if total_extracted else 0.0
+            ),
+            "rpf_length_profile": self._length_profile_from_sequence_counts(rpf_length_counts),
         }
 
     @staticmethod

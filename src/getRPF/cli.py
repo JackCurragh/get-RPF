@@ -92,7 +92,7 @@ class InputFormat(str, Enum):
 
 
 @click.group()
-@click.version_option(version="0.2.3")
+@click.version_option(version="0.2.4")
 def cli():
     """getRPF - Comprehensive Ribosome Protected Fragment Analysis.
 
@@ -188,6 +188,9 @@ def extract(
         default_report = output_file.with_suffix(f".extraction_report.{output_format}")
         if default_report != output_report and default_report.exists():
             move(str(default_report), str(output_report))
+
+
+cli.add_command(extract, "extract-rpf")
 
 
 @cli.command()
@@ -557,97 +560,6 @@ def align_detect(
         save_bam_path=save_bam,
         max_reads=max_reads,
     )
-
-
-@cli.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
-@click.argument("output_file", type=click.Path(path_type=Path))
-@click.option(
-    "--format",
-    "-f",
-    type=click.Choice(["fastq", "fasta", "collapsed"]),
-    help="Input file format",
-    required=True,
-)
-@click.option(
-    "--architecture-db",
-    "-a",
-    type=click.Path(exists=True, path_type=Path),
-    help="Path to custom architecture database (JSON file)",
-)
-@click.option(
-    "--seqspec-dir",
-    "-s",
-    type=click.Path(exists=True, path_type=Path),
-    help="Directory containing seqspec files for novel protocols",
-)
-@click.option(
-    "--generate-seqspec",
-    "-g",
-    is_flag=True,
-    help="Generate seqspec file for detected architecture",
-)
-@click.option(
-    "--output-format",
-    "-of",
-    type=click.Choice(["json", "csv"]),
-    help="Format for detection report",
-    default="json",
-)
-@click.option(
-    "--max-reads",
-    "-n",
-    type=int,
-    help="Maximum number of reads to process",
-    default=None,
-)
-@click.option(
-    "--star-index",
-    type=click.Path(exists=True, path_type=Path),
-    help="Path to STAR index for alignment-based verification",
-)
-@click.option(
-    "--star-threads",
-    type=int,
-    help="Threads for STAR verification",
-    default=1,
-)
-@click.option('--collapse/--no-collapse', default=True,
-              help='Collapse output into unique reads (default: True)')
-@click.option('--collapsed-only', is_flag=True,
-              help='Skip writing large expanded FASTQ, only write collapsed FASTA')
-def extract_rpf(
-    input_file: Path,
-    output_file: Path,
-    format: str,
-    architecture_db: Optional[Path] = None,
-    seqspec_dir: Optional[Path] = None,
-    generate_seqspec: bool = False,
-    output_format: str = "json",
-    max_reads: Optional[int] = None,
-    star_index: Optional[Path] = None,
-    star_threads: int = 1,
-    collapse: bool = True,
-    collapsed_only: bool = False
-):
-    """Extract clean RPFs with architecture detection and alignment verification."""
-    from .core.handlers import handle_extract_rpf
-    handle_extract_rpf(
-        input_file=input_file,
-        output_file=output_file,
-        format=format,
-        architecture_db=architecture_db,
-        seqspec_dir=seqspec_dir,
-        generate_seqspec=generate_seqspec,
-        output_format=output_format,
-        max_reads=max_reads,
-        star_index=star_index,
-        star_threads=star_threads,
-        collapse_output=collapse,
-        collapsed_only=collapsed_only
-    )
-
-
 
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))

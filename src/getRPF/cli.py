@@ -92,7 +92,7 @@ class InputFormat(str, Enum):
 
 
 @click.group()
-@click.version_option(version="0.2.2")
+@click.version_option(version="0.2.3")
 def cli():
     """getRPF - Comprehensive Ribosome Protected Fragment Analysis.
 
@@ -112,96 +112,82 @@ def cli():
 
 
 @cli.command()
-@click.argument('input_file', type=click.Path(exists=True))
-@click.argument('output_file', type=click.Path())
-@click.option('--star-index', required=True, type=click.Path(exists=True),
-              help='Path to STAR genome index directory')
-@click.option('--preserve-umi/--no-preserve-umi', default=False,
-              help='Detect and preserve UMI sequences in FASTQ headers')
-@click.option('--sample-size', default=10000, type=int,
-              help='Number of reads to sample for boundary detection (default: 10000)')
-@click.option('--no-adapter-report', is_flag=True,
-              help='Skip adapter scanning (faster but less informative)')
-@click.option('--threads', default=4, type=int,
-              help='Number of threads for STAR alignment (default: 4)')
-@click.option('--output-report', type=click.Path(),
-              help='Path for JSON report (default: <output>.extraction_report.json)')
-@click.option('--collapse/--no-collapse', default=True,
-              help='Collapse output into unique reads (default: True)')
-@click.option('--collapsed-only', is_flag=True,
-              help='Skip writing large expanded FASTQ, only write collapsed FASTA')
-def extract(input_file, output_file, star_index, preserve_umi, sample_size,
-            no_adapter_report, threads, output_report, collapse, collapsed_only):
-    """
-    Extract RPF using alignment-based method (RECOMMENDED).
-    ...
-    """
-    import json
-    import logging
-    from pathlib import Path
-    from .core.processors.alignment_extractor import AlignmentBasedExtractor
-    from .utils.logging import setup_logging
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("output_file", type=click.Path(path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    default="fastq",
+    show_default=True,
+)
+@click.option(
+    "--architecture-db",
+    "-a",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to custom architecture database (JSON file)",
+)
+@click.option(
+    "--seqspec-dir",
+    "-s",
+    type=click.Path(exists=True, path_type=Path),
+    help="Directory containing seqspec files for novel protocols",
+)
+@click.option("--generate-seqspec", "-g", is_flag=True)
+@click.option(
+    "--output-format",
+    "-of",
+    type=click.Choice(["json", "csv"]),
+    default="json",
+    show_default=True,
+)
+@click.option("--max-reads", "-n", type=int, default=None)
+@click.option("--star-index", type=click.Path(exists=True, path_type=Path))
+@click.option("--star-threads", type=int, default=None, help="Threads for STAR verification")
+@click.option("--threads", type=int, default=1, help="Alias for --star-threads")
+@click.option("--output-report", type=click.Path(path_type=Path), help="Legacy report path alias")
+@click.option("--collapse/--no-collapse", default=True)
+@click.option("--collapsed-only", is_flag=True)
+def extract(
+    input_file: Path,
+    output_file: Path,
+    format: str = "fastq",
+    architecture_db: Optional[Path] = None,
+    seqspec_dir: Optional[Path] = None,
+    generate_seqspec: bool = False,
+    output_format: str = "json",
+    max_reads: Optional[int] = None,
+    star_index: Optional[Path] = None,
+    star_threads: Optional[int] = None,
+    threads: int = 1,
+    output_report: Optional[Path] = None,
+    collapse: bool = True,
+    collapsed_only: bool = False,
+):
+    """Extract trimmed reads without applying the final RPF length gate."""
+    from shutil import move
+    from .core.handlers import handle_extract_rpf
 
-    setup_logging()
-    logger = logging.getLogger(__name__)
+    handle_extract_rpf(
+        input_file=input_file,
+        output_file=output_file,
+        format=format,
+        architecture_db=architecture_db,
+        seqspec_dir=seqspec_dir,
+        generate_seqspec=generate_seqspec,
+        output_format=output_format,
+        max_reads=max_reads,
+        star_index=star_index,
+        star_threads=star_threads if star_threads is not None else threads,
+        collapse_output=collapse,
+        collapsed_only=collapsed_only,
+    )
 
-    try:
-        logger.info("=" * 70)
-        logger.info("getRPF: Alignment-Based RPF Extraction")
-        logger.info("=" * 70)
-
-        # Initialize extractor
-        extractor = AlignmentBasedExtractor()
-
-        # Run extraction
-        result = extractor.extract(
-            input_file=Path(input_file),
-            output_file=Path(output_file),
-            star_index=Path(star_index),
-            preserve_umi=preserve_umi,
-            sample_size=sample_size,
-            report_adapters=not no_adapter_report,
-            star_threads=threads,
-            collapse_output=collapse,
-            collapsed_only=collapsed_only
-        )
-
-        # Write JSON report
-        if output_report:
-            report_path = Path(output_report)
-        else:
-            report_path = Path(output_file).with_suffix('.extraction_report.json')
-
-        result_dict = result.to_dict()
-        with open(report_path, 'w') as f:
-            json.dump(result_dict, f, indent=2)
-
-        # Print summary
-        click.echo("\n" + "=" * 70)
-        click.echo("Extraction Complete!")
-        click.echo("=" * 70)
-        click.echo(f"Extracted: {result.extracted_rpfs:,} RPFs from {result.input_reads:,} reads")
-        click.echo(f"Extraction rate: {result.extraction_rate:.1%}")
-        
-        # Access unique RPF count from the internal stats if present
-        # In AlignmentBasedExtractor.extract, extraction_stats are what we want for 'unique'
-        # Currently ExtractionResult doesn't store the full extraction_stats dict, 
-        # but input_reads and extracted_rpfs are mirrored.
-        # Let's just report the core stats.
-
-        click.echo(f"\nOutput files:")
-        if not collapsed_only:
-            click.echo(f"  RPF sequences (FASTQ): {output_file}")
-        if collapse:
-            collapsed_path = Path(output_file).with_suffix('.collapsed.fa')
-            click.echo(f"  RPF sequences (collapsed FASTA): {collapsed_path}")
-        click.echo(f"  JSON report: {report_path}")
-        click.echo("=" * 70)
-
-    except Exception as e:
-        logger.error(f"Extraction failed: {e}", exc_info=True)
-        click.echo(f"\n❌ Error: {e}", err=True)
-        raise click.Abort()
+    if output_report:
+        default_report = output_file.with_suffix(f".extraction_report.{output_format}")
+        if default_report != output_report and default_report.exists():
+            move(str(default_report), str(output_report))
 
 
 @cli.command()

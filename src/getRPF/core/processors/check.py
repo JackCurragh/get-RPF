@@ -4,7 +4,7 @@ This module provides functionality for analyzing sequence quality, composition,
 and potential contaminants in high-throughput sequencing data.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -13,6 +13,11 @@ from Bio import SeqIO
 
 from ...utils.file_utils import get_file_opener
 from ..processors.collapsed import parse_collapsed_fasta
+
+# Cap on raw reads retained for downstream coverage-normalized per-position
+# analysis (SignalProcessor). Matches SignalProcessor's own internal sampling
+# depth, so retaining more here would not add resolution.
+MAX_SIGNAL_READS = 50_000
 
 
 @dataclass
@@ -25,6 +30,8 @@ class CleanlinessResults:
         quality_scores: Per-position quality scores (FASTQ only)
         gc_content: Overall GC content percentage
         complexity_scores: Sequence complexity measures
+        reads: Raw sequences (bounded sample), for coverage-normalized
+            per-position analysis via SignalProcessor.
     """
 
     length_distribution: Dict[int, int]
@@ -32,6 +39,7 @@ class CleanlinessResults:
     quality_scores: Optional[Dict[int, List[float]]] = None
     gc_content: Optional[float] = None
     complexity_scores: Optional[Dict[str, float]] = None
+    reads: List[str] = field(default_factory=list)
 
     def write_report(self, output_path: Path) -> None:
         """Write analysis results to a file.
@@ -120,6 +128,7 @@ class CleanlinessChecker:
         quality_scores = {} if self.format == "fastq" else None
         gc_count = 0
         total_bases = 0
+        reads_sample: List[str] = []
 
         if self.format == "collapsed":
             if count_pattern is None:
@@ -140,12 +149,18 @@ class CleanlinessChecker:
                     for nt in "ACGT":
                         nuc_freqs[nt].append(0)
 
-                for pos, nt in enumerate(seq.upper()):
+                seq_upper = seq.upper()
+                for pos, nt in enumerate(seq_upper):
                     if nt in nuc_freqs:
                         nuc_freqs[nt][pos] += count
                         if nt in "GC":
                             gc_count += count
                 total_bases += length * count
+
+                if len(reads_sample) < MAX_SIGNAL_READS:
+                    reads_sample.extend(
+                        [seq_upper] * min(count, MAX_SIGNAL_READS - len(reads_sample))
+                    )
 
         else:
             # Existing code for FASTQ/FASTA processing
@@ -174,6 +189,9 @@ class CleanlinessChecker:
                                 gc_count += 1
                     total_bases += length
 
+                    if len(reads_sample) < MAX_SIGNAL_READS:
+                        reads_sample.append(seq_str)
+
                     if self.format == "fastq" and hasattr(record, "letter_annotations"):
                         phred_scores = record.letter_annotations.get(
                             "phred_quality", []
@@ -193,100 +211,10 @@ class CleanlinessChecker:
         # Calculate GC content
         gc_content = (gc_count / total_bases * 100) if total_bases > 0 else None
 
-        # Generate reversed nucleotide frequencies for 3' end analysis
-        reversed_nuc_freqs = self._generate_reversed_frequencies(
-            sequences if self.format == "collapsed" else None,
-            counts if self.format == "collapsed" else None,
-            input_path
-        )
-
-        results = CleanlinessResults(
+        return CleanlinessResults(
             length_distribution=length_dist,
             nucleotide_frequencies=nuc_freqs,
             quality_scores=quality_scores,
             gc_content=gc_content,
+            reads=reads_sample,
         )
-        
-        # Add reversed frequencies as additional data
-        results.reversed_nucleotide_frequencies = reversed_nuc_freqs
-        return results
-
-    def _generate_reversed_frequencies(self, sequences=None, counts=None, input_path=None):
-        """Generate nucleotide frequencies from reversed sequences for 3' end analysis."""
-        if self.format == "collapsed" and sequences:
-            return self._generate_reversed_from_collapsed(sequences, counts)
-        else:
-            return self._generate_reversed_from_file(input_path)
-    
-    def _generate_reversed_from_collapsed(self, sequences, counts):
-        """Generate reversed frequencies from collapsed sequences."""
-        reversed_nuc_freqs = {nt: [] for nt in "ACGT"}
-        max_length = max(len(seq) for seq in sequences.values()) if sequences else 0
-        
-        # Initialize frequency arrays
-        for nt in "ACGT":
-            reversed_nuc_freqs[nt] = [0] * max_length
-        
-        # Process each sequence in reverse
-        for header, seq in sequences.items():
-            count = counts.get(header, 1)
-            reversed_seq = seq[::-1]  # Reverse the sequence
-            
-            # Extend arrays if needed
-            while max(len(reversed_nuc_freqs[nt]) for nt in "ACGT") < len(reversed_seq):
-                for nt in "ACGT":
-                    reversed_nuc_freqs[nt].append(0)
-            
-            # Count nucleotides in reversed sequence
-            for pos, nt in enumerate(reversed_seq.upper()):
-                if nt in reversed_nuc_freqs:
-                    reversed_nuc_freqs[nt][pos] += count
-        
-        # Normalize
-        total_reads = sum(counts.values()) if counts else len(sequences)
-        for nt in "ACGT":
-            reversed_nuc_freqs[nt] = [count / total_reads for count in reversed_nuc_freqs[nt]]
-        
-        return reversed_nuc_freqs
-    
-    def _generate_reversed_from_file(self, input_path):
-        """Generate reversed frequencies by re-reading the file."""
-        reversed_nuc_freqs = {nt: [] for nt in "ACGT"}
-
-        # Collapsed format is structurally FASTA, so use "fasta" for BioPython
-        bio_format = "fasta" if self.format == "collapsed" else self.format
-
-        file_opener = get_file_opener(input_path)
-        with file_opener(str(input_path), "rt") as handle:
-            record_count = 0
-            sequences = []
-
-            for record in SeqIO.parse(handle, bio_format):
-                if self.max_reads is not None and record_count >= self.max_reads:
-                    break
-                sequences.append(str(record.seq).upper())
-                record_count += 1
-        
-        if not sequences:
-            return reversed_nuc_freqs
-        
-        # Find max length and reverse all sequences
-        max_length = max(len(seq) for seq in sequences)
-        
-        # Initialize frequency arrays
-        for nt in "ACGT":
-            reversed_nuc_freqs[nt] = [0] * max_length
-        
-        # Process reversed sequences
-        for seq in sequences:
-            reversed_seq = seq[::-1]  # Reverse
-            for pos, nt in enumerate(reversed_seq):
-                if nt in reversed_nuc_freqs and pos < max_length:
-                    reversed_nuc_freqs[nt][pos] += 1
-        
-        # Normalize
-        total_reads = len(sequences)
-        for nt in "ACGT":
-            reversed_nuc_freqs[nt] = [count / total_reads for count in reversed_nuc_freqs[nt]]
-        
-        return reversed_nuc_freqs

@@ -34,9 +34,11 @@ def runner():
 
 def test_version(runner):
     """Test CLI version command."""
+    import importlib.metadata
+
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.2.4" in result.output
+    assert importlib.metadata.version("getRPF") in result.output
 
 
 def test_help(runner):

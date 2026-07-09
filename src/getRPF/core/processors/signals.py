@@ -31,12 +31,17 @@ class SignalStats:
 class SignalProcessor:
     """Calculates informative signals from read populations."""
 
-    def process_reads(self, reads: List[str]) -> SignalStats:
+    def process_reads(self, reads: List[str], compute_dinucleotide: bool = True) -> SignalStats:
         """Calculate signal statistics for a set of reads.
-        
+
         Args:
             reads: List of DNA sequences
-            
+            compute_dinucleotide: Whether to compute per-position dinucleotide
+                frequencies. No current caller reads dinucleotide_5p/3p, so
+                callers that don't need them (e.g. sketch/boundary
+                estimation) should pass False to skip the O(reads * length)
+                work. Defaults to True to preserve prior behavior.
+
         Returns:
             SignalStats object with calculated metrics
         """
@@ -48,18 +53,24 @@ class SignalProcessor:
         valid_reads = [r for r in reads if len(r) >= 20]
         if not valid_reads:
             return self._empty_stats()
-            
+
         # Limit processing depth for speed (though we aim for high N)
         # 50k reads is robust enough for high confidence
         sample_reads = valid_reads[:50000]
-        
+
         return SignalStats(
             entropy_5p=self._calculate_entropy(sample_reads, align="5p"),
             composition_5p=self._calculate_composition(sample_reads, align="5p"),
-            dinucleotide_5p=self._calculate_dinucleotides(sample_reads, align="5p"),
+            dinucleotide_5p=(
+                self._calculate_dinucleotides(sample_reads, align="5p")
+                if compute_dinucleotide else []
+            ),
             entropy_3p=self._calculate_entropy(sample_reads, align="3p"),
             composition_3p=self._calculate_composition(sample_reads, align="3p"),
-            dinucleotide_3p=self._calculate_dinucleotides(sample_reads, align="3p"),
+            dinucleotide_3p=(
+                self._calculate_dinucleotides(sample_reads, align="3p")
+                if compute_dinucleotide else []
+            ),
             sample_size=len(sample_reads)
         )
 

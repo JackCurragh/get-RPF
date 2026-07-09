@@ -13,7 +13,7 @@ The handlers in this module follow a consistent pattern:
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from ..core.checkers import (
     BaseCompositionCheck,
@@ -216,13 +216,18 @@ def handle_extract_rpf(
     star_index: Optional[Path] = None,
     star_threads: int = 1,
     collapse_output: bool = True,
-    collapsed_only: bool = False
-) -> None:
+    collapsed_only: bool = False,
+    infer_reads: int = 500_000,
+    apply_boundary_trims: bool = True,
+    rules: Optional[Path] = None,
+) -> Optional[Dict]:
     """Handle the RPF extraction command workflow.
 
     Automatically extracts ribosome protected fragments from raw sequencing
     reads using pattern matching or de novo detection. If star_index is provided,
-    performs alignment-based verification of trim parameters.
+    performs alignment-based verification of trim parameters (informational
+    only -- see docs/release_qc_and_terminal_trimming_plan.md section 12,
+    the FASTQ stage stays reference-free).
 
     Args:
         input_file: Path to input sequence file
@@ -235,6 +240,17 @@ def handle_extract_rpf(
         max_reads: Maximum number of reads to process
         star_index: Path to STAR index for verification
         star_threads: Threads for STAR
+        infer_reads: Subsample depth for boundary-estimation inference
+            (Stage 0/1); the extraction apply pass still streams all reads.
+        apply_boundary_trims: Whether to run the M2/M3 per-length boundary
+            estimation + apply path. Disable to fall back to the extractor's
+            single global architecture-derived trim only.
+        rules: Override mode -- path to a JSON file of explicit frozen
+            per-length trim rules ({"29": {"trim_5p": 0, "trim_3p": 1}}),
+            applied instead of inferring them.
+
+    Returns:
+        The M5 evidence object (section 9) for this sample.
     """
     logger.info(f"Starting masterful RPF extraction from {input_file}")
 
@@ -244,17 +260,7 @@ def handle_extract_rpf(
             raise ValueError("Cannot specify both --architecture-db and --seqspec-dir")
         
         extractor = RPFExtractor(architecture_db_path=architecture_db, seqspec_dir=seqspec_dir)
-        
-        # 1. Initial Extraction / Architecture Detection
-        # We perform detection first. If verification is enabled, we need to know the proposed architecture.
-        # But extractor.extract_rpfs does everything.
-        # So we might need to "peek" or just use it, and if verification is on, verify parameters.
-        # The cleanest way is to use extractor for detection, then refine if needed.
-        
-        final_trim_5p = 0
-        final_trim_3p = 0
-        final_adapter_list = None
-        
+
         if star_index:
              # Whole Shebang Mode
              logger.info("=== Running 'Whole Shebang' Verification ===")
@@ -298,29 +304,50 @@ def handle_extract_rpf(
              logger.info(f"Original Detection: 5' trim={arch_data.get('trim_recommendations', {}).get('recommended_5prime_trim')}")
              logger.info(f"Alignment Suggestion: 5' trim={align_results.trim_recommendations.get('recommended_5prime_trim')}")
              logger.info(f"Consensus Decision: 5' trim={consensus.trim_5p}")
-             
-             # Update parameters for final run
-             # Note: RPFExtractor currently uses detected segments. 
-             # We need to tell it to OVERRIDE detected segments with consensus trims?
-             # For now, we will trust the EXTRACTOR'S integrity if it matches known architectures.
-             # If consensus deviates significantly, we might issue an Override warning or re-configure.
-             # Ideally, we'd pass these override params to extract_rpfs_from_reads.
-             
+
+             # This alignment-based consensus is logged as a cross-check
+             # only; the actual applied trims come from the reference-free
+             # per-length boundary plan computed below (run_sample), per
+             # section 12 (FASTQ stage stays reference-free).
+             if consensus.trim_5p:
+                 logger.info(
+                     "Alignment consensus suggests a 5' trim of "
+                     f"{consensus.trim_5p}, which the reference-free "
+                     "boundary estimator does not apply (5' trims require "
+                     "a named seqspec element)."
+                 )
+
              cleanup_temp_files([temp_rpf])
-             
-             # TODO: Pass override trims to extract_rpfs if supported
-             # For now, we log the verification. The user gains confidence.
-             # In a perfect world, we would force the 5' trim.
-             
-        # Final Extraction (Full run)
-        results = extractor.extract_rpfs(
+
+        # Full pipeline: sketch -> boundary plan -> apply -> identity
+        # screen -> evidence/release class (M1-M5). Shared with the `run`
+        # samplesheet driver so audit and production agree by construction.
+        from .pipeline import run_sample
+
+        override_trims = None
+        if rules is not None:
+            import json as _json
+
+            raw_rules = _json.loads(Path(rules).read_text())
+            override_trims = {int(length): rule for length, rule in raw_rules.items()}
+
+        evidence, results = run_sample(
             input_file=input_file,
             output_file=output_file,
             format=format,
+            infer_reads=infer_reads,
             max_reads=max_reads,
-            generate_seqspec=generate_seqspec,
+            apply_trims=apply_boundary_trims,
+            override_trims=override_trims,
+            architecture_db=architecture_db,
+            seqspec_dir=seqspec_dir,
             collapse_output=collapse_output,
-            collapsed_only=collapsed_only
+            collapsed_only=collapsed_only,
+            generate_seqspec=generate_seqspec,
+        )
+        logger.info(
+            f"Release class: {evidence['release_class']} "
+            f"(biological_confirmation={evidence['biological_confirmation']})"
         )
 
         # Seqspec generation is handled internally by the extractor
@@ -340,6 +367,8 @@ def handle_extract_rpf(
             logger.info(f"Matched architecture: {results.architecture_match}")
         logger.info(f"Results written to {output_file}")
         logger.info(f"Report written to {report_path}")
+
+        return evidence
 
     except Exception as e:
         logger.error(f"RPF extraction failed: {str(e)}")

@@ -10,8 +10,7 @@ This module implements the core RPF extraction system that combines:
 import logging
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Tuple, Any
 from collections import Counter
 
 from ...utils.file_utils import get_file_opener
@@ -25,7 +24,7 @@ from .types import (
     SegmentInfo,
     RPFExtractionResult,
 )
-from .signals import SignalProcessor, SignalStats
+from .signals import SignalProcessor
 from .matcher import ArchitectureMatcher
 from .segmenter import ProbabilisticSegmenter
 from .reporting import Reporter
@@ -125,16 +124,26 @@ class RPFExtractor:
         self.reporter = Reporter()
     
     def extract_rpfs(
-        self, 
-        input_file: Path, 
+        self,
+        input_file: Path,
         output_file: Path,
         format: str = "fastq",
         max_reads: Optional[int] = None,
         generate_seqspec: bool = False,
         collapse_output: bool = True,
-        collapsed_only: bool = False
+        collapsed_only: bool = False,
+        override_trims: Optional[Dict[int, Dict[str, int]]] = None,
     ) -> RPFExtractionResult:
-        """Extract RPFs from input file."""
+        """Extract RPFs from input file.
+
+        Args:
+            override_trims: Optional per-raw-read-length trim rules, e.g.
+                {29: {"trim_5p": 0, "trim_3p": 1}}. When a read's pre-trim
+                length has an entry here, that exact trim is applied instead
+                of the single global architecture-derived trim. This is the
+                apply path for boundary.py's per-length-class decisions; see
+                docs/release_qc_and_terminal_trimming_plan.md M3.
+        """
         logger.info(f"Starting RPF extraction from {input_file}")
         
         # 1. Load large sample for robust signal generation
@@ -379,10 +388,11 @@ class RPFExtractor:
                      pass
 
             extraction_stats = self._extract_rpfs_from_reads(
-                input_file, output_file, extracted_segments, format, max_reads, 
+                input_file, output_file, extracted_segments, format, max_reads,
                 adapters=adapters_to_trim,
                 collapse_output=collapse_output,
-                collapsed_only=collapsed_only
+                collapsed_only=collapsed_only,
+                override_trims=override_trims,
             )
             
             adapter_report = self._adapter_reporting(
@@ -778,11 +788,12 @@ class RPFExtractor:
         max_reads: Optional[int],
         adapters: Optional[List[str]] = None,
         collapse_output: bool = True,
-        collapsed_only: bool = False
+        collapsed_only: bool = False,
+        override_trims: Optional[Dict[int, Dict[str, int]]] = None,
     ) -> Dict[str, Any]:
         """Extract RPF sequences from reads using Two-Stage Collapsing for performance."""
         from .collapsed import TwoStageCollapser
-        
+
         # Find RPF segment boundaries
         rpf_segments = [seg for seg in segments if seg.segment_type == "rpf"]
         if not rpf_segments:
@@ -790,11 +801,18 @@ class RPFExtractor:
         else:
             rpf_segment = rpf_segments[0]
             rpf_start, rpf_end = rpf_segment.start_pos, rpf_segment.end_pos
-        
+
         sorted_adapters = sorted(adapters, key=len, reverse=True) if adapters else None
-        
+
         def trim_logic(sequence: str) -> Optional[str]:
             """Inner function to trim a single unique sequence."""
+            rule = override_trims.get(len(sequence)) if override_trims else None
+            if rule is not None:
+                trim_5p = rule.get("trim_5p", 0)
+                trim_3p = rule.get("trim_3p", 0)
+                end = len(sequence) - trim_3p if trim_3p else len(sequence)
+                return sequence[trim_5p:end]
+
             if rpf_end == -1:
                 rpf_seq = sequence[rpf_start:]
                 if sorted_adapters:

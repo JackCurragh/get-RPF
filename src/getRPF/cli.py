@@ -48,7 +48,6 @@ from .core.handlers import (
     handle_adapter_detection,
     handle_cleanliness_check,
     handle_align_detect,
-    handle_extract_rpf,
 )
 # NOTE: Plotting modules pull in heavy optional deps (matplotlib, seaborn).
 # Import them lazily inside the specific subcommands so that core commands
@@ -92,7 +91,7 @@ class InputFormat(str, Enum):
 
 
 @click.group()
-@click.version_option(version="0.2.4")
+@click.version_option(package_name="getRPF")
 def cli():
     """getRPF - Comprehensive Ribosome Protected Fragment Analysis.
 
@@ -149,6 +148,35 @@ def cli():
 @click.option("--output-report", type=click.Path(path_type=Path), help="Legacy report path alias")
 @click.option("--collapse/--no-collapse", default=True)
 @click.option("--collapsed-only", is_flag=True)
+@click.option(
+    "--infer-reads",
+    type=int,
+    default=500_000,
+    show_default=True,
+    help="Subsample depth for boundary-estimation inference (Stage 0/1)",
+)
+@click.option(
+    "--apply-boundary-trims/--no-apply-boundary-trims",
+    default=True,
+    help="Apply the M2/M3 per-length boundary-estimated trims (default: on)",
+)
+@click.option(
+    "--audit-only",
+    is_flag=True,
+    help="Infer + screen, apply nothing (rule development / new-family validation)",
+)
+@click.option(
+    "--rules",
+    type=click.Path(exists=True, path_type=Path),
+    help="Override mode: JSON file of explicit frozen per-length trim rules",
+)
+@click.option(
+    "--fail-on",
+    type=click.Choice(["none", "review", "hold"]),
+    default="none",
+    show_default=True,
+    help="Process exit-code threshold",
+)
 def extract(
     input_file: Path,
     output_file: Path,
@@ -164,12 +192,18 @@ def extract(
     output_report: Optional[Path] = None,
     collapse: bool = True,
     collapsed_only: bool = False,
+    infer_reads: int = 500_000,
+    apply_boundary_trims: bool = True,
+    audit_only: bool = False,
+    rules: Optional[Path] = None,
+    fail_on: str = "none",
 ):
     """Extract trimmed reads without applying the final RPF length gate."""
     from shutil import move
     from .core.handlers import handle_extract_rpf
+    from .core.samplesheet import compute_exit_code
 
-    handle_extract_rpf(
+    evidence = handle_extract_rpf(
         input_file=input_file,
         output_file=output_file,
         format=format,
@@ -182,6 +216,9 @@ def extract(
         star_threads=star_threads if star_threads is not None else threads,
         collapse_output=collapse,
         collapsed_only=collapsed_only,
+        infer_reads=infer_reads,
+        apply_boundary_trims=apply_boundary_trims and not audit_only,
+        rules=rules,
     )
 
     if output_report:
@@ -189,8 +226,136 @@ def extract(
         if default_report != output_report and default_report.exists():
             move(str(default_report), str(output_report))
 
+    exit_code = compute_exit_code(
+        [evidence["release_class"]] if evidence else [], fail_on=fail_on
+    )
+    if exit_code:
+        raise SystemExit(exit_code)
+
 
 cli.add_command(extract, "extract-rpf")
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("output_file", type=click.Path(path_type=Path))
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["fastq", "fasta", "collapsed"]),
+    help="Input file format",
+    default="fastq",
+    show_default=True,
+)
+@click.option(
+    "--count-pattern",
+    "-p",
+    help="Pattern for extracting read count from collapsed FASTA headers.",
+    default="seq{id}_x{count}",
+)
+@click.option(
+    "--max-reads",
+    "-n",
+    type=int,
+    help="Subsample depth for Stage-0 sketch inference",
+    default=500_000,
+    show_default=True,
+)
+def sketch(
+    input_file: Path,
+    output_file: Path,
+    format: str,
+    count_pattern: str,
+    max_reads: int,
+):
+    """Stage-0 sketch: reference-free per-position/per-length diagnostics.
+
+    Computes length distribution, coverage-normalized 5'/3' entropy and
+    composition (pooled and per read-length class), a per-position quality
+    profile, and top 3' terminal k-mers, on a bounded subsample. This is
+    the substrate every later stage (boundary estimation, identity screen,
+    release classification) reads from; see
+    docs/release_qc_and_terminal_trimming_plan.md sections 4-5.
+
+    Examples:
+        getRPF sketch input.fastq sketch.json --format fastq
+    """
+    import json
+
+    from .core.processors.sketch import SketchBuilder
+
+    builder = SketchBuilder(max_reads=max_reads)
+    result = builder.build_from_file(
+        input_file, format=format, count_pattern=count_pattern
+    )
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w") as f:
+        json.dump(result.to_dict(), f, indent=2)
+
+    click.echo(f"✅ Wrote sketch ({result.sample_size} reads): {output_file}")
+
+
+@cli.command()
+@click.argument("samplesheet", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output", "-o", "output_dir",
+    type=click.Path(path_type=Path), required=True,
+    help="Output directory for per-sample outputs and cohort roll-ups",
+)
+@click.option(
+    "--infer-reads", type=int, default=500_000, show_default=True,
+    help="Subsample depth for boundary-estimation inference (Stage 0/1)",
+)
+@click.option("--max-reads", type=int, default=None, help="Cap on reads streamed per sample")
+@click.option(
+    "--audit-only", is_flag=True,
+    help="Infer + screen, apply nothing (rule development / new-family validation)",
+)
+@click.option(
+    "--rules", type=click.Path(exists=True, path_type=Path),
+    help="Override mode: JSON file of {sample_id: {length: {trim_5p, trim_3p}}}",
+)
+@click.option(
+    "--fail-on", type=click.Choice(["none", "review", "hold"]), default="none",
+    show_default=True, help="Process exit-code threshold",
+)
+@click.option("--collapse/--no-collapse", default=True)
+def run(
+    samplesheet: Path,
+    output_dir: Path,
+    infer_reads: int,
+    max_reads: Optional[int],
+    audit_only: bool,
+    rules: Optional[Path],
+    fail_on: str,
+    collapse: bool,
+):
+    """Cohort driver: run the full pipeline over a local-FASTQ samplesheet.
+
+    Minimum samplesheet columns: sample_id,fastq_1. Reuses the same
+    per-sample pipeline as `extract`, so audit and production modes agree
+    by construction. Writes per-sample outputs plus cohort roll-up TSVs
+    (release_qc_summary.tsv, release_qc_flags.tsv, adapter_protocol_summary.tsv,
+    samples_needing_seqspec.tsv, samples_excluded_or_held.tsv).
+    """
+    from .core.samplesheet import run_cohort
+
+    result = run_cohort(
+        samplesheet, output_dir,
+        audit_only=audit_only, rules_path=rules,
+        infer_reads=infer_reads, max_reads=max_reads, collapse=collapse,
+    )
+
+    for e in result.evidence:
+        click.echo(f"{e['sample_id']}: {e['release_class']}")
+    click.echo(f"✅ Processed {len(result.evidence)} sample(s): {output_dir}")
+    for name, path in result.cohort_tsv_paths.items():
+        click.echo(f"  {name}: {path}")
+
+    exit_code = result.exit_code(fail_on=fail_on)
+    if exit_code:
+        raise SystemExit(exit_code)
 
 
 @cli.command()

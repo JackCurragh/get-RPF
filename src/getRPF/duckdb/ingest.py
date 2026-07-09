@@ -12,7 +12,6 @@ lightweight view for QC dashboards and gating.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -60,6 +59,19 @@ CREATE TABLE IF NOT EXISTS extraction_summary (
   UNIQUE(sample_id)
 );
 
+CREATE TABLE IF NOT EXISTS evidence (
+  sample_id TEXT,
+  release_class TEXT,
+  biological_confirmation TEXT,
+  retained_fraction DOUBLE,
+  read_count_input BIGINT,
+  read_count_output BIGINT,
+  biological_screen_verdict TEXT,
+  evidence_path TEXT,
+  evidence_json TEXT,
+  UNIQUE(sample_id)
+);
+
 CREATE VIEW IF NOT EXISTS qc_overview AS
 SELECT s.sample_id,
        g.is_clean,
@@ -69,11 +81,15 @@ SELECT s.sample_id,
        a.recommended_5prime_trim,
        a.recommended_3prime_trim,
        e.extracted_rpfs,
-       e.extraction_rate
+       e.extraction_rate,
+       v.release_class,
+       v.biological_confirmation,
+       v.biological_screen_verdict
 FROM samples s
 LEFT JOIN getrpf_checks g USING (sample_id)
 LEFT JOIN alignment_stats a USING (sample_id)
-LEFT JOIN extraction_summary e USING (sample_id);
+LEFT JOIN extraction_summary e USING (sample_id)
+LEFT JOIN evidence v USING (sample_id);
 """
 
 
@@ -232,6 +248,70 @@ def ingest_extraction_json(
             summ.get("method"),
         ],
     )
+
+
+def ingest_evidence(
+    con: duckdb.DuckDBPyConnection,
+    sample_id: str,
+    evidence_json: Path,
+) -> None:
+    """Ingest one sample's M5 evidence.json (section 9 schema)."""
+    data: Dict[str, Any] = {}
+    try:
+        data = json.loads(Path(evidence_json).read_text())
+    except Exception:
+        pass
+
+    biological_screen = data.get("biological_screen", {})
+
+    con.execute(
+        """
+        INSERT INTO evidence AS v
+        (sample_id, release_class, biological_confirmation, retained_fraction,
+         read_count_input, read_count_output, biological_screen_verdict,
+         evidence_path, evidence_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (sample_id) DO UPDATE SET
+          release_class=excluded.release_class,
+          biological_confirmation=excluded.biological_confirmation,
+          retained_fraction=excluded.retained_fraction,
+          read_count_input=excluded.read_count_input,
+          read_count_output=excluded.read_count_output,
+          biological_screen_verdict=excluded.biological_screen_verdict,
+          evidence_path=excluded.evidence_path,
+          evidence_json=excluded.evidence_json;
+        """,
+        [
+            sample_id,
+            data.get("release_class"),
+            data.get("biological_confirmation"),
+            data.get("retained_fraction"),
+            data.get("read_count_input"),
+            data.get("read_count_output"),
+            biological_screen.get("verdict"),
+            str(evidence_json),
+            json.dumps(data),
+        ],
+    )
+
+
+def ingest_cohort(db_path: Path, evidence_dir: Path, pattern: str = "*.evidence.json") -> Path:
+    """Batch-ingest a directory of `{sample}.evidence.json` files (M6's
+    samplesheet cohort output) into the DuckDB store. Unlike `ingest_all`,
+    this does not require one CLI invocation per sample."""
+    evidence_dir = Path(evidence_dir)
+    con = _ensure_db(Path(db_path))
+    for evidence_path in sorted(evidence_dir.glob(pattern)):
+        sample_id = evidence_path.name[: -len(pattern) + 1] if pattern.startswith("*") else evidence_path.stem
+        try:
+            data = json.loads(evidence_path.read_text())
+            sample_id = data.get("sample_id", sample_id)
+        except Exception:
+            pass
+        upsert_sample(con, sample_id, evidence_path)
+        ingest_evidence(con, sample_id, evidence_path)
+    con.close()
+    return Path(db_path)
 
 
 def upsert_sample(con: duckdb.DuckDBPyConnection, sample_id: str, source_path: Path) -> None:

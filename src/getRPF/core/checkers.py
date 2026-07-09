@@ -6,15 +6,26 @@ matches expectations for clean RPF data.
 """
 
 import logging
-import math
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Any
 
 from .processors.check import CleanlinessResults
+from .processors.signals import SignalProcessor, SignalStats
 
 logger = logging.getLogger(__name__)
+
+
+def _signal_stats(results: CleanlinessResults) -> SignalStats:
+    """Compute coverage-normalized per-position signal statistics.
+
+    Positions are normalized by the reads that actually cover them, not by
+    total sample reads, so variable-length tails don't deflate entropy or
+    composition estimates. This is the single source of per-position stats
+    for checks below; see docs/release_qc_and_terminal_trimming_plan.md.
+    """
+    return SignalProcessor().process_reads(results.reads)
 
 
 class Status(Enum):
@@ -250,33 +261,28 @@ class InformationContentCheck(BaseCheck):
         self.ignore_end_positions = ignore_end_positions
     
     def check(self, results: CleanlinessResults) -> CheckResult:
-        """Check Shannon entropy at each position for uniform complexity."""
-        entropies = []
+        """Check Shannon entropy at each position for uniform complexity.
+
+        Entropy is computed by SignalProcessor in 5'-anchored coordinates,
+        normalized by the reads that actually cover each position. This
+        avoids false low-complexity calls at variable-length tail positions,
+        where few reads contribute but the covering reads may still be
+        maximally diverse.
+        """
+        stats = _signal_stats(results)
+        entropies_5p = stats.entropy_5p
+
         low_entropy_positions = []
-        
-        positions = len(next(iter(results.nucleotide_frequencies.values())))
-        
+
         # Only check middle positions, ignore ends
         start_pos = self.ignore_end_positions
-        end_pos = positions - self.ignore_end_positions
-        
-        for pos in range(start_pos, end_pos):
-            # Get frequencies at this position
-            freqs = [results.nucleotide_frequencies[nt][pos] for nt in "ACGT"]
-            # Filter out zero frequencies for entropy calculation
-            freqs = [f for f in freqs if f > 0]
-            
-            if len(freqs) <= 1:
-                entropy = 0.0  # No diversity
-            else:
-                # Calculate Shannon entropy
-                entropy = -sum(f * math.log2(f) for f in freqs)
-            
-            entropies.append(entropy)
-            
+        end_pos = len(entropies_5p) - self.ignore_end_positions
+
+        entropies = list(entropies_5p[start_pos:end_pos])
+        for offset, entropy in enumerate(entropies):
             if entropy < self.min_entropy:
-                low_entropy_positions.append((pos, entropy))
-        
+                low_entropy_positions.append((start_pos + offset, entropy))
+
         mean_entropy = sum(entropies) / len(entropies) if entropies else 0
         min_entropy = min(entropies) if entropies else 0
         
@@ -319,56 +325,44 @@ class EndBiasCheck(BaseCheck):
     
     def check(self, results: CleanlinessResults) -> CheckResult:
         """Check for excessive nucleotide bias at read ends.
-        
-        For 3' end analysis, we use reversed sequences to align all reads at their 3' ends,
-        making adapter contamination detectable as nucleotide bias.
+
+        Both ends are read from SignalProcessor's anchored composition
+        arrays (composition_5p, composition_3p), which are normalized by the
+        reads that actually cover each position. The 3' array is already
+        end-anchored (position 0 is the last base of every read), so no
+        separate reversed-sequence pass is needed.
         """
+        stats = _signal_stats(results)
         problems = []
         max_bias_found = 0.0
         worst_position = None
-        
-        positions = len(next(iter(results.nucleotide_frequencies.values())))
-        
+
         # Check 5' end positions (straightforward - all reads start at pos 0)
-        for pos in range(min(self.end_positions, positions)):
-            pos_freqs = {nt: results.nucleotide_frequencies[nt][pos] for nt in "ACGT"}
-            max_freq = max(pos_freqs.values())
-            
+        for pos in range(min(self.end_positions, len(stats.composition_5p))):
+            pos_freqs = stats.composition_5p[pos]
+            if not pos_freqs:
+                continue
+            dominant_nt, max_freq = max(pos_freqs.items(), key=lambda x: x[1])
+
             if max_freq > self.max_bias:
-                dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
                 problems.append(f"5' position {pos}: {dominant_nt}={max_freq:.1%}")
                 if max_freq > max_bias_found:
                     max_bias_found = max_freq
                     worst_position = f"5'_{pos}"
-        
-        # Check 3' end positions using REVERSED sequences
-        if hasattr(results, 'reversed_nucleotide_frequencies') and results.reversed_nucleotide_frequencies:
-            reversed_positions = len(next(iter(results.reversed_nucleotide_frequencies.values())))
-            
-            for pos in range(min(self.end_positions, reversed_positions)):
-                pos_freqs = {nt: results.reversed_nucleotide_frequencies[nt][pos] for nt in "ACGT"}
-                max_freq = max(pos_freqs.values())
-                
-                if max_freq > self.max_bias:
-                    dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
-                    problems.append(f"3' position {pos} (reversed): {dominant_nt}={max_freq:.1%}")
-                    if max_freq > max_bias_found:
-                        max_bias_found = max_freq
-                        worst_position = f"3'_reversed_{pos}"
-        else:
-            # Fallback to old method if reversed frequencies not available
-            for i in range(min(self.end_positions, positions)):
-                pos = positions - 1 - i  # Count from end
-                pos_freqs = {nt: results.nucleotide_frequencies[nt][pos] for nt in "ACGT"}
-                max_freq = max(pos_freqs.values())
-                
-                if max_freq > self.max_bias:
-                    dominant_nt = max(pos_freqs.items(), key=lambda x: x[1])[0]
-                    problems.append(f"3' position -{i+1}: {dominant_nt}={max_freq:.1%}")
-                    if max_freq > max_bias_found:
-                        max_bias_found = max_freq
-                        worst_position = f"3'_{i+1}"
-        
+
+        # Check 3' end positions (already anchored to read end)
+        for pos in range(min(self.end_positions, len(stats.composition_3p))):
+            pos_freqs = stats.composition_3p[pos]
+            if not pos_freqs:
+                continue
+            dominant_nt, max_freq = max(pos_freqs.items(), key=lambda x: x[1])
+
+            if max_freq > self.max_bias:
+                problems.append(f"3' position {pos} (reversed): {dominant_nt}={max_freq:.1%}")
+                if max_freq > max_bias_found:
+                    max_bias_found = max_freq
+                    worst_position = f"3'_reversed_{pos}"
+
         # Determine status
         if problems:
             status = Status.FAIL
@@ -376,7 +370,7 @@ class EndBiasCheck(BaseCheck):
         else:
             status = Status.PASS
             message = "No excessive nucleotide bias at read ends"
-        
+
         return CheckResult(
             status=status,
             message=message,
@@ -385,7 +379,6 @@ class EndBiasCheck(BaseCheck):
                 "max_bias_found": max_bias_found,
                 "worst_position": worst_position,
                 "bias_threshold": self.max_bias,
-                "uses_reversed_analysis": hasattr(results, 'reversed_nucleotide_frequencies')
             }
         )
 
@@ -466,7 +459,13 @@ def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
             if "length" in check_name.lower():
                 failure_categories.append("length_distribution")
             elif "end" in check_name.lower() or "bias" in check_name.lower():
-                failure_categories.append("end_bias")
+                worst_position = (result.details or {}).get("worst_position") or ""
+                if worst_position.startswith("3'"):
+                    failure_categories.append("three_prime_terminal_bias")
+                elif worst_position.startswith("5'"):
+                    failure_categories.append("five_prime_terminal_bias")
+                else:
+                    failure_categories.append("end_bias")
             elif "information" in check_name.lower() or "entropy" in check_name.lower():
                 failure_categories.append("low_complexity")
             elif "clipping" in check_name.lower():

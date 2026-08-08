@@ -6,9 +6,8 @@ from a sample of reads to drive architecture detection.
 
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from collections import Counter
-import numpy as np
 
 
 @dataclass
@@ -58,21 +57,63 @@ class SignalProcessor:
         # 50k reads is robust enough for high confidence
         sample_reads = valid_reads[:50000]
 
+        entropy_5p, composition_5p = self._calculate_metrics(sample_reads, "5p")
+        entropy_3p, composition_3p = self._calculate_metrics(sample_reads, "3p")
+
         return SignalStats(
-            entropy_5p=self._calculate_entropy(sample_reads, align="5p"),
-            composition_5p=self._calculate_composition(sample_reads, align="5p"),
+            entropy_5p=entropy_5p,
+            composition_5p=composition_5p,
             dinucleotide_5p=(
                 self._calculate_dinucleotides(sample_reads, align="5p")
                 if compute_dinucleotide else []
             ),
-            entropy_3p=self._calculate_entropy(sample_reads, align="3p"),
-            composition_3p=self._calculate_composition(sample_reads, align="3p"),
+            entropy_3p=entropy_3p,
+            composition_3p=composition_3p,
             dinucleotide_3p=(
                 self._calculate_dinucleotides(sample_reads, align="3p")
                 if compute_dinucleotide else []
             ),
             sample_size=len(sample_reads)
         )
+
+    def _calculate_metrics(
+        self, reads: List[str], align: str
+    ) -> tuple[List[float], List[Dict[str, float]]]:
+        """Calculate entropy and composition in one positional pass.
+
+        Entropy and composition use the same per-position base counts. Keeping
+        them together avoids traversing every read twice for each end.
+        """
+        length = self._get_max_len(reads)
+        entropies: List[float] = []
+        compositions: List[Dict[str, float]] = []
+
+        for position in range(length):
+            counts: Counter = Counter()
+            for read in reads:
+                index = position if align == "5p" else -(position + 1)
+                if (align == "5p" and index < len(read)) or (
+                    align == "3p" and abs(index) <= len(read)
+                ):
+                    counts[read[index]] += 1
+
+            total = sum(counts.values())
+            if total == 0:
+                entropies.append(0.0)
+                compositions.append({})
+                continue
+
+            entropy = 0.0
+            frequencies = {}
+            for base, count in counts.items():
+                frequency = count / total
+                frequencies[base] = frequency
+                entropy -= frequency * math.log2(frequency)
+
+            entropies.append(entropy)
+            compositions.append(frequencies)
+
+        return entropies, compositions
 
     def _calculate_entropy(self, reads: List[str], align: str = "5p") -> List[float]:
         """Calculate per-position Shannon entropy."""
@@ -193,3 +234,20 @@ class SignalProcessor:
     def _empty_stats(self) -> SignalStats:
         """Return empty statistics object."""
         return SignalStats([], [], [], [], [], [], 0)
+
+
+def process_reads(reads: List[str], compute_dinucleotide: bool = True) -> SignalStats:
+    """Calculate signal statistics for a read population.
+
+    Signal calculation is stateless. This function is the preferred API for
+    new code; ``SignalProcessor`` remains as a compatibility wrapper for
+    callers that used the original class-based interface.
+    """
+    return SignalProcessor().process_reads(
+        reads, compute_dinucleotide=compute_dinucleotide
+    )
+
+
+def empty_stats() -> SignalStats:
+    """Return an empty signal result for an empty read population."""
+    return SignalProcessor()._empty_stats()

@@ -42,6 +42,26 @@ def test_observed_dual_ligation_loader_keeps_5p_adapter_out_of_trim_targets():
     assert dual.trim_adapter_sequences == ["TCGTATGCCGTCTTCTGCTTG"]
 
 
+def test_loader_records_post_rpf_technical_regions():
+    db = ArchitectureDatabase()
+    mcglincy = next(
+        arch for arch in db.architectures
+        if arch.protocol_name == "mcglincy_ingolia_2017"
+    )
+    tcp = next(
+        arch for arch in db.architectures
+        if arch.protocol_name == "tcp_seq_se100"
+    )
+    arabidopsis = next(
+        arch for arch in db.architectures
+        if arch.protocol_name == "arabidopsis_thaliana_timeseries_2024"
+    )
+
+    assert mcglincy.post_rpf_trim_bases == 10
+    assert tcp.post_rpf_trim_bases == 4
+    assert arabidopsis.post_rpf_trim_bases == 5
+
+
 def test_external_validation_manifest_is_not_packaged_with_getrpf():
     packaged_manifest = (
         importlib.resources.files("getRPF")

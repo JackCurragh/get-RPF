@@ -24,8 +24,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from ..core.processors.signals import SignalProcessor
-from ..core.processors.segmenter import ProbabilisticSegmenter
+from ..core.processors.signals import process_reads
+from ..core.processors.segmenter import (
+    decode_segments_with_posteriors,
+    segment_reads,
+)
 from ..core.processors.collapsed import TwoStageCollapser
 
 
@@ -112,15 +115,13 @@ def plot_hmm_entropy(
         raise RuntimeError("No reads available to plot HMM entropy.")
 
     # Compute per-position entropy/composition
-    sp = SignalProcessor()
-    stats = sp.process_reads(reads)
+    stats = process_reads(reads, compute_dinucleotide=False)
 
     # Segment via HMM (can be hidden with show_segments=False)
-    seg = ProbabilisticSegmenter()
     if show_posteriors:
-        _, posteriors, segments = seg.decode_with_posteriors(stats)
+        _, posteriors, segments = decode_segments_with_posteriors(stats)
     else:
-        posteriors, segments = [], seg.segment(stats)
+        posteriors, segments = [], segment_reads(stats)
 
     # Prepare plot
     x = list(range(len(stats.entropy_5p)))

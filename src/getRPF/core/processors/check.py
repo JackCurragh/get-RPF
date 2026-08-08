@@ -218,3 +218,20 @@ class CleanlinessChecker:
             gc_content=gc_content,
             reads=reads_sample,
         )
+
+
+def analyze_file(
+    input_path: Path,
+    format: str,
+    min_quality: int = 20,
+    threads: int = 1,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+) -> CleanlinessResults:
+    """Analyze a sequence file and return its bounded quality summary."""
+    return CleanlinessChecker(
+        format=format,
+        min_quality=min_quality,
+        threads=threads,
+        max_reads=max_reads,
+    ).analyze_file(input_path, count_pattern=count_pattern)

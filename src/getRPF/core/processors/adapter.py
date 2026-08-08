@@ -214,3 +214,25 @@ class AdapterDetector:
             variant_counts=variants,
             contamination_rate=contamination_rate,
         )
+
+
+def analyze_adapter_file(
+    input_path: Path,
+    adapter: str,
+    format: str,
+    min_overlap: int = 10,
+    max_mismatches: int = 1,
+    threads: int = 1,
+    count_pattern: Optional[str] = None,
+    max_reads: Optional[int] = None,
+) -> AdapterResults:
+    """Analyze adapter evidence in a sequence file."""
+    return AdapterDetector(
+        adapter=adapter,
+        format=format,
+        min_overlap=min_overlap,
+        max_mismatches=max_mismatches,
+        threads=threads,
+        count_pattern=count_pattern,
+        max_reads=max_reads,
+    ).analyze_file(input_path)

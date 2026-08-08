@@ -282,11 +282,13 @@ def sketch(
     """
     import json
 
-    from .core.processors.sketch import SketchBuilder
+    from .core.processors.sketch import build_sketch
 
-    builder = SketchBuilder(max_reads=max_reads)
-    result = builder.build_from_file(
-        input_file, format=format, count_pattern=count_pattern
+    result = build_sketch(
+        input_file,
+        format=format,
+        max_reads=max_reads,
+        count_pattern=count_pattern,
     )
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -420,7 +422,7 @@ def check_cleanliness(
         # Check collapsed format with limited reads
         getRPF check-cleanliness input.fasta -f collapsed -o reports/ --max-reads 5000
     """
-    from .core.processors.check import CleanlinessChecker
+    from .core.processors.check import analyze_file
     from .core.checkers import (
         run_all_cleanliness_checks, 
         categorize_failures, 
@@ -434,9 +436,10 @@ def check_cleanliness(
     output.mkdir(exist_ok=True)
     
     # Run sequence analysis
-    checker = CleanlinessChecker(format=format, max_reads=max_reads)
-    sequence_results = checker.analyze_file(
+    sequence_results = analyze_file(
         input_file,
+        format=format,
+        max_reads=max_reads,
         count_pattern=count_pattern if format == "collapsed" else None,
     )
     

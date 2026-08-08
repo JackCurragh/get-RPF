@@ -24,10 +24,10 @@ from .types import (
     SegmentInfo,
     RPFExtractionResult,
 )
-from .signals import SignalProcessor
-from .matcher import ArchitectureMatcher
-from .segmenter import ProbabilisticSegmenter
-from .reporting import Reporter
+from .signals import process_reads
+from .matcher import MatchResult, match_architecture
+from .segmenter import segment_reads
+from .reporting import generate_cli_report, write_html_report
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,87 @@ MIN_RPF_LENGTH = 20
 MAX_RPF_LENGTH = 40
 FOOTPRINT_CORE_MIN = 26
 FOOTPRINT_CORE_MAX = 34
+DISOME_CANDIDATE_MIN = 50
+DISOME_CANDIDATE_MAX = 80
+MIN_DISOME_CANDIDATE_FRACTION = 0.20
 MIN_PRETRIMMED_RPF_FRACTION = 0.80
 MIN_PRETRIMMED_CORE_FRACTION = 0.50
 MIN_RETAINED_FRACTION_WARN = 0.05
 MIN_EXTRACTED_CORE_FRACTION_WARN = 0.10
+GENERIC_ARCHITECTURE = "comprehensive_adapter_check"
+MIN_STRONG_ADAPTER_EVIDENCE_FRACTION = 0.50
+MIN_ADAPTER_EVIDENCE_MARGIN = 0.10
+
+
+def resolve_architecture_choice(
+    match_result: Optional[MatchResult],
+    adapter_evidence: List[Dict[str, Any]],
+) -> Tuple[Optional[ReadArchitecture], str, List[str]]:
+    """Choose an architecture without allowing generic matches to mask evidence.
+
+    The comprehensive catalogue is useful as a fallback, but it is not a
+    protocol identification result. A strong, specific adapter signal must
+    therefore override a generic strict match. For named architectures, a
+    competing specific adapter only wins when it is both strongly supported
+    and clearly stronger than the selected architecture's own evidence.
+    """
+    best_evidence = adapter_evidence[0] if adapter_evidence else None
+    best_specific = next(
+        (
+            item
+            for item in adapter_evidence
+            if item["protocol_name"] != GENERIC_ARCHITECTURE
+        ),
+        None,
+    )
+
+    if match_result and match_result.is_match:
+        selected = match_result.architecture
+        selected_evidence = next(
+            (
+                item
+                for item in adapter_evidence
+                if item["protocol_name"] == selected.protocol_name
+            ),
+            None,
+        )
+        selected_fraction = (
+            selected_evidence["hit_fraction"] if selected_evidence else 0.0
+        )
+        specific_fraction = best_specific["hit_fraction"] if best_specific else 0.0
+        generic_match = selected.protocol_name == GENERIC_ARCHITECTURE
+        specific_wins = (
+            best_specific is not None
+            and specific_fraction >= MIN_STRONG_ADAPTER_EVIDENCE_FRACTION
+            and (
+                generic_match
+                or specific_fraction >= selected_fraction + MIN_ADAPTER_EVIDENCE_MARGIN
+            )
+        )
+        if specific_wins:
+            return (
+                best_specific["architecture"],
+                "adapter_evidence_match",
+                [
+                    "Replaced generic/unsupported strict architecture with "
+                    f"specific adapter evidence: {best_specific['protocol_name']} "
+                    f"({specific_fraction:.1%} of sampled reads)."
+                ],
+            )
+        return selected, "strict_pattern_match", list(match_result.reasons)
+
+    if best_evidence and best_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION:
+        return (
+            best_evidence["architecture"],
+            "adapter_evidence_match",
+            [
+                "Selected architecture by adapter evidence: "
+                f"{best_evidence['protocol_name']} "
+                f"({best_evidence['hit_fraction']:.1%} of sampled reads)."
+            ],
+        )
+
+    return None, "unknown", []
 
 
 
@@ -118,10 +195,25 @@ class RPFExtractor:
         self.seqspec_generator = SeqSpecGenerator()
         
         # New components
-        self.signal_processor = SignalProcessor()
-        self.matcher = ArchitectureMatcher()
-        self.segmenter = ProbabilisticSegmenter()
-        self.reporter = Reporter()
+
+    def infer_architecture(
+        self,
+        sample_reads: List[str],
+        signals=None,
+    ) -> Tuple[Optional[ReadArchitecture], str, List[str], List[Dict[str, Any]]]:
+        """Infer architecture once for orchestration and extraction.
+
+        ``signals`` may be supplied by the Stage-0 sketch so callers do not
+        recompute the pooled signal solely to decide whether the expensive
+        boundary planner is needed.
+        """
+        signals = signals or process_reads(sample_reads, compute_dinucleotide=False)
+        adapter_evidence = self._score_adapter_evidence(sample_reads)
+        match_result = match_architecture(signals, self.architecture_db.architectures)
+        architecture, method, trace_log = resolve_architecture_choice(
+            match_result, adapter_evidence
+        )
+        return architecture, method, trace_log, adapter_evidence
     
     def extract_rpfs(
         self,
@@ -133,6 +225,8 @@ class RPFExtractor:
         collapse_output: bool = True,
         collapsed_only: bool = False,
         override_trims: Optional[Dict[int, Dict[str, int]]] = None,
+        sample_reads: Optional[List[str]] = None,
+        sample_headers: Optional[List[str]] = None,
     ) -> RPFExtractionResult:
         """Extract RPFs from input file.
 
@@ -146,54 +240,42 @@ class RPFExtractor:
         """
         logger.info(f"Starting RPF extraction from {input_file}")
         
-        # 1. Load large sample for robust signal generation
-        sample_reads, sample_headers = self._load_sample_reads(input_file, format, sample_size=50000)
+        # 1. Reuse the bounded analysis sample when the caller already built
+        # one (the pipeline does this after sketching). Direct callers retain
+        # the original file-loading behavior.
+        if sample_reads is None:
+            sample_reads, loaded_headers = self._load_sample_reads(
+                input_file, format, sample_size=50000
+            )
+            sample_headers = loaded_headers
+        else:
+            sample_reads = sample_reads[:50000]
+            sample_headers = sample_headers or []
         
         # 2. Generate Signals (Entropy, Composition)
         logger.info("Generating signal metrics...")
-        signals = self.signal_processor.process_reads(sample_reads)
-        raw_length_profile = self._length_profile(sample_reads)
-        adapter_evidence = self._score_adapter_evidence(sample_reads)
+        signals = process_reads(sample_reads, compute_dinucleotide=False)
+        sample_length_counts = Counter(len(read) for read in sample_reads)
+        raw_length_profile = self._length_profile_from_length_counts(
+            sample_length_counts
+        )
+        (
+            final_architecture,
+            method,
+            trace_log,
+            adapter_evidence,
+        ) = self.infer_architecture(sample_reads, signals)
         best_adapter_evidence = adapter_evidence[0] if adapter_evidence else None
         
         # 3. Match against known architectures
         logger.info("Matching architectures...")
-        match_result = self.matcher.match(signals, self.architecture_db.architectures)
-        
         extracted_segments = []
-        method = "unknown"
-        trace_log = []
-        final_architecture = None
-        
-        if match_result and match_result.is_match:
-            # Pattern Match Success
-            logger.info(f"Matched architecture: {match_result.architecture.protocol_name}")
-            final_architecture = match_result.architecture
-            method = "strict_pattern_match"
-            trace_log = match_result.reasons
-            
-            # Convert architecture definition to segment info
+        if final_architecture is not None:
+            logger.info(
+                "Selected architecture: "
+                f"{final_architecture.protocol_name} ({method})"
+            )
             extracted_segments = self._arch_to_segments(final_architecture)
-            
-        else:
-            if (
-                best_adapter_evidence
-                and best_adapter_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION
-            ):
-                final_architecture = best_adapter_evidence["architecture"]
-                extracted_segments = self._arch_to_segments(final_architecture)
-                method = "adapter_evidence_match"
-                trace_log.append(
-                    "Selected architecture by adapter evidence: "
-                    f"{final_architecture.protocol_name} "
-                    f"({best_adapter_evidence['hit_fraction']:.1%} of sampled reads)."
-                )
-
-            if final_architecture is not None:
-                logger.info(
-                    "Matched architecture by adapter evidence: "
-                    f"{final_architecture.protocol_name}"
-                )
 
         if final_architecture is None and self._looks_pretrimmed(raw_length_profile):
             logger.info(
@@ -228,8 +310,10 @@ class RPFExtractor:
             
             # IMPROVEMENT: Multi-Scale Binning Strategy
             # Variable read lengths can smear the signal. We bin reads by length and detect on each bin independently.
-            from collections import Counter
-            length_counts = Counter(len(r) for r in sample_reads)
+            reads_by_length: Dict[int, List[str]] = {}
+            for read in sample_reads:
+                reads_by_length.setdefault(len(read), []).append(read)
+            length_counts = sample_length_counts
             
             # Select bins with sufficient coverage (>1000 reads)
             valid_bins = [l for l, c in length_counts.items() if c > 1000]
@@ -240,9 +324,9 @@ class RPFExtractor:
             if len(valid_bins) > 1:
                 logger.info(f"Multi-scale detection: analyzing {len(valid_bins)} length bins: {valid_bins}")
                 for length in valid_bins:
-                    bin_reads = [r for r in sample_reads if len(r) == length]
-                    bin_signals = self.signal_processor.process_reads(bin_reads)
-                    bin_segments = self.segmenter.segment(bin_signals)
+                    bin_reads = reads_by_length[length]
+                    bin_signals = process_reads(bin_reads, compute_dinucleotide=False)
+                    bin_segments = segment_reads(bin_signals)
                     
                     if bin_segments:
                         detected_segments_per_bin.append(bin_segments)
@@ -284,7 +368,7 @@ class RPFExtractor:
             
             if not extracted_segments:
                  # Try global signal if binning failed or was skipped
-                 extracted_segments = self.segmenter.segment(signals)
+                 extracted_segments = segment_reads(signals)
 
             if extracted_segments:
                 trace_log.append("Used HMM segmentation.")
@@ -348,12 +432,14 @@ class RPFExtractor:
         # 4. Generate Reports
         if final_architecture and extracted_segments:
             # CLI Report
-            cli_report = self.reporter.generate_cli_report(final_architecture, extracted_segments, signals)
+            cli_report = generate_cli_report(
+                final_architecture, extracted_segments, signals
+            )
             logger.info("\n" + cli_report)
             
             # HTML Report
             html_report_path = output_file.with_suffix(".report.html")
-            self.reporter.generate_html_report(
+            write_html_report(
                 html_report_path, final_architecture, extracted_segments, signals, trace_log
             )
             logger.info(f"Interactive report written to {html_report_path}")
@@ -390,6 +476,7 @@ class RPFExtractor:
             extraction_stats = self._extract_rpfs_from_reads(
                 input_file, output_file, extracted_segments, format, max_reads,
                 adapters=adapters_to_trim,
+                post_rpf_trim_bases=final_architecture.post_rpf_trim_bases,
                 collapse_output=collapse_output,
                 collapsed_only=collapsed_only,
                 override_trims=override_trims,
@@ -486,6 +573,25 @@ class RPFExtractor:
         if not reads:
             return []
 
+        # The same adapter sequence is present in multiple architecture
+        # records. Match each distinct sequence once, then reuse its count for
+        # the architecture-specific report entries.
+        normalized_reads = [read.upper() for read in reads]
+        adapter_sequences = {
+            adapter.upper()
+            for arch in self.architecture_db.architectures
+            for adapter in arch.adapter_sequences
+            if adapter
+        }
+        hit_counts = {
+            adapter: sum(
+                1
+                for read in normalized_reads
+                if self._find_adapter_prefix(read, adapter) is not None
+            )
+            for adapter in adapter_sequences
+        }
+
         scored = []
         seen = set()
         for arch in self.architecture_db.architectures:
@@ -499,11 +605,7 @@ class RPFExtractor:
                     continue
                 seen.add(key)
 
-                hit_count = sum(
-                    1
-                    for read in reads
-                    if self._find_adapter_prefix(read.upper(), adapter) is not None
-                )
+                hit_count = hit_counts[adapter]
                 if hit_count == 0:
                     continue
 
@@ -596,6 +698,7 @@ class RPFExtractor:
             "frac_20_40": fraction(MIN_RPF_LENGTH, MAX_RPF_LENGTH),
             "frac_26_34": fraction(FOOTPRINT_CORE_MIN, FOOTPRINT_CORE_MAX),
             "frac_35_40": fraction(35, MAX_RPF_LENGTH),
+            "frac_50_80": fraction(DISOME_CANDIDATE_MIN, DISOME_CANDIDATE_MAX),
             "frac_gt40": fraction(MAX_RPF_LENGTH + 1),
             "top_lengths": [
                 {"length": length, "count": count}
@@ -675,6 +778,8 @@ class RPFExtractor:
         if extraction_stats["retained_fraction"] < MIN_RETAINED_FRACTION_WARN:
             warnings.append("low_retained_fraction")
         extracted_profile = extraction_stats.get("extracted_length_profile") or {}
+        if extracted_profile.get("frac_50_80", 0.0) >= MIN_DISOME_CANDIDATE_FRACTION:
+            warnings.append("disome_like_length_distribution")
         if extracted_profile.get("frac_26_34", 0.0) < MIN_EXTRACTED_CORE_FRACTION_WARN:
             warnings.append("low_26_34_fraction")
         return warnings
@@ -689,6 +794,8 @@ class RPFExtractor:
         extraction_warnings = extraction_warnings or []
         if "low_retained_fraction" in extraction_warnings:
             return "adapter_supported_low_yield"
+        if "disome_like_length_distribution" in extraction_warnings:
+            return "needs_length_policy_review"
         if "low_26_34_fraction" in extraction_warnings:
             return "extracted_rpf_length_suspicious"
         conflict = adapter_report.get("adapter_conflict") or {}
@@ -787,6 +894,7 @@ class RPFExtractor:
         format: str,
         max_reads: Optional[int],
         adapters: Optional[List[str]] = None,
+        post_rpf_trim_bases: int = 0,
         collapse_output: bool = True,
         collapsed_only: bool = False,
         override_trims: Optional[Dict[int, Dict[str, int]]] = None,
@@ -807,23 +915,30 @@ class RPFExtractor:
         def trim_logic(sequence: str) -> Optional[str]:
             """Inner function to trim a single unique sequence."""
             rule = override_trims.get(len(sequence)) if override_trims else None
-            if rule is not None:
-                trim_5p = rule.get("trim_5p", 0)
-                trim_3p = rule.get("trim_3p", 0)
-                end = len(sequence) - trim_3p if trim_3p else len(sequence)
-                return sequence[trim_5p:end]
+            trim_5p = rule.get("trim_5p", 0) if rule is not None else 0
+            trim_3p = rule.get("trim_3p", 0) if rule is not None else 0
 
             if rpf_end == -1:
-                rpf_seq = sequence[rpf_start:]
+                # Architecture-derived boundaries take precedence over a
+                # terminal artifact rule. If an adapter is present, trimming
+                # it already removes the terminal bases covered by trim_3p;
+                # applying both would cut into the RPF.
+                rpf_seq = sequence[rpf_start + trim_5p:]
+                adapter_found = False
                 if sorted_adapters:
                     for adapter in sorted_adapters:
                         adapter_pos = self._find_adapter_prefix(rpf_seq, adapter)
                         if adapter_pos is not None:
                             rpf_seq = rpf_seq[:adapter_pos]
+                            adapter_found = True
                             break
+                if not adapter_found and trim_3p:
+                    rpf_seq = rpf_seq[:-trim_3p]
+                if adapter_found and post_rpf_trim_bases:
+                    rpf_seq = rpf_seq[:-post_rpf_trim_bases]
                 return rpf_seq
             else:
-                return sequence[rpf_start:rpf_end]
+                return sequence[rpf_start + trim_5p:rpf_end]
 
         collapser = TwoStageCollapser(logger=logger)
         
@@ -884,34 +999,34 @@ class RPFExtractor:
 
     @staticmethod
     def _find_adapter_prefix(sequence: str, adapter: str) -> Optional[int]:
-        """Return first position matching an adapter prefix of sufficient length."""
+        """Return the 3' boundary position of a suffix adapter overlap.
+
+        Adapter evidence may be inspected in other ways, but extraction must
+        only trim when the read ends with an adapter prefix. Searching for an
+        arbitrary internal match can truncate genuine RPF sequence.
+        """
         sequence = sequence.upper()
         adapter = adapter.upper()
         max_k = min(len(adapter), len(sequence))
         min_overlap = min(MIN_ADAPTER_PREFIX_OVERLAP, len(adapter))
-        best_pos = None
-        best_k = 0
         for k in range(max_k, min_overlap - 1, -1):
             adapter_prefix = adapter[:k]
             if "N" in adapter_prefix:
-                pos = RPFExtractor._find_iupac_prefix(sequence, adapter_prefix)
+                pos = RPFExtractor._find_iupac_suffix(sequence, adapter_prefix)
             else:
-                pos = sequence.find(adapter_prefix)
-            if pos >= 0 and (
-                best_pos is None or pos < best_pos or (pos == best_pos and k > best_k)
-            ):
-                best_pos = pos
-                best_k = k
-        return best_pos
+                pos = len(sequence) - k if sequence.endswith(adapter_prefix) else -1
+            if pos >= 0:
+                return pos
+        return None
 
     @staticmethod
-    def _find_iupac_prefix(sequence: str, adapter_prefix: str) -> int:
-        """Find a prefix where N in the adapter can match any read base."""
+    def _find_iupac_suffix(sequence: str, adapter_prefix: str) -> int:
+        """Find an adapter prefix at the read's 3' boundary."""
         prefix_len = len(adapter_prefix)
-        for pos in range(0, len(sequence) - prefix_len + 1):
-            for idx, expected in enumerate(adapter_prefix):
-                if expected != "N" and sequence[pos + idx] != expected:
-                    break
-            else:
-                return pos
-        return -1
+        pos = len(sequence) - prefix_len
+        if pos < 0:
+            return -1
+        for idx, expected in enumerate(adapter_prefix):
+            if expected != "N" and sequence[pos + idx] != expected:
+                return -1
+        return pos

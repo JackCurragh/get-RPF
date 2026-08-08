@@ -5,39 +5,15 @@ seqspec-based Architecture Loader
 Allows loading architectures from seqspec files in a directory
 """
 
-import yaml
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Any, Optional
+
+import yaml
+
+from .processors.types import ReadArchitecture
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class ReadArchitecture:
-    """Represents a read architecture loaded from seqspec."""
-    protocol_name: str
-    lab_source: str
-    umi_positions: List[tuple] = None
-    barcode_positions: List[tuple] = None
-    adapter_sequences: List[str] = None
-    trim_adapter_sequences: List[str] = None
-    rpf_start: int = 0
-    rpf_end: int = -1
-    expected_rpf_length: tuple = (20, 40)
-    quality_markers: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.umi_positions is None:
-            self.umi_positions = []
-        if self.barcode_positions is None:
-            self.barcode_positions = []
-        if self.adapter_sequences is None:
-            self.adapter_sequences = []
-        if self.trim_adapter_sequences is None:
-            self.trim_adapter_sequences = []
-        if self.quality_markers is None:
-            self.quality_markers = {}
 
 class SeqSpecArchitectureLoader:
     """Loads read architectures from seqspec files."""
@@ -113,6 +89,7 @@ class SeqSpecArchitectureLoader:
             umi_positions = []
             barcode_positions = []
             rpf_regions = []
+            post_rpf_trim_bases = 0
             
             current_pos = 0
             
@@ -148,9 +125,19 @@ class SeqSpecArchitectureLoader:
                     elif 'umi' in region_type or 'umi' in region_id:
                         if region_length > 0:
                             umi_positions.append((current_pos, current_pos + region_length))
+                            if rpf_regions and current_pos >= rpf_regions[-1][1]:
+                                post_rpf_trim_bases += region_length
                     elif 'barcode' in region_type or 'barcode' in region_id:
                         if region_length > 0:
                             barcode_positions.append((current_pos, current_pos + region_length))
+                            if rpf_regions and current_pos >= rpf_regions[-1][1]:
+                                post_rpf_trim_bases += region_length
+                    elif (
+                        rpf_regions
+                        and current_pos >= rpf_regions[-1][1]
+                        and region_type in {"linker", "primer", "technical"}
+                    ):
+                        post_rpf_trim_bases += region_length
                     elif 'rpf' in region_type or 'rpf' in region_id or 'cdna' in region_type:
                         rpf_regions.append((current_pos, current_pos + region_length, min_len, max_len))
                     
@@ -185,7 +172,8 @@ class SeqSpecArchitectureLoader:
                 quality_markers={
                     "adapter_match_threshold": 0.3,  # Conservative for user-defined
                     "description": description
-                }
+                },
+                post_rpf_trim_bases=post_rpf_trim_bases,
             )
             
             logger.info(f"Created architecture from seqspec: {protocol_name}")

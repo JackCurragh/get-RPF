@@ -257,17 +257,18 @@ class ExtractionEmptyError(Exception):
 @dataclass
 class ReadArchitecture:
     """Represents a known read architecture from ribosome profiling protocols."""
-    
+
     protocol_name: str
     lab_source: str
-    umi_positions: List[Tuple[int, int]]
-    barcode_positions: List[Tuple[int, int]]
-    adapter_sequences: List[str]
-    rpf_start: int
-    rpf_end: int
-    expected_rpf_length: Tuple[int, int]
-    quality_markers: Dict[str, Any]
+    umi_positions: List[Tuple[int, int]] = field(default_factory=list)
+    barcode_positions: List[Tuple[int, int]] = field(default_factory=list)
+    adapter_sequences: List[str] = field(default_factory=list)
+    rpf_start: int = 0
+    rpf_end: int = -1
+    expected_rpf_length: Tuple[int, int] = (20, 40)
+    quality_markers: Dict[str, Any] = field(default_factory=dict)
     trim_adapter_sequences: Optional[List[str]] = None
+    post_rpf_trim_bases: int = 0
     confidence: float = 1.0
 
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 
 from .processors.check import CleanlinessResults
-from .processors.signals import SignalProcessor, SignalStats
+from .processors.signals import SignalStats, process_reads
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def _signal_stats(results: CleanlinessResults) -> SignalStats:
     composition estimates. This is the single source of per-position stats
     for checks below; see docs/release_qc_and_terminal_trimming_plan.md.
     """
-    return SignalProcessor().process_reads(results.reads)
+    return process_reads(results.reads, compute_dinucleotide=False)
 
 
 class Status(Enum):

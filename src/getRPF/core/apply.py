@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .processors.boundary import LengthClassDecision, estimate_boundaries
-from .processors.sketch import Sketch, SketchBuilder
+from .processors.sketch import Sketch, build_sketch
 
 OverrideTrims = Dict[int, Dict[str, int]]
 
@@ -85,8 +85,11 @@ def plan_from_file(
     use this rather than re-deriving a Sketch and calling plan_from_sketch
     separately, so there's one code path to keep correct.
     """
-    sketch = SketchBuilder(max_reads=infer_reads).build_from_file(
-        input_file, format=format, count_pattern=count_pattern
+    sketch = build_sketch(
+        input_file,
+        format=format,
+        max_reads=infer_reads,
+        count_pattern=count_pattern,
     )
     override_trims, applied_rules, proposed_rules, decisions = plan_from_sketch(
         sketch, known_adapters=known_adapters

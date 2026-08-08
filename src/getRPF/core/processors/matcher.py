@@ -6,7 +6,7 @@ using deterministic boolean logic constraints.
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional
 from .signals import SignalStats
 from .types import ReadArchitecture
 
@@ -176,3 +176,16 @@ class ArchitectureMatcher:
              # For strict matching, if we DON'T see it, we might reject if we expect raw data.
              reasons.append(f"Adapter footprint not found at 3' end (Score: {best_adapter_score:.2f})")
              return 0.0
+
+
+def match_architecture(
+    stats: SignalStats,
+    architectures: List[ReadArchitecture],
+    confidence_threshold: float = 0.8,
+) -> Optional[MatchResult]:
+    """Return the best architecture match for the observed signal statistics.
+
+    Matching has no per-call mutable state. The class remains available as a
+    compatibility API, while new code should call this function directly.
+    """
+    return ArchitectureMatcher(confidence_threshold).match(stats, architectures)

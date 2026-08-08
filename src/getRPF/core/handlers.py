@@ -21,8 +21,8 @@ from ..core.checkers import (
     LengthDistributionCheck,
     write_check_report,
 )
-from ..core.processors.adapter import AdapterDetector
-from ..core.processors.check import CleanlinessChecker
+from ..core.processors.adapter import analyze_adapter_file
+from ..core.processors.check import analyze_file
 from ..core.processors.alignment import STARAligner
 from ..core.processors.rpf_extractor import RPFExtractor
 from ..utils.validation import validate_adapter_sequence
@@ -55,16 +55,13 @@ def handle_cleanliness_check(
     logger.info(f"Starting cleanliness check for {input_file}")
     try:
         # Initialize checker with parameters
-        checker = CleanlinessChecker(
+        # Process file and get basic results
+        results = analyze_file(
+            input_file,
             format=format,
             min_quality=min_quality,
             threads=threads,
             max_reads=max_reads,
-        )
-
-        # Process file and get basic results
-        results = checker.analyze_file(
-            input_file,
             count_pattern=count_pattern if format == "collapsed" else None,
         )
 
@@ -126,7 +123,9 @@ def handle_adapter_detection(
         validate_adapter_sequence(adapter)
 
         # Initialize detector with parameters
-        detector = AdapterDetector(
+        # Process file and get results
+        results = analyze_adapter_file(
+            input_file,
             adapter=adapter,
             format=format,
             min_overlap=min_overlap,
@@ -135,9 +134,6 @@ def handle_adapter_detection(
             count_pattern=count_pattern,
             max_reads=max_reads,
         )
-
-        # Process file and get results
-        results = detector.analyze_file(input_file)
 
         # Write report
         results.write_report(output)
@@ -264,7 +260,7 @@ def handle_extract_rpf(
         if star_index:
              # Whole Shebang Mode
              logger.info("=== Running 'Whole Shebang' Verification ===")
-             from .processors.consensus import TrimDecider
+             from .processors.consensus import decide_trim_consensus
              from dataclasses import asdict
              
              # Step A: Detect Architecture (Dry run on sample or just use extraction machinery)
@@ -297,8 +293,7 @@ def handle_extract_rpf(
              
              # Step C: Consensus
              logger.info("Step 3/3: Calculating consensus...")
-             decider = TrimDecider()
-             consensus = decider.decide(arch_data, align_data)
+             consensus = decide_trim_consensus(arch_data, align_data)
              
              logger.info(f"Alignment Verification Complete.")
              logger.info(f"Original Detection: 5' trim={arch_data.get('trim_recommendations', {}).get('recommended_5prime_trim')}")
@@ -388,7 +383,7 @@ def handle_decide_trim(
     """
     import json
     from dataclasses import asdict
-    from .processors.consensus import TrimDecider
+    from .processors.consensus import decide_trim_consensus
     
     logger.info(f"Starting consensus trim decision for {input_file}")
     
@@ -433,8 +428,7 @@ def handle_decide_trim(
         
         # 3. Consensus Decision
         logger.info("Step 3/3: calculating consensus parameters...")
-        decider = TrimDecider()
-        consensus = decider.decide(arch_data, align_data)
+        consensus = decide_trim_consensus(arch_data, align_data)
         
         # Write Output
         output_data = asdict(consensus)

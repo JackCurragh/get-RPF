@@ -15,7 +15,7 @@ from Bio import SeqIO
 
 from ...utils.file_utils import get_file_opener
 from .collapsed import parse_collapsed_fasta
-from .signals import SignalProcessor, SignalStats
+from .signals import SignalStats, empty_stats, process_reads
 
 # Base quality below this (mean Phred) at a low-entropy terminal position is
 # characteristic of 2-colour-chemistry dark cycles (poly-G), not a real
@@ -87,7 +87,6 @@ class SketchBuilder:
     def __init__(self, max_reads: int = 500_000, terminal_kmer_len: int = 4):
         self.max_reads = max_reads
         self.terminal_kmer_len = terminal_kmer_len
-        self.signal_processor = SignalProcessor()
 
     def build_from_file(
         self, input_path: Path, format: str, count_pattern: Optional[str] = None
@@ -103,14 +102,14 @@ class SketchBuilder:
             return Sketch(
                 length_distribution={},
                 sample_size=0,
-                pooled=self.signal_processor._empty_stats(),
+                pooled=empty_stats(),
             )
 
         length_distribution: Dict[int, int] = {}
         for r in reads:
             length_distribution[len(r)] = length_distribution.get(len(r), 0) + 1
 
-        pooled = self.signal_processor.process_reads(reads, compute_dinucleotide=False)
+        pooled = process_reads(reads, compute_dinucleotide=False)
 
         by_length: Dict[int, List[str]] = {}
         for r in reads:
@@ -120,7 +119,7 @@ class SketchBuilder:
         per_length_support: Dict[int, int] = {}
         for length, length_reads in by_length.items():
             per_length_support[length] = len(length_reads)
-            per_length[length] = self.signal_processor.process_reads(
+            per_length[length] = process_reads(
                 length_reads, compute_dinucleotide=False
             )
 
@@ -215,6 +214,18 @@ class SketchBuilder:
             return []
 
         return [(kmer, count / total) for kmer, count in counter.most_common(10)]
+
+
+def build_sketch(
+    input_path: Path,
+    format: str,
+    max_reads: int = 500_000,
+    count_pattern: Optional[str] = None,
+) -> Sketch:
+    """Build a bounded input sketch from a sequence file."""
+    return SketchBuilder(max_reads=max_reads).build_from_file(
+        input_path, format=format, count_pattern=count_pattern
+    )
 
 
 def classify_terminal_signal(

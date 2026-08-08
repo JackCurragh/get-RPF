@@ -1,7 +1,11 @@
 from collections import Counter
 
 from getRPF.core.processors.collapsed import TwoStageCollapser
-from getRPF.core.processors.rpf_extractor import RPFExtractor
+from getRPF.core.processors.matcher import MatchResult
+from getRPF.core.processors.rpf_extractor import (
+    RPFExtractor,
+    resolve_architecture_choice,
+)
 from getRPF.core.processors.types import ExtractionEmptyError, ReadArchitecture
 
 
@@ -31,21 +35,28 @@ def test_two_stage_collapser_can_apply_upper_length_bound():
 
 
 def test_adapter_prefix_match_finds_partial_adapter():
-    sequence = "A" * 32 + "TGGAATTCTC" + "C" * 18
+    sequence = "A" * 32 + "TGGAATTCTC"
     adapter = "TGGAATTCTCGGGTGCCAAGG"
 
     assert RPFExtractor._find_adapter_prefix(sequence, adapter) == 32
 
 
 def test_adapter_prefix_match_requires_minimum_overlap():
-    sequence = "A" * 32 + "TGGAATTC" + "C" * 20
+    sequence = "A" * 32 + "TGGAATTC"
+    adapter = "TGGAATTCTCGGGTGCCAAGG"
+
+    assert RPFExtractor._find_adapter_prefix(sequence, adapter) is None
+
+
+def test_adapter_prefix_match_rejects_internal_match():
+    sequence = "A" * 32 + "TGGAATTCTC" + "C" * 18
     adapter = "TGGAATTCTCGGGTGCCAAGG"
 
     assert RPFExtractor._find_adapter_prefix(sequence, adapter) is None
 
 
 def test_adapter_prefix_match_supports_short_observed_adapter():
-    sequence = "A" * 29 + "AGATCGGAG" + "C" * 20
+    sequence = "A" * 29 + "AGATCGGAG"
     adapter = "AGATCGGAG"
 
     assert RPFExtractor._find_adapter_prefix(sequence, adapter) == 29
@@ -96,6 +107,54 @@ def test_adapter_evidence_prefers_observed_protocol_over_generic_catalog():
     assert evidence[0]["protocol_name"] == "observed_truseq_21nt_3p_adapter"
     assert evidence[0]["hit_count"] == 2
     assert evidence[0]["hit_fraction"] == 2 / 3
+
+
+def test_specific_adapter_evidence_overrides_generic_strict_match():
+    generic = ReadArchitecture(
+        protocol_name="comprehensive_adapter_check",
+        lab_source="Generic",
+        umi_positions=[],
+        barcode_positions=[],
+        adapter_sequences=["AAAAAAAAAA"],
+        rpf_start=0,
+        rpf_end=-1,
+        expected_rpf_length=(20, 40),
+        quality_markers={},
+    )
+    riboflow = ReadArchitecture(
+        protocol_name="riboflow_template_switch",
+        lab_source="RiboFlow",
+        umi_positions=[(0, 12)],
+        barcode_positions=[],
+        adapter_sequences=["AAAAAAAAAACAAAAAAAAAA"],
+        rpf_start=16,
+        rpf_end=-1,
+        expected_rpf_length=(20, 40),
+        quality_markers={},
+    )
+    match = MatchResult(generic, True, 1.0, ["generic match"])
+    evidence = [
+        {
+            "architecture": riboflow,
+            "protocol_name": riboflow.protocol_name,
+            "adapter": riboflow.adapter_sequences[0],
+            "hit_count": 80,
+            "hit_fraction": 0.8,
+        },
+        {
+            "architecture": generic,
+            "protocol_name": generic.protocol_name,
+            "adapter": generic.adapter_sequences[0],
+            "hit_count": 80,
+            "hit_fraction": 0.8,
+        },
+    ]
+
+    architecture, method, trace = resolve_architecture_choice(match, evidence)
+
+    assert architecture is riboflow
+    assert method == "adapter_evidence_match"
+    assert "riboflow_template_switch" in trace[0]
 
 
 def test_adapter_reporting_flags_unsupported_selected_architecture_conflict():
@@ -179,6 +238,32 @@ def test_pretrimmed_length_filter_policy_requires_footprint_like_reads():
     assert extractor._looks_pretrimmed(long_profile) is False
 
 
+def test_length_profile_surfaces_disome_candidate_lengths_without_filtering():
+    extractor = RPFExtractor()
+
+    profile = extractor._length_profile(["A" * 60] * 80 + ["C" * 30] * 20)
+
+    assert profile["frac_50_80"] == 0.8
+    warnings = extractor._extraction_warnings(
+        {"retained_fraction": 1.0, "extracted_length_profile": profile}
+    )
+    assert "disome_like_length_distribution" in warnings
+
+
+def test_disome_candidate_lengths_require_explicit_policy_review():
+    extractor = RPFExtractor()
+    report = {"adapter_conflict": {"has_conflict": False}}
+
+    assert (
+        extractor._extraction_class(
+            "adapter_evidence_match",
+            report,
+            ["disome_like_length_distribution"],
+        )
+        == "needs_length_policy_review"
+    )
+
+
 def test_extract_rpfs_reports_pretrimmed_length_filter_without_seqspec(tmp_path):
     input_file = tmp_path / "pretrimmed.fastq"
     reads = []
@@ -247,6 +332,77 @@ def test_extract_rpfs_trims_only_post_rpf_adapter_for_dual_ligation(tmp_path):
     assert result.extracted_rpfs == 20
     assert result.quality_metrics["unique_extracted_sequences"] == 1
     assert (tmp_path / "out.collapsed.fa").read_text().splitlines()[1] == rpf
+
+
+def test_extract_rpfs_removes_post_rpf_technical_bases(tmp_path):
+    input_file = tmp_path / "post_rpf_technical.fastq"
+    rpf = "ACGTACGTACGTACGTACGTACGTACGT"
+    technical_tail = "NNNNN".replace("N", "A") + "CCCCC"
+    adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
+    reads = [rpf + technical_tail + adapter] * 12
+    input_file.write_text(
+        "".join(f"@r{i}\n{s}\n+\n{'I' * len(s)}\n" for i, s in enumerate(reads))
+    )
+
+    extractor = RPFExtractor()
+    stats = extractor._extract_rpfs_from_reads(
+        input_file=input_file,
+        output_file=tmp_path / "out.fastq",
+        segments=[],
+        format="fastq",
+        max_reads=None,
+        adapters=[adapter],
+        post_rpf_trim_bases=10,
+        collapsed_only=True,
+    )
+
+    assert stats["extracted_rpfs"] == 12
+    assert stats["extracted_length_profile"]["mode_length"] == len(rpf)
+
+
+def test_terminal_override_does_not_cut_rpf_when_adapter_is_known(tmp_path):
+    input_file = tmp_path / "known_adapter_with_override.fastq"
+    rpf = "ACGTACGTACGTACGTACGTACGTACGT"
+    adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
+    reads = [rpf + adapter] * 12
+    input_file.write_text(
+        "".join(f"@r{i}\n{s}\n+\n{'I' * len(s)}\n" for i, s in enumerate(reads))
+    )
+
+    stats = RPFExtractor()._extract_rpfs_from_reads(
+        input_file=input_file,
+        output_file=tmp_path / "out.fastq",
+        segments=[],
+        format="fastq",
+        max_reads=None,
+        adapters=[adapter],
+        override_trims={len(reads[0]): {"trim_5p": 0, "trim_3p": 1}},
+        collapsed_only=True,
+    )
+
+    assert stats["extracted_length_profile"]["mode_length"] == len(rpf)
+
+
+def test_terminal_override_trims_tail_when_no_adapter_is_found(tmp_path):
+    input_file = tmp_path / "unknown_adapter_with_override.fastq"
+    rpf = "ACGTACGTACGTACGTACGTACGTACGT"
+    reads = [rpf + "AAA"] * 12
+    input_file.write_text(
+        "".join(f"@r{i}\n{s}\n+\n{'I' * len(s)}\n" for i, s in enumerate(reads))
+    )
+
+    stats = RPFExtractor()._extract_rpfs_from_reads(
+        input_file=input_file,
+        output_file=tmp_path / "out.fastq",
+        segments=[],
+        format="fastq",
+        max_reads=None,
+        adapters=["AGATCGGAAGAGCACACGTCT"],
+        override_trims={len(reads[0]): {"trim_5p": 0, "trim_3p": 3}},
+        collapsed_only=True,
+    )
+
+    assert stats["extracted_length_profile"]["mode_length"] == len(rpf)
 
 
 def test_pretrimmed_length_filter_has_no_adapter_conflict():

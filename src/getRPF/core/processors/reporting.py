@@ -5,10 +5,8 @@ Generates:
 2. Lightweight, interactive HTML reports (FastQC-style).
 """
 
-import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from dataclasses import asdict
+from typing import List
 
 from .signals import SignalStats
 from .types import SegmentInfo, ReadArchitecture
@@ -158,3 +156,25 @@ class Reporter:
             left_pct = i * width_pct
             bars += f'<div class="bar" style="left: {left_pct}%; width: {width_pct}%; height: {height_pct}%;" title="Pos {i}: {val:.2f}"></div>'
         return bars
+
+
+def generate_cli_report(
+    architecture: ReadArchitecture,
+    segments: List[SegmentInfo],
+    stats: SignalStats,
+) -> str:
+    """Generate the extraction summary shown in CLI logs."""
+    return Reporter().generate_cli_report(architecture, segments, stats)
+
+
+def write_html_report(
+    output_path: Path,
+    architecture: ReadArchitecture,
+    segments: List[SegmentInfo],
+    stats: SignalStats,
+    trace_log: List[str],
+) -> None:
+    """Write the standalone extraction report used for investigation."""
+    Reporter().generate_html_report(
+        output_path, architecture, segments, stats, trace_log
+    )

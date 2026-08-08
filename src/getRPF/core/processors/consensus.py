@@ -24,70 +24,74 @@ class TrimConsensus:
     details: Dict[str, Any]
 
 class TrimDecider:
-    """Decides on trim parameters by comparing architecture and alignment data."""
-    
+    """Compatibility wrapper for :func:`decide_trim_consensus`."""
+
     def decide(
         self, 
         architecture_result: Dict[str, Any], 
         alignment_result: Dict[str, Any]
     ) -> TrimConsensus:
-        """Derive consensus trim parameters."""
-        
-        # Extract Architecture Recommendations
-        arch_recs = architecture_result.get("trim_recommendations", {})
-        arch_5p = arch_recs.get("recommended_5prime_trim", 0)
-        arch_3p = arch_recs.get("recommended_3prime_trim", 0)
-        arch_adapter = arch_recs.get("three_prime_adapter")
-        arch_match = architecture_result.get("architecture_match")
-        
-        # Extract Alignment Recommendations
-        align_recs = alignment_result.get("trim_recommendations", {})
-        align_5p = align_recs.get("recommended_5prime_trim", 0)
-        align_3p = align_recs.get("recommended_3prime_trim", 0)
-        align_consensus = align_recs.get("consensus_level", 0.0)
-        global_align_pattern = align_recs.get("global_pattern_detected", False)
+        return decide_trim_consensus(architecture_result, alignment_result)
 
-        # 1. 5' Trim Decision
-        final_5p = 0
-        method_5p = "unknown"
-        
-        if arch_5p == align_5p:
-            # perfect agreement
-            final_5p = arch_5p
-            method_5p = "agreement"
-        elif arch_match and arch_5p > 0:
-            # Trust known architecture over alignment noise if explicit match
-            final_5p = arch_5p
-            method_5p = "architecture_dominant"
-        elif global_align_pattern and align_consensus > 0.8:
-            # Strong alignment signal overrides generic architecture
-            final_5p = align_5p
-            method_5p = "alignment_dominant"
-        else:
-            # Fallback to safer option (usually architecture if detected, or 0)
-            final_5p = arch_5p if arch_match else align_5p
-            method_5p = "fallback"
 
-        # 2. 3' Trim Decision (Adapter vs Fixed)
-        final_3p = 0
-        final_adapter = arch_adapter
-        
-        # Comparison Logic
-        details = {
-            "sources": {
-                "architecture": {"5p": arch_5p, "3p": arch_3p, "match": arch_match},
-                "alignment": {"5p": align_5p, "3p": align_3p, "consensus": align_consensus}
+def decide_trim_consensus(
+    architecture_result: Dict[str, Any],
+    alignment_result: Dict[str, Any],
+) -> TrimConsensus:
+    """Derive trim parameters from architecture and alignment evidence.
+
+    This is intentionally a function: the decision has no mutable state and
+    depends only on its two evidence objects. ``TrimDecider`` remains above as
+    a compatibility wrapper for callers using the original API.
+    """
+    architecture_recommendations = architecture_result.get("trim_recommendations", {})
+    architecture_5p = architecture_recommendations.get("recommended_5prime_trim", 0)
+    architecture_3p = architecture_recommendations.get("recommended_3prime_trim", 0)
+    architecture_adapter = architecture_recommendations.get("three_prime_adapter")
+    architecture_match = architecture_result.get("architecture_match")
+
+    alignment_recommendations = alignment_result.get("trim_recommendations", {})
+    alignment_5p = alignment_recommendations.get("recommended_5prime_trim", 0)
+    alignment_3p = alignment_recommendations.get("recommended_3prime_trim", 0)
+    alignment_consensus = alignment_recommendations.get("consensus_level", 0.0)
+    global_alignment_pattern = alignment_recommendations.get(
+        "global_pattern_detected", False
+    )
+
+    if architecture_5p == alignment_5p:
+        final_5p = architecture_5p
+        method_5p = "agreement"
+    elif architecture_match and architecture_5p > 0:
+        final_5p = architecture_5p
+        method_5p = "architecture_dominant"
+    elif global_alignment_pattern and alignment_consensus > 0.8:
+        final_5p = alignment_5p
+        method_5p = "alignment_dominant"
+    else:
+        final_5p = architecture_5p if architecture_match else alignment_5p
+        method_5p = "fallback"
+
+    details = {
+        "sources": {
+            "architecture": {
+                "5p": architecture_5p,
+                "3p": architecture_3p,
+                "match": architecture_match,
             },
-            "decisions": {
-                "5p_logic": method_5p
-            }
-        }
-        
-        return TrimConsensus(
-            trim_5p=final_5p,
-            trim_3p=final_3p, # Usually 0 if adapter handled
-            adapter_sequence=final_adapter,
-            confidence=0.9 if method_5p == "agreement" else 0.7,
-            method="combined_consensus",
-            details=details
-        )
+            "alignment": {
+                "5p": alignment_5p,
+                "3p": alignment_3p,
+                "consensus": alignment_consensus,
+            },
+        },
+        "decisions": {"5p_logic": method_5p},
+    }
+
+    return TrimConsensus(
+        trim_5p=final_5p,
+        trim_3p=0,
+        adapter_sequence=architecture_adapter,
+        confidence=0.9 if method_5p == "agreement" else 0.7,
+        method="combined_consensus",
+        details=details,
+    )

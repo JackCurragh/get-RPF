@@ -7,7 +7,7 @@ This module implements an HMM-based segmenter to identify read components
 import math
 import logging
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
 from .signals import SignalStats
 from .types import SegmentInfo
 
@@ -74,72 +74,46 @@ class ProbabilisticSegmenter:
         if not obs_seq:
             return []
             
-        # Viterbi Algorithm
-        # T = sequence length
-        # N = number of states
+        return self._path_to_segments(self._viterbi_path(obs_seq))
+
+    def _viterbi_path(self, obs_seq: List[Dict]) -> List[int]:
+        """Decode the highest-scoring state at every observed position."""
         T = len(obs_seq)
-        N = 6 
-        
-        # log_prob matrix: T x N
-        # path matrix: T x N (stores backpointers)
+        if not T:
+            return []
+
+        N = len(STATE_NAMES)
         viterbi = [[-float('inf')] * N for _ in range(T)]
         backpointer = [[0] * N for _ in range(T)]
-        
-        # Initialization (t=0)
-        # Adaptive start prior: if early entropy is high, favor UMI; otherwise favor RPF.
-        # This keeps behavior sensible across protocols without a fixed bias.
-        early_k = min(5, len(obs_seq))
-        early_entropy = sum(o["entropy"] for o in obs_seq[:early_k]) / max(1, early_k)
-        # Map entropy (~0..2) → prior in [0.05, 0.95]
-        def sigmoid(x):
-            return 1.0 / (1.0 + math.exp(-x))
-        umi_prior = 0.05 + 0.90 * sigmoid((early_entropy - 1.3) / 0.3)
-        rpf_prior = max(1e-6, 1.0 - umi_prior)
-        viterbi[0][STATE_UMI] = math.log(umi_prior) + self._log_emission(STATE_UMI, obs_seq[0])
-        viterbi[0][STATE_RPF] = math.log(rpf_prior) + self._log_emission(STATE_RPF, obs_seq[0])
-        # Allow barcode start? Let's treat Barcode same as UMI for now structure-wise or just after UMI.
-        
-        # Iteration
-        for t in range(1, T):
-            for s in range(N):
-                # Find best transition to state s
-                max_tr_prob = -float('inf')
-                best_prev_s = -1
-                
-                for prev_s in range(N):
-                    # Transition probability prev_s -> s
-                    tr_prob = self._log_transition(prev_s, s, t)
-                    
-                    prob = viterbi[t-1][prev_s] + tr_prob
-                    if prob > max_tr_prob:
-                        max_tr_prob = prob
-                        best_prev_s = prev_s
-                
-                # Multiply by emission probability
-                emission_prob = self._log_emission(s, obs_seq[t])
-                viterbi[t][s] = max_tr_prob + emission_prob
-                backpointer[t][s] = best_prev_s
 
-        # Termination
-        # Best final state (likely ADAPTER or RPF or END)
-        max_final_prob = -float('inf')
-        best_last_state = -1
-        
-        for s in range(N):
-            if viterbi[T-1][s] > max_final_prob:
-                max_final_prob = viterbi[T-1][s]
-                best_last_state = s
-                
-        # Backtracking
-        best_path = [best_last_state]
-        for t in range(T-1, 0, -1):
-            prev_s = backpointer[t][best_path[-1]]
-            best_path.append(prev_s)
-            
-        best_path = best_path[::-1] # Reverse
-        
-        # Convert path to SegmentInfo
-        return self._path_to_segments(best_path)
+        # Adaptive start prior: high early entropy favours a UMI, otherwise RPF.
+        early_k = min(5, T)
+        early_entropy = sum(o["entropy"] for o in obs_seq[:early_k]) / early_k
+        umi_prior = 0.05 + 0.90 / (1.0 + math.exp(-(early_entropy - 1.3) / 0.3))
+        rpf_prior = max(1e-6, 1.0 - umi_prior)
+        viterbi[0][STATE_UMI] = math.log(umi_prior) + self._log_emission(
+            STATE_UMI, obs_seq[0]
+        )
+        viterbi[0][STATE_RPF] = math.log(rpf_prior) + self._log_emission(
+            STATE_RPF, obs_seq[0]
+        )
+
+        for t in range(1, T):
+            for state in range(N):
+                candidates = [
+                    viterbi[t - 1][previous] + self._log_transition(previous, state, t)
+                    for previous in range(N)
+                ]
+                best_previous = max(range(N), key=candidates.__getitem__)
+                viterbi[t][state] = candidates[best_previous] + self._log_emission(
+                    state, obs_seq[t]
+                )
+                backpointer[t][state] = best_previous
+
+        path = [max(range(N), key=viterbi[-1].__getitem__)]
+        for t in range(T - 1, 0, -1):
+            path.append(backpointer[t][path[-1]])
+        return path[::-1]
 
     # --- New: Viterbi + Forward-Backward posteriors for visualization ---
     def decode_with_posteriors(self, stats: SignalStats):
@@ -195,10 +169,10 @@ class ProbabilisticSegmenter:
             gammas = [g / ssum for g in gammas]
             post.append(gammas)
 
-        # Viterbi path and segments for reference
-        segments = self.segment(stats)
-
-        return [max(range(N), key=lambda s: fwd[T-1][s])], post, segments
+        # Keep the diagnostic path aligned with the posterior positions. The
+        # previous implementation returned only the best terminal state.
+        viterbi_path = self._viterbi_path(obs_seq)
+        return viterbi_path, post, self._path_to_segments(viterbi_path)
 
     def _prepare_observations(self, stats: SignalStats) -> List[Dict]:
         """Convert stats to observation sequence."""
@@ -318,3 +292,19 @@ class ProbabilisticSegmenter:
                  segments.append(seg)
                  
         return segments
+
+
+def segment_reads(
+    stats: SignalStats, config: Optional[SegmenterConfig] = None
+) -> List[SegmentInfo]:
+    """Infer read segments from signal statistics using the HMM segmenter."""
+    return ProbabilisticSegmenter(config or SegmenterConfig()).segment(stats)
+
+
+def decode_segments_with_posteriors(
+    stats: SignalStats, config: Optional[SegmenterConfig] = None
+):
+    """Return HMM state posteriors and decoded segments for visualization."""
+    return ProbabilisticSegmenter(config or SegmenterConfig()).decode_with_posteriors(
+        stats
+    )

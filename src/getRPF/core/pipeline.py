@@ -132,6 +132,12 @@ def run_sample(
         known_adapters=_known_adapters(extractor),
     )
 
+    analysis_reads = [
+        read
+        for reads_at_length in sketch.per_length_reads.values()
+        for read in reads_at_length
+    ][:50_000]
+
     if override_trims is not None:
         applied_rules = [
             override_rule_record(length, rule.get("trim_3p", 0))
@@ -151,6 +157,7 @@ def run_sample(
         generate_seqspec=generate_seqspec,
         collapse_output=collapse_output, collapsed_only=collapsed_only,
         override_trims=trims_to_apply,
+        sample_reads=analysis_reads,
     )
 
     self_consistency = check_self_consistency(sketch, trims_to_apply or {})

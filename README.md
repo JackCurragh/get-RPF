@@ -3,19 +3,17 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-getRPF is a comprehensive tool for automated analysis and extraction of Ribosome Protected Fragments (RPFs) from Ribo-seq experiments. It combines intelligent architecture detection, quality assessment, and extensible protocol support to handle diverse ribosome profiling datasets at scale.
+getRPF extracts ribosome-protected fragments (RPFs) from Ribo-seq reads. It detects read architectures, trims technical sequence, checks input quality, and reports the decisions made during extraction.
 
-## 🚀 Key Features
+## Key features
 
-- **🔍 Automated Architecture Detection**: Pattern matching against known protocols + de novo detection for novel structures
-- **📊 Comprehensive Quality Assessment**: Multi-dimensional cleanliness checking with failure categorization
-- **🧬 seqspec Integration**: Load novel protocols from standard seqspec files for unlimited extensibility  
-- **⚡ Scalable Processing**: Designed to handle thousands of samples with efficient batch processing workflows
-- **⚡ Scalable Processing**: Designed to handle thousands of samples with efficient batch processing workflows
-- **📈 Insightful Reporting**: Interactive HTML reports with architecture flowcharts and alignment sparklines
-- **🧠 Intelligent Detection**: Strict pattern matching + Probabilistic HMM segmentation for novel reads
+- Architecture detection using known protocols, observed patterns, and de novo segmentation
+- Quality checks with categorized failure reports
+- Loading custom protocols from seqspec files
+- Extraction reports containing counts, read-length distributions, and trimming decisions
+- FASTQ, FASTA, and collapsed-read input
 
-## 📋 Table of Contents
+## Table of contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -26,7 +24,7 @@ getRPF is a comprehensive tool for automated analysis and extraction of Ribosome
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
-## 🔧 Installation
+## Installation
 
 ### Prerequisites
 
@@ -38,7 +36,7 @@ getRPF is a comprehensive tool for automated analysis and extraction of Ribosome
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/getRPF.git
+git clone https://github.com/JackCurragh/get-RPF.git
 cd getRPF
 
 # Install in development mode
@@ -59,7 +57,7 @@ conda activate getrf
 pip install -e .
 ```
 
-## 🚀 Quick Start
+## Quick start
 
 ### 1. Basic RPF Extraction
 
@@ -82,8 +80,8 @@ Check if your data is clean and ready for analysis:
 getRPF check-cleanliness sample.fastq -f fastq -o reports/
 
 # Result examples:
-# ✅ CLEAN: sample.fastq passed all cleanliness checks  
-# ❌ NEEDS_SEQSPEC: Primary failure: end_bias
+# CLEAN: sample.fastq passed all cleanliness checks
+# NEEDS_SEQSPEC: Primary failure: end_bias
 ```
 
 ### 3. Novel Protocol Support
@@ -115,9 +113,9 @@ getRPF detect-architecture input.fastq output.fastq --generate-seqspec
 # - Decision trace to understand why a specific architecture was inferred
 ```
 
-## 📋 Commands Overview
+## Commands overview
 
-getRPF provides five main commands for different aspects of RPF analysis:
+getRPF provides commands for extraction, quality assessment, architecture detection, and adapter analysis.
 
 
 | Command | Purpose | Use Case |
@@ -128,7 +126,7 @@ getRPF provides five main commands for different aspects of RPF analysis:
 | `detect-adapter` | Adapter sequence detection | Contamination analysis |
 | `align-detect` | STAR alignment + feature detection | Alignment-based quality checks |
 
-## 🔄 User Workflows
+## User workflows
 
 ### Workflow 1: Single Clean Sample
 
@@ -148,9 +146,9 @@ getRPF extract-rpf sample.fastq rpfs.fastq -f fastq --generate-seqspec
 #    - rpfs.extraction_report.json (statistics)
 ```
 
-### Workflow 2: Large-Scale Quality Screening (Recommended for 4k+ samples)
+### Workflow 2: Batch quality screening
 
-Process thousands of samples efficiently:
+Process a directory of samples:
 
 ```bash
 # 1. Batch quality screening
@@ -237,7 +235,7 @@ echo "=== Analysis Complete ==="
 echo "Results in: $OUTPUT_DIR/"
 ```
 
-## 📁 Input/Output Formats
+## Input and output formats
 
 ### Supported Input Formats
 
@@ -267,7 +265,7 @@ GCGATCGCTAGCGATCGCTAGCA
 
 ### Output Files
 
-getRPF generates several output files for comprehensive analysis:
+The main output files are:
 
 ```
 analysis_results/
@@ -279,7 +277,7 @@ analysis_results/
 └── adapter_report.txt                  # Adapter contamination analysis
 ```
 
-## 🔧 Advanced Usage
+## Advanced usage
 
 ### Custom Architecture Databases
 
@@ -310,7 +308,7 @@ parallel -j 8 getRPF extract-rpf {} {.}_rpfs.fastq -f fastq ::: samples/*.fastq
 
 ### Integration with Other Tools
 
-getRPF works seamlessly with standard bioinformatics tools:
+The output can be passed to standard bioinformatics tools, for example:
 
 ```bash
 # Combine with cutadapt for pre-processing
@@ -326,9 +324,9 @@ getRPF extract-rpf input.fastq rpfs.fastq -f fastq
 fastqc rpfs.fastq
 ```
 
-## 🔍 Quality Assessment Details
+## Quality assessment details
 
-getRPF implements comprehensive quality checks to ensure clean RPF data:
+The cleanliness checks cover:
 
 ### Cleanliness Criteria (All Must Pass)
 
@@ -347,9 +345,9 @@ Failed samples are automatically categorized for efficient batch processing:
 - **`low_complexity_failures/`**: Repetitive sequences → Contamination or degradation
 - **`base_composition_failures/`**: Positional bias → Systematic sequencing artifacts
 
-## 🧬 seqspec Integration
+## seqspec integration
 
-getRPF supports the standard seqspec format for unlimited protocol extensibility:
+Custom protocols can be described with the standard seqspec format:
 
 ### Creating seqspec Files
 
@@ -398,7 +396,7 @@ getRPF extract-rpf input.fastq output.fastq -f fastq --seqspec-dir my_protocols/
 # 4. Uses best-matching protocol for extraction
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -451,7 +449,7 @@ parallel -j 4 getRPF extract-rpf {} {.}_rpfs.fastq -f fastq ::: *.fastq
 getRPF extract-rpf input.fasta output.fastq -f collapsed
 ```
 
-## 📊 Output Interpretation
+## Output interpretation
 
 ### Extraction Report Example
 
@@ -492,14 +490,14 @@ base_composition               [PASS]
 gc_content                     [PASS]
 ```
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/getRPF.git
+git clone https://github.com/JackCurragh/get-RPF.git
 cd getRPF
 pip install -e .[dev]
 
@@ -514,30 +512,30 @@ isort src/ tests/
 mypy src/
 ```
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
-## 📚 Citation
+## Citation
 
 If you use getRPF in your research, please cite:
 
 ```bibtex
 @software{getRPF,
   title={getRPF: Automated Ribosome Protected Fragment Analysis},
-  author={Your Name},
+  author={Curragh, Jack},
   year={2024},
-  url={https://github.com/yourusername/getRPF}
+  url={https://github.com/JackCurragh/get-RPF}
 }
 ```
 
-## 🔗 Links
+## Links
 
 - **Documentation**: [Full documentation](https://getRPF.readthedocs.io)
-- **Bug Reports**: [GitHub Issues](https://github.com/yourusername/getRPF/issues)
+- **Bug reports**: [GitHub Issues](https://github.com/JackCurragh/get-RPF/issues)
 - **seqspec Format**: [Lior Pachter Lab](https://pachterlab.github.io/seqspec/)
 - **Ribo-seq Resources**: [Ribo-seq.org](https://ribo-seq.org)
 
 ---
 
-**getRPF** - Making ribosome profiling analysis accessible, scalable, and extensible. 🧬✨
+**getRPF** is maintained as part of the Ribo-seq analysis workflow developed by the Ensembl genebuild team.

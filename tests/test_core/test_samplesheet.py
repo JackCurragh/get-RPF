@@ -3,9 +3,16 @@
 Covers docs/release_qc_and_terminal_trimming_plan.md Milestone M6.
 """
 
-from getRPF.core.samplesheet import run_cohort
+from pathlib import Path
+
+from getRPF.core.samplesheet import _infer_format, run_cohort
 
 BASES = "ACGT"
+
+
+def test_samplesheet_infers_collapsed_fasta_format():
+    assert _infer_format(Path("sample.collapsed.fa")) == "collapsed"
+    assert _infer_format(Path("sample.fasta")) == "fasta"
 
 
 def _cycled_seq(i: int, length: int) -> str:

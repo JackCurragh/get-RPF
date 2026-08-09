@@ -77,6 +77,8 @@ def parse_samplesheet(path: Path) -> List[SampleSheetRow]:
 
 def _infer_format(fastq_path: Path) -> str:
     suffixes = "".join(fastq_path.suffixes).lower()
+    if "collapsed" in suffixes:
+        return "collapsed"
     if "fasta" in suffixes or suffixes.endswith((".fa", ".fa.gz")):
         return "fasta"
     return "fastq"

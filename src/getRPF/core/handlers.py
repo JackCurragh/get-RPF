@@ -59,8 +59,8 @@ def handle_cleanliness_check(
         results = analyze_file(
             input_file,
             format=format,
-            min_quality=min_quality,
-            threads=threads,
+            min_quality=20 if min_quality is None else min_quality,
+            threads=1 if threads is None else threads,
             max_reads=max_reads,
             count_pattern=count_pattern if format == "collapsed" else None,
         )
@@ -128,9 +128,9 @@ def handle_adapter_detection(
             input_file,
             adapter=adapter,
             format=format,
-            min_overlap=min_overlap,
-            max_mismatches=max_mismatches,
-            threads=threads,
+            min_overlap=10 if min_overlap is None else min_overlap,
+            max_mismatches=1 if max_mismatches is None else max_mismatches,
+            threads=1 if threads is None else threads,
             count_pattern=count_pattern,
             max_reads=max_reads,
         )

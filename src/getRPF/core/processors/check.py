@@ -123,9 +123,11 @@ class CleanlinessChecker:
             CleanlinessResults object containing analysis results
         """
         # Initialize counters
-        length_dist = {}
-        nuc_freqs = {nt: [] for nt in "ACGT"}
-        quality_scores = {} if self.format == "fastq" else None
+        length_dist: Dict[int, int] = {}
+        nuc_freqs: Dict[str, List[float]] = {nt: [] for nt in "ACGT"}
+        quality_scores: Optional[Dict[int, List[float]]] = (
+            {} if self.format == "fastq" else None
+        )
         gc_count = 0
         total_bases = 0
         reads_sample: List[str] = []
@@ -192,7 +194,9 @@ class CleanlinessChecker:
                     if len(reads_sample) < MAX_SIGNAL_READS:
                         reads_sample.append(seq_str)
 
-                    if self.format == "fastq" and hasattr(record, "letter_annotations"):
+                    if quality_scores is not None and hasattr(
+                        record, "letter_annotations"
+                    ):
                         phred_scores = record.letter_annotations.get(
                             "phred_quality", []
                         )

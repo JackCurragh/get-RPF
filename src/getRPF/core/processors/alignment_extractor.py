@@ -20,7 +20,7 @@ import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import yaml
 
@@ -80,7 +80,7 @@ class TrimBoundaries:
 
     consensus_5p: int
     consensus_3p: int
-    per_length: Dict[int, Dict[str, int]]
+    per_length: Dict[int, Dict[str, Any]]
     confidence: str
 
     def to_dict(self) -> Dict:
@@ -248,7 +248,7 @@ class AlignmentBasedExtractor:
         logger.info("Phase 2/4: Characterizing sample...")
 
         # 2a. Adapter scan (informational only)
-        adapter_info = None
+        adapter_info: Optional[AdapterInfo] = None
         if report_adapters:
             logger.info("  Scanning for known adapters...")
             adapter_info = self._scan_adapters(subset_reads)
@@ -258,8 +258,8 @@ class AlignmentBasedExtractor:
             else:
                 logger.info("    No known adapters detected")
 
-        bam_file = None
-        alignment_result = None
+        bam_file: Optional[Path] = None
+        alignment_result: Optional[Dict[str, Any]] = None
         is_trimmed_alignment = False
 
         # PATH 1: Trim-then-Align (Prioritized)
@@ -296,6 +296,8 @@ class AlignmentBasedExtractor:
                 f"({alignment_result['alignment_rate']:.1%})"
             )
 
+        assert bam_file is not None and alignment_result is not None
+
         # Phase 2c. Analyze soft-clipping on the CHOSEN BAM
         logger.info("  Analyzing soft-clipping patterns...")
         boundaries = self._analyze_soft_clipping(bam_file)
@@ -306,6 +308,7 @@ class AlignmentBasedExtractor:
         # Phase 3: Structure Learning
         logger.info("Phase 3/4: Learning read structure (per-position entropy)...")
         if is_trimmed_alignment:
+            assert adapter_info is not None  # only PATH 1 sets this flag
             # We aligned trimmed reads, so the 3' end should show NO soft-clips (ideally)
             # We need to construct the structure manually to include the adapter we removed
 
@@ -493,7 +496,7 @@ class AlignmentBasedExtractor:
 
     def _scan_adapters(self, reads: List[Tuple[str, str]]) -> AdapterInfo:
         """Scan for known adapters (informational only)."""
-        adapter_hits = defaultdict(list)
+        adapter_hits: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         reads_with_adapter = set()
 
         for adapter_name, adapter_seq in self.adapters:
@@ -510,11 +513,11 @@ class AlignmentBasedExtractor:
                     )
                     reads_with_adapter.add(read_id)
 
-        detected = []
+        detected: List[Dict[str, Any]] = []
         for adapter_name, hits in adapter_hits.items():
             frequency = len(hits) / len(reads)
             if frequency > 0.10:
-                positions = [h["position"] for h in hits]
+                positions: List[float] = [h["position"] for h in hits]
                 detected.append(
                     {
                         "name": adapter_name,
@@ -529,7 +532,7 @@ class AlignmentBasedExtractor:
                     }
                 )
 
-        detected.sort(key=lambda x: x["frequency"], reverse=True)
+        detected.sort(key=lambda x: float(x["frequency"]), reverse=True)
         no_adapter_fraction = 1.0 - (len(reads_with_adapter) / len(reads))
 
         return AdapterInfo(
@@ -681,11 +684,13 @@ class AlignmentBasedExtractor:
         MIN_RPF_LENGTH = 20
         MAX_RPF_LENGTH = 40
 
-        clip_5p = Counter()
-        clip_3p = Counter()
-        per_length_clips = defaultdict(lambda: {"5p": [], "3p": []})
+        clip_5p: Counter = Counter()
+        clip_3p: Counter = Counter()
+        per_length_clips: Dict[int, Dict[str, List[int]]] = defaultdict(
+            lambda: {"5p": [], "3p": []}
+        )
 
-        with pysam.AlignmentFile(bam_file, "rb") as bam:
+        with pysam.AlignmentFile(str(bam_file), "rb") as bam:
             for read in bam:
                 if read.is_unmapped:
                     continue
@@ -800,16 +805,16 @@ class AlignmentBasedExtractor:
         # Step 1: Extract soft-clip sequences
         # 5' clips: grouped by length, aligned from 5' end (forward)
         # 3' clips: ALL clips collected, will be aligned from 3' end (reversed)
-        clips_5p_by_length = defaultdict(list)  # length -> list of sequences
-        clips_3p_all = []  # All 3' clips (variable length)
-        rpf_lengths = Counter()
+        clips_5p_by_length: Dict[int, List[str]] = defaultdict(list)
+        clips_3p_all: List[str] = []  # All 3' clips (variable length)
+        rpf_lengths: Counter = Counter()
 
-        with pysam.AlignmentFile(bam_file, "rb") as bam:
+        with pysam.AlignmentFile(str(bam_file), "rb") as bam:
             for read in bam:
-                if read.is_unmapped or not read.cigartuples:
+                seq = read.query_sequence
+                if read.is_unmapped or not read.cigartuples or seq is None:
                     continue
 
-                seq = read.query_sequence
                 cigar = read.cigartuples
 
                 # Track aligned (RPF) length
@@ -842,11 +847,15 @@ class AlignmentBasedExtractor:
         # Step 2: Find dominant 5' clip length (need sufficient coverage)
         dominant_5p_len = self._find_dominant_length(clips_5p_by_length, min_coverage)
 
-        validation_warnings = []
+        validation_warnings: List[str] = []
 
         # Step 3: Classify 5' region (aligned from 5' end - forward)
         five_prime = self._classify_region_5prime(
-            clips_5p_by_length.get(dominant_5p_len, []),
+            (
+                []
+                if dominant_5p_len is None
+                else clips_5p_by_length.get(dominant_5p_len, [])
+            ),
             dominant_5p_len,
             validation_warnings,
             min_coverage,
@@ -859,7 +868,7 @@ class AlignmentBasedExtractor:
 
         # Step 5: Determine overall confidence
         if five_prime.confidence > 0.8 and three_prime.confidence > 0.8:
-            overall_confidence = "high"
+            overall_confidence: Literal["high", "medium", "low"] = "high"
         elif five_prime.confidence > 0.5 or three_prime.confidence > 0.5:
             overall_confidence = "medium"
         else:

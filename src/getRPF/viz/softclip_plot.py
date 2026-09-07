@@ -117,16 +117,14 @@ def _compute_clip_distributions_from_bam(bam_path: Path):
 
         # Convert to fractions per row
         with np.errstate(divide="ignore", invalid="ignore"):
-            heat5 = heat5 / counts[:, None]
-            heat3 = heat3 / counts[:, None]
-            heat5 = np.nan_to_num(heat5)
-            heat3 = np.nan_to_num(heat3)
+            frac5 = np.nan_to_num(heat5 / counts[:, None])
+            frac3 = np.nan_to_num(heat3 / counts[:, None])
 
         return {
             "min_len": int(min_len),
             "max_len": int(max_len),
-            "heat5": heat5,
-            "heat3": heat3,
+            "heat5": frac5,
+            "heat3": frac3,
         }
 
 
@@ -155,17 +153,18 @@ def plot_softclips(
         rec3.append(row.get("3prime_trim", 0))
 
     # Sort by length for nice plotting
-    idx = np.argsort(lengths) if lengths else []
-    lengths = np.array(lengths)[idx] if len(idx) else np.array([])
-    mean5 = np.array(mean5)[idx] if len(idx) else np.array([])
-    mean3 = np.array(mean3)[idx] if len(idx) else np.array([])
-    rec5 = np.array(rec5)[idx] if len(idx) else np.array([])
-    rec3 = np.array(rec3)[idx] if len(idx) else np.array([])
+    order = np.argsort(lengths) if lengths else np.array([], dtype=int)
+    if order.size:
+        len_a = np.array(lengths)[order]
+        mean5_a, mean3_a = np.array(mean5)[order], np.array(mean3)[order]
+        rec5_a, rec3_a = np.array(rec5)[order], np.array(rec3)[order]
+    else:
+        len_a = mean5_a = mean3_a = rec5_a = rec3_a = np.array([])
 
     # If no per-length JSON but we do have BAM, render heatmap-only layout
-    has_heatmap = heatmap and (bam_path is not None)
-    if lengths.size == 0 and has_heatmap:
-        H = _compute_clip_distributions_from_bam(Path(bam_path))
+    has_heatmap = heatmap and bam_path is not None
+    if len_a.size == 0 and has_heatmap:
+        H = _compute_clip_distributions_from_bam(Path(str(bam_path)))
         fig, ax = plt.subplots(1, 1, figsize=(8, 4), constrained_layout=True)
         if not H:
             ax.axis("off")
@@ -183,7 +182,7 @@ def plot_softclips(
                 heat5,
                 aspect="auto",
                 origin="lower",
-                extent=[0, heat5.shape[1], min_len, max_len],
+                extent=(0, heat5.shape[1], min_len, max_len),
                 cmap="viridis",
             )
             cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
@@ -211,18 +210,18 @@ def plot_softclips(
         ax0, ax1, ax2 = axes
 
     # Panel 1: per-length means
-    if lengths.size:
-        ax0.plot(lengths, mean5, label="Mean 5' clips", color="#1f77b4", lw=1.8)
-        ax0.plot(lengths, mean3, label="Mean 3' clips", color="#ff7f0e", lw=1.8)
+    if len_a.size:
+        ax0.plot(len_a, mean5_a, label="Mean 5' clips", color="#1f77b4", lw=1.8)
+        ax0.plot(len_a, mean3_a, label="Mean 3' clips", color="#ff7f0e", lw=1.8)
         ax0.set_xlabel("Read length")
         ax0.set_ylabel("Mean soft clips (bases)")
         ax0.legend(frameon=False)
     ax0.set_title("Per-length mean soft clips")
 
     # Panel 2: recommended trims per length
-    if lengths.size:
-        ax1.plot(lengths, rec5, label="5' trim", color="#1f77b4", lw=1.8)
-        ax1.plot(lengths, rec3, label="3' trim", color="#ff7f0e", lw=1.8)
+    if len_a.size:
+        ax1.plot(len_a, rec5_a, label="5' trim", color="#1f77b4", lw=1.8)
+        ax1.plot(len_a, rec3_a, label="3' trim", color="#ff7f0e", lw=1.8)
         # Global recommended trims (dashed)
         g5 = trims.get("recommended_5prime_trim", 0)
         g3 = trims.get("recommended_3prime_trim", 0)
@@ -245,7 +244,7 @@ def plot_softclips(
     # Panel 3: heatmaps from BAM (optional)
     if has_heatmap:
         try:
-            H = _compute_clip_distributions_from_bam(Path(bam_path))
+            H = _compute_clip_distributions_from_bam(Path(str(bam_path)))
         except Exception as e:
             ax2.axis("off")
             ax2.text(0.5, 0.5, f"Heatmap disabled: {e}", ha="center", va="center")
@@ -264,7 +263,7 @@ def plot_softclips(
                     heat5,
                     aspect="auto",
                     origin="lower",
-                    extent=[0, heat5.shape[1], min_len, max_len],
+                    extent=(0, heat5.shape[1], min_len, max_len),
                     cmap="viridis",
                 )
                 cb = fig.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)

@@ -175,7 +175,7 @@ class AdapterDetector:
                 # Find best adapter match
                 pos, length, variant = self._find_best_match(sequence)
 
-                if pos is not None:
+                if pos is not None and length is not None:
                     contaminated_reads += count
                     positions[pos] = positions.get(pos, 0) + count
                     partial_matches[length] = partial_matches.get(length, 0) + count
@@ -196,7 +196,7 @@ class AdapterDetector:
                     # Find best adapter match
                     pos, length, variant = self._find_best_match(sequence)
 
-                    if pos is not None:
+                    if pos is not None and length is not None:
                         contaminated_reads += 1
                         positions[pos] = positions.get(pos, 0) + 1
                         partial_matches[length] = partial_matches.get(length, 0) + 1

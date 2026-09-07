@@ -385,7 +385,7 @@ class EndBiasCheck(BaseCheck):
         )
 
 
-class SoftClippingCheck(BaseCheck):
+class SoftClippingCheck:
     """Check for excessive soft-clipping in alignments."""
 
     def __init__(self, max_clip_rate: float = 0.1, max_mean_clips: float = 1.0):
@@ -445,7 +445,7 @@ class SoftClippingCheck(BaseCheck):
         )
 
 
-def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
+def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, Any]:
     """Categorize sample by failure type for seqspec batch processing.
 
     Args:

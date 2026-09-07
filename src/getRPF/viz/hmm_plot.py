@@ -185,7 +185,7 @@ def plot_hmm_entropy(
         )
 
     # Unified legend (entropy + bases; no segment legend by default)
-    labs = [ln.get_label() for ln in lines]
+    labs = [str(ln.get_label()) for ln in lines]
     ax.legend(lines, labs, loc="upper right", frameon=False, ncol=3)
 
     output_png = Path(output_png)

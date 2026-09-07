@@ -147,7 +147,7 @@ class SignalProcessor:
     ) -> List[Dict[str, float]]:
         """Calculate per-position nucleotide frequencies."""
         length = self._get_max_len(reads)
-        compositions = []
+        compositions: List[Dict[str, float]] = []
 
         for i in range(length):
             bases = self._get_bases_at_pos(reads, i, align)
@@ -167,7 +167,7 @@ class SignalProcessor:
     ) -> List[Dict[str, float]]:
         """Calculate per-position dinucleotide frequencies."""
         length = self._get_max_len(reads)
-        di_freqs = []
+        di_freqs: List[Dict[str, float]] = []
 
         for i in range(length - 1):
             # For dinucleotides, we need position i and i+1

@@ -28,7 +28,7 @@ class SeqSpecRegion:
     min_len: int = 0
     max_len: int = 0
     strand: str = "pos"
-    regions: List["SeqSpecRegion"] = None
+    regions: Optional[List["SeqSpecRegion"]] = None
 
     def __post_init__(self):
         if self.regions is None:
@@ -59,14 +59,14 @@ class SeqSpecAssay:
     doi: str = "auto-detected"
     publication_date: str = ""
     description: str = ""
-    modalities: List[str] = None
+    modalities: Optional[List[str]] = None
     lib_struct: str = ""
     library_protocol: str = ""
     library_kit: str = ""
     sequence_protocol: str = ""
     sequence_kit: str = ""
-    sequence_spec: List[SeqSpecRegion] = None
-    library_spec: List[SeqSpecRegion] = None
+    sequence_spec: Optional[List[SeqSpecRegion]] = None
+    library_spec: Optional[List[SeqSpecRegion]] = None
 
     def __post_init__(self):
         if self.modalities is None:
@@ -90,9 +90,9 @@ class SeqSpecGenerator:
         self,
         architecture,
         sample_reads: List[str],
-        detected_segments: List = None,
+        detected_segments: Optional[List] = None,
         output_file: Optional[Path] = None,
-        sample_headers: List[str] = None,
+        sample_headers: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Generate seqspec from detected architecture or segments.
 
@@ -412,7 +412,7 @@ class SeqSpecGenerator:
 
         # Convert regions to dict format
         def region_to_dict(region: SeqSpecRegion) -> Dict[str, Any]:
-            region_dict = {
+            region_dict: Dict[str, Any] = {
                 "!Region": None,
                 "region_id": region.region_id,
                 "region_type": region.region_type,
@@ -461,7 +461,7 @@ class SeqSpecGenerator:
                 "files": files,
             }
 
-        seqspec = {
+        seqspec: Dict[str, Any] = {
             "!Assay": None,
             "seqspec_version": assay.seqspec_version,
             "assay_id": assay.assay_id,
@@ -485,7 +485,7 @@ class SeqSpecGenerator:
             seqspec["sequence_kit"] = assay.sequence_kit
 
         # CORRECT STRUCTURE: library_spec contains Regions, sequence_spec contains Reads
-        seqspec["library_spec"] = [region_to_dict(r) for r in assay.sequence_spec]
+        seqspec["library_spec"] = [region_to_dict(r) for r in assay.sequence_spec or []]
         seqspec["sequence_spec"] = [read_to_dict(r) for r in reads] if reads else []
 
         return seqspec
@@ -790,7 +790,8 @@ class SeqSpecGenerator:
 
         Expected format: @read_id_element1:length_element2:length_...
         """
-        region_data = {}  # region_type -> {positions: [], lengths: [], sequences: []}
+        # region_type -> {positions: [], lengths: [], sequences: []}
+        region_data: Dict[str, Dict[str, List[Any]]] = {}
         total_structures = []
 
         for i, header in enumerate(headers[:100]):  # Sample first 100

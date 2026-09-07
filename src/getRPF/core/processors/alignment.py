@@ -45,7 +45,7 @@ class AlignmentResults:
 
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write alignment results to file in specified format."""
-        report_data = {
+        report_data: Dict[str, Any] = {
             "alignment_statistics": {
                 "input_reads": self.input_reads,
                 "aligned_reads": self.aligned_reads,
@@ -340,7 +340,8 @@ class STARAligner:
                 reads_with_clips = 0
 
                 # Per-read-length tracking
-                per_length_data = {}  # {length: {'5p': [clips], '3p': [clips]}}
+                # {length: {'5p': [clips], '3p': [clips]}}
+                per_length_data: Dict[int, Dict[str, List[int]]] = {}
 
                 for read in bamfile:
                     if read.is_unmapped:
@@ -405,7 +406,7 @@ class STARAligner:
         Returns:
             Dictionary with trim recommendations and per-length analysis
         """
-        recommendations = {
+        recommendations: Dict[str, Any] = {
             "trim_recommendations": {
                 "global_pattern_detected": False,
                 "recommended_5prime_trim": 0,
@@ -420,7 +421,7 @@ class STARAligner:
             return recommendations
 
         # Analyze each read length
-        length_recommendations = {}
+        length_recommendations: Dict[int, Dict[str, Any]] = {}
 
         for length in sorted(per_length_data.keys()):
             clips_5p = per_length_data[length]["5p"]

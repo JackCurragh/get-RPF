@@ -1,9 +1,15 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "getRPF"
+# Lowercase deliberately (REPO_CONTRACT.md 5.3). PyPI rejects a wheel whose
+# filename is not the normalised project name, with a 400 at upload that
+# `twine check` does not catch -- it killed three translonscorer releases.
+# hatchling normalised the filename on its own; setuptools does not, so the
+# name and the CI filename assertion have to land together with the backend
+# swap. The import package and the console script stay `getRPF`.
+name = "getrpf"
 version = "0.3.1"
 description = "A tool for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments"
 readme = "README.md"
@@ -46,8 +52,17 @@ docs = [
 [project.scripts]
 getRPF = "getRPF.cli:cli"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/getRPF"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["getRPF", "getRPF.*"]
+
+# The architecture YAMLs are runtime package data, read through
+# importlib.resources.files("getRPF") in
+# core/processors/rpf_extractor.py:_init_builtin_architectures. hatchling
+# shipped every file under the package directory; setuptools ships only
+# Python modules unless told otherwise, so name them explicitly.
+[tool.setuptools.package-data]
+"getRPF" = ["architectures/*.yaml", "architectures/*.md"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

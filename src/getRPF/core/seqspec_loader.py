@@ -7,7 +7,7 @@ Allows loading architectures from seqspec files in a directory
 
 import logging
 from pathlib import Path
-from typing import List, Any, Optional
+from typing import Any, List, Optional
 
 import yaml
 
@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 class SeqSpecArchitectureLoader:
     """Loads read architectures from seqspec files."""
-    
+
     def __init__(self):
         self.loaded_architectures = []
-    
+
     def load_from_directory(self, seqspec_dir: Any) -> List[ReadArchitecture]:
         """Load all seqspec files from a directory (Path or Traversable)."""
-        
+
         architectures = []
         try:
             # Handle both Path objects and Traversable (from importlib.resources)
@@ -32,14 +32,14 @@ class SeqSpecArchitectureLoader:
             else:
                 s_dir = Path(seqspec_dir)
                 files = list(s_dir.glob("*.yaml")) + list(s_dir.glob("*.yml"))
-                
+
             logger.info(f"Scanning {len(files)} files in {seqspec_dir}")
 
             for file_path in files:
                 # Basic check for yaml extension if iterating blindly
                 if not file_path.name.endswith(('.yaml', '.yml')):
                     continue
-                    
+
                 try:
                     arch = self.load_from_seqspec(file_path)
                     if arch:
@@ -47,18 +47,18 @@ class SeqSpecArchitectureLoader:
                         logger.info(f"Loaded architecture: {arch.protocol_name}")
                 except Exception as e:
                     logger.warning(f"Failed to load {file_path}: {e}")
-                    
+
         except Exception as e:
             logger.error(f"Error scanning directory {seqspec_dir}: {e}")
-        
+
         self.loaded_architectures.extend(architectures)
         return architectures
-    
+
     def load_from_seqspec(self, seqspec_file: Path) -> Optional[ReadArchitecture]:
         """Load a single architecture from a seqspec file."""
-        
+
         logger.debug(f"Loading seqspec: {seqspec_file}")
-        
+
         try:
             # Handle Traversable objects from importlib.resources
             if hasattr(seqspec_file, 'read_text'):
@@ -66,33 +66,33 @@ class SeqSpecArchitectureLoader:
             else:
                 with open(seqspec_file, 'r') as f:
                     content = f.read()
-            
+
             # Try to parse as YAML (ignoring custom tags for now)
             # This is a simplified parser - real seqspec parsing would be more complex
             yaml_content = self._clean_seqspec_yaml(content)
             data = yaml.safe_load(yaml_content)
-            
+
             if not data:
                 logger.warning(f"Empty or invalid YAML in {seqspec_file}")
                 return None
-            
+
             # Extract architecture information
             protocol_name = data.get('assay_id', seqspec_file.stem)
             lab_source = data.get('library_kit', 'Unknown')
             description = data.get('description', '')
-            
+
             # Parse sequence_spec for regions
             sequence_spec = data.get('sequence_spec', [])
-            
+
             adapter_sequences = []
             trim_adapter_sequences = []
             umi_positions = []
             barcode_positions = []
             rpf_regions = []
             post_rpf_trim_bases = 0
-            
+
             current_pos = 0
-            
+
             for region in sequence_spec:
                 if isinstance(region, dict):
                     region_type = region.get('region_type', '').lower()
@@ -103,14 +103,14 @@ class SeqSpecArchitectureLoader:
                     sequences = []
                     if region.get('sequence_type') == 'list' and 'sequences' in region:
                         sequences = region['sequences']
-                    
+
                     if sequences:
                         region_length = max(
                             [min_len, max_len] + [len(seq) for seq in sequences]
                         )
                     else:
                         region_length = max(min_len, max_len, len(sequence)) if sequence else max_len
-                    
+
                     # Categorize regions
                     if 'adapter' in region_type or 'adapter' in region_id:
                         adapter_start = current_pos
@@ -140,9 +140,9 @@ class SeqSpecArchitectureLoader:
                         post_rpf_trim_bases += region_length
                     elif 'rpf' in region_type or 'rpf' in region_id or 'cdna' in region_type:
                         rpf_regions.append((current_pos, current_pos + region_length, min_len, max_len))
-                    
+
                     current_pos += region_length
-            
+
             # Determine RPF length range
             if rpf_regions:
                 rpf_min = min(region[2] for region in rpf_regions)
@@ -157,7 +157,7 @@ class SeqSpecArchitectureLoader:
 
             if rpf_regions and expected_rpf_length[0] != expected_rpf_length[1]:
                 rpf_end = -1
-            
+
             # Create architecture
             architecture = ReadArchitecture(
                 protocol_name=protocol_name,
@@ -175,26 +175,26 @@ class SeqSpecArchitectureLoader:
                 },
                 post_rpf_trim_bases=post_rpf_trim_bases,
             )
-            
+
             logger.info(f"Created architecture from seqspec: {protocol_name}")
             logger.debug(f"  Adapters: {adapter_sequences}")
             logger.debug(f"  UMI positions: {umi_positions}")
             logger.debug(f"  Barcode positions: {barcode_positions}")
             logger.debug(f"  RPF length: {expected_rpf_length}")
-            
+
             return architecture
-            
+
         except Exception as e:
             logger.error(f"Error loading seqspec {seqspec_file}: {e}")
             return None
-    
+
     def _clean_seqspec_yaml(self, content: str) -> str:
         """Clean seqspec YAML content to make it parseable by standard YAML."""
-        
+
         # Remove custom Python object tags
         lines = content.split('\n')
         cleaned_lines = []
-        
+
         for line in lines:
             # Skip lines with Python object tags
             if '!!python/object/apply:' in line:
@@ -203,14 +203,14 @@ class SeqSpecArchitectureLoader:
             if line.strip().startswith('!!'):
                 continue
             cleaned_lines.append(line)
-        
+
         return '\n'.join(cleaned_lines)
 
     def create_sample_seqspec(self, output_dir: Path):
         """Create sample seqspec files for testing."""
-        
+
         output_dir.mkdir(exist_ok=True)
-        
+
         # Sample seqspec 1: Novel protocol
         sample1 = {
             'seqspec_version': '0.3.0',
@@ -250,10 +250,10 @@ class SeqSpecArchitectureLoader:
                 }
             ]
         }
-        
+
         with open(output_dir / 'novel_protocol.yaml', 'w') as f:
             yaml.dump(sample1, f, indent=2)
-        
+
         # Sample seqspec 2: Modified McGlincy protocol
         sample2 = {
             'seqspec_version': '0.3.0',
@@ -292,10 +292,10 @@ class SeqSpecArchitectureLoader:
                 }
             ]
         }
-        
+
         with open(output_dir / 'modified_mcglincy.yaml', 'w') as f:
             yaml.dump(sample2, f, indent=2)
-        
+
         logger.info(f"Created sample seqspec files in {output_dir}")
-        
+
         return [output_dir / 'novel_protocol.yaml', output_dir / 'modified_mcglincy.yaml']

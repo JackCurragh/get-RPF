@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .pipeline import run_sample
-from .release import ALL_RELEASE_CLASSES, HOLD_EXCLUDE_CLASSES, REVIEW_CLASSES, write_cohort_tsvs
+from .release import (
+    ALL_RELEASE_CLASSES,
+    HOLD_EXCLUDE_CLASSES,
+    REVIEW_CLASSES,
+    write_cohort_tsvs,
+)
 
 logger = logging.getLogger(__name__)
 

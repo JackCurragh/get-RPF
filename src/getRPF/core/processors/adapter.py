@@ -11,8 +11,8 @@ from typing import Dict, Optional, Tuple
 
 from Bio import SeqIO
 
-from ..processors.collapsed import parse_collapsed_fasta
 from ...utils.file_utils import get_file_opener
+from ..processors.collapsed import parse_collapsed_fasta
 
 
 @dataclass

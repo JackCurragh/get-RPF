@@ -1,9 +1,9 @@
 """Focused tests for the small HMM segmentation API."""
 
 from getRPF.core.processors.segmenter import (
-    ProbabilisticSegmenter,
     STATE_RPF,
     STATE_UMI,
+    ProbabilisticSegmenter,
 )
 from getRPF.core.processors.signals import SignalStats
 

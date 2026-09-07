@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 import matplotlib
 
@@ -24,12 +24,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from ..core.processors.signals import process_reads
+from ..core.processors.collapsed import TwoStageCollapser
 from ..core.processors.segmenter import (
     decode_segments_with_posteriors,
     segment_reads,
 )
-from ..core.processors.collapsed import TwoStageCollapser
+from ..core.processors.signals import process_reads
 
 
 def _sample_reads(
@@ -168,7 +168,6 @@ def plot_hmm_entropy(
         P = np.array(posteriors)
         # We’ll plot UMI, RPF, ADAPTER; ignore START/END/BARCODE for clarity
         state_ix = {"UMI":1, "RPF":3, "ADAPTER":4}
-        labels = ["UMI p(state)", "RPF p(state)", "ADAPTER p(state)"]
         cols = ["#f5a623", "#4a90e2", "#d0021b"]
         ys = [P[:, state_ix["UMI"]], P[:, state_ix["RPF"]], P[:, state_ix["ADAPTER"]]]
         ax.fill_between(x, 0, ys[0], color=cols[0], alpha=0.10, linewidth=0)
@@ -176,7 +175,7 @@ def plot_hmm_entropy(
         ax.fill_between(x, ys[0]+ys[1], ys[0]+ys[1]+ys[2], color=cols[2], alpha=0.10, linewidth=0)
 
     # Unified legend (entropy + bases; no segment legend by default)
-    labs = [l.get_label() for l in lines]
+    labs = [ln.get_label() for ln in lines]
     ax.legend(lines, labs, loc="upper right", frameon=False, ncol=3)
 
     output_png = Path(output_png)

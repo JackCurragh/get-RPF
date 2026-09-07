@@ -17,11 +17,12 @@ Author: getRPF team
 
 import logging
 import math
-import yaml
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+import yaml
 
 try:
     import pysam
@@ -31,16 +32,16 @@ except ImportError:
 
 from Bio import SeqIO
 
+from ...utils.file_utils import create_temp_file, get_file_opener
 from .alignment import STARAligner
 from .types import (
+    ExtractionEmptyError,
+    LearnedStructure,
     PositionProfile,
     RegionClassification,
-    LearnedStructure,
-    TrimmerConfig,
     StructureLearningError,
-    ExtractionEmptyError,
+    TrimmerConfig,
 )
-from ...utils.file_utils import create_temp_file, get_file_opener
 
 logger = logging.getLogger(__name__)
 
@@ -292,16 +293,16 @@ class AlignmentBasedExtractor:
         if is_trimmed_alignment:
             # We aligned trimmed reads, so the 3' end should show NO soft-clips (ideally)
             # We need to construct the structure manually to include the adapter we removed
-            
+
             # Learn 5' structure from the BAM (it wasn't trimmed)
             partial_structure = self._learn_read_structure_reliable(bam_file)
-            
+
             # Construct verification-based 3' structure
             # If soft-clipping found extra bases, boundaries.consensus_3p > 0
             # But the MAIN adapter is what we checked
             adapter_name = adapter_info.top_adapter
             adapter_seq = next(seq for name, seq in self.adapters if name == adapter_name)
-            
+
             three_prime = RegionClassification(
                 region_type='adapter',
                 length=0, # Variable
@@ -309,12 +310,12 @@ class AlignmentBasedExtractor:
                 consensus_sequence=adapter_seq,
                 adapter_name=adapter_name,
                 evidence={
-                    'method': 'alignment_verification', 
+                    'method': 'alignment_verification',
                     'align_rate': alignment_result['alignment_rate'],
                     'extra_soft_clip': boundaries.consensus_3p
                 }
             )
-            
+
             learned_structure = LearnedStructure(
                 five_prime=partial_structure.five_prime, # Trust 5' analysis
                 three_prime=three_prime, # Enforce validated adapter
@@ -536,10 +537,10 @@ class AlignmentBasedExtractor:
         """
         logger.info(f"  Testing adapter hypothesis: {adapter_name}")
         adapter_seq = next(seq for name, seq in self.adapters if name == adapter_name)
-        
+
         # 1. Trim subset using this adapter
         trimmed_reads = []
-        
+
         for read_id, seq in reads:
             match = self._find_adapter_in_read(seq, adapter_seq)
             if match:
@@ -550,24 +551,24 @@ class AlignmentBasedExtractor:
             else:
                 # Keep original? No, for verification assume everything HAS adapter
                 pass
-                
+
         if not trimmed_reads:
             logger.warning("    No reads contained the adapter - hypothesis rejected")
             return None
-            
+
         logger.info(f"    Trimming found adapter in {len(trimmed_reads)}/{len(reads)} reads")
-        
+
         # 2. Align trimmed reads
         temp_trimmed = output_prefix.with_suffix('.trimmed.fastq')
         if not temp_trimmed.parent.exists():
             temp_trimmed.parent.mkdir(parents=True, exist_ok=True)
-            
+
         with open(temp_trimmed, 'w') as f:
             for read_id, seq in trimmed_reads:
                 f.write(f"@{read_id}\n{seq}\n+\n{'I' * len(seq)}\n")
-        
+
         logger.info(f"    Saved trimmed subset for debugging to: {temp_trimmed}")
-        
+
         bam_path = output_prefix.with_suffix('.trimmed.bam')
         aligner = STARAligner(star_index=star_index, threads=threads)
         try:
@@ -579,11 +580,11 @@ class AlignmentBasedExtractor:
         except Exception as e:
             logger.warning(f"    Verification alignment failed: {e}")
             return None
-            
+
         # 3. Check alignment rate
         align_rate = result.alignment_rate
         logger.info(f"    Alignment rate of trimmed reads: {align_rate:.1%}")
-        
+
         # Ribo-seq data typically has 5-50% genome alignment rate due to
         # rRNA contamination. A low threshold accepts this reality while
         # still rejecting truly wrong adapters (which give ~0% alignment).
@@ -612,7 +613,7 @@ class AlignmentBasedExtractor:
         with open(temp_fastq, 'w') as f:
             for read_id, sequence in reads:
                 f.write(f"@{read_id}\n{sequence}\n+\n{'I' * len(sequence)}\n")
-        
+
         logger.info(f"    Saved subset for alignment to: {temp_fastq}")
 
         aligner = STARAligner(
@@ -708,7 +709,7 @@ class AlignmentBasedExtractor:
             if min_freq >= 0.80:
                 conf_level = 'high'
                 high_confidence_count += 1
-            elif min_freq >= 0.70:
+            elif min_freq >= MIN_MODE_FREQUENCY:
                 conf_level = 'medium'
             else:
                 conf_level = 'low'
@@ -1166,9 +1167,9 @@ class AlignmentBasedExtractor:
                 logger.info(f"    5' End: ADAPTER ({fp.adapter_name or 'unknown'})")
                 logger.info(f"             Sequence: {fp.consensus_sequence}")
             elif fp.region_type == 'none':
-                logger.info(f"    5' End: None (no soft-clipping)")
+                logger.info("    5' End: None (no soft-clipping)")
             else:
-                logger.info(f"    5' End: UNKNOWN (ambiguous)")
+                logger.info("    5' End: UNKNOWN (ambiguous)")
 
         # 3' region
         if structure.three_prime:
@@ -1179,9 +1180,9 @@ class AlignmentBasedExtractor:
                 logger.info(f"    3' End: ADAPTER ({tp.adapter_name or 'unknown'})")
                 logger.info(f"             Sequence: {tp.consensus_sequence}")
             elif tp.region_type == 'none':
-                logger.info(f"    3' End: None (no soft-clipping)")
+                logger.info("    3' End: None (no soft-clipping)")
             else:
-                logger.info(f"    3' End: UNKNOWN (ambiguous)")
+                logger.info("    3' End: UNKNOWN (ambiguous)")
 
         # Warnings
         for warning in structure.validation_warnings:
@@ -1205,15 +1206,15 @@ class AlignmentBasedExtractor:
     ) -> Dict:
         """Extract RPFs using Two-Stage Collapsing for alignment-based results."""
         from .collapsed import TwoStageCollapser
-        
+
         def trim_logic(seq: str) -> Optional[str]:
             start_idx = 0
             end_idx = len(seq)
-            
+
             # 5' Trimming
             if config.trim_5p_fixed and config.trim_5p_fixed > 0:
                 start_idx = min(config.trim_5p_fixed, len(seq))
-                
+
             # 3' Trimming
             if config.trim_3p_adapter:
                 remaining_seq = seq[start_idx:]
@@ -1225,7 +1226,7 @@ class AlignmentBasedExtractor:
                 )
                 if adapter_pos >= 0:
                     end_idx = start_idx + adapter_pos
-            
+
             rpf_seq = seq[start_idx:end_idx]
             if len(rpf_seq) < config.min_rpf_length or len(rpf_seq) > config.max_rpf_length:
                 return None
@@ -1233,31 +1234,31 @@ class AlignmentBasedExtractor:
 
         collapser = TwoStageCollapser(logger=logger)
         format_type = self._detect_format(input_file)
-        
+
         # Stage 1: Raw collapse
         raw_counts = collapser.collapse_raw(input_file, format=format_type)
-        
+
         # Stage 2 & 3: Trim unique and merge
         final_counts = collapser.apply_trimming(raw_counts, trim_logic)
-        
+
         # Stage 4: Write outputs
         if collapse_output:
             collapsed_path = output_file.with_suffix('.collapsed.fa')
             collapser.write_collapsed_fasta(final_counts, collapsed_path)
-            
+
         total_extracted = sum(final_counts.values())
         total_input = sum(raw_counts.values())
-        
+
         if not collapsed_only:
             logger.info(f"Writing expanded FASTQ output to {output_file}...")
-            # Note: UMI preservation in headers would need more careful tracking of 
+            # Note: UMI preservation in headers would need more careful tracking of
             # original headers per unique sequence if implemented here.
             # For pure performance/disk savings, we focus on the sequences.
             with open(output_file, 'w') as fout:
                 for idx, (seq, count) in enumerate(final_counts.items(), 1):
                     for i in range(count):
                         fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
-        
+
         return {
             'total_reads': total_input,
             'extracted_rpfs': total_extracted,

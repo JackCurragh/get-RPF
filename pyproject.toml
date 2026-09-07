@@ -35,7 +35,6 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
     "black>=22.0.0",
-    "isort>=5.0.0",
     "mypy>=0.900",
     "ruff>=0.0.270",
 ]
@@ -62,20 +61,9 @@ line-length = 88
 target-version = ['py310']
 include = '\.pyi?$'
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-
 [tool.ruff]
-# Select rules to enable
-select = ["E", "F", "I", "W"]  # Add the rules you want to enforce
 line-length = 88
-extend-ignore = ["E501"]  # Ignore line length violations
-
-# Target Python version
 target-version = "py310"
-
-# Exclude directories
 exclude = [
     ".git",
     ".venv",
@@ -83,6 +71,11 @@ exclude = [
     "dist",
 ]
 
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I import order. `I` is why isort is not a
+# dependency here -- ruff replaces both flake8 and isort (REPO_CONTRACT.md 4b).
+select = ["E", "F", "I", "W"]
+extend-ignore = ["E501"]  # line length is black's job
 # Allow unused variables when underscore-prefixed
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 

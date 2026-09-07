@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
 from .processors.check import CleanlinessResults
 from .processors.signals import SignalStats, process_reads
@@ -245,21 +245,21 @@ class GCContentCheck(BaseCheck):
 
 class InformationContentCheck(BaseCheck):
     """Check for consistent information content across read positions.
-    
+
     This is the primary check for detecting adapter contamination and repetitive
     sequences by measuring Shannon entropy at each position.
     """
-    
+
     def __init__(self, min_entropy: float = 1.0, ignore_end_positions: int = 2):
         """Initialize information content check.
-        
+
         Args:
             min_entropy: Minimum Shannon entropy threshold per position
             ignore_end_positions: Number of positions to ignore at each end
         """
         self.min_entropy = min_entropy
         self.ignore_end_positions = ignore_end_positions
-    
+
     def check(self, results: CleanlinessResults) -> CheckResult:
         """Check Shannon entropy at each position for uniform complexity.
 
@@ -285,7 +285,7 @@ class InformationContentCheck(BaseCheck):
 
         mean_entropy = sum(entropies) / len(entropies) if entropies else 0
         min_entropy = min(entropies) if entropies else 0
-        
+
         # Determine status
         if low_entropy_positions:
             status = Status.FAIL
@@ -293,10 +293,10 @@ class InformationContentCheck(BaseCheck):
         else:
             status = Status.PASS
             message = "Information content uniform across positions"
-        
+
         return CheckResult(
             status=status,
-            message=message, 
+            message=message,
             details={
                 "mean_entropy": mean_entropy,
                 "min_entropy": min_entropy,
@@ -308,21 +308,21 @@ class InformationContentCheck(BaseCheck):
 
 class EndBiasCheck(BaseCheck):
     """Check for extreme nucleotide bias at 5' and 3' ends of reads.
-    
+
     Note: This detects single-nucleotide bias (e.g. poly-A tails, primer sites).
     For adapter contamination (repetitive sequences), use InformationContentCheck.
     """
-    
+
     def __init__(self, end_positions: int = 3, max_bias: float = 0.7):
         """Initialize end bias check.
-        
+
         Args:
             end_positions: Number of positions to check at each end
             max_bias: Maximum allowable nucleotide frequency at ends
         """
         self.end_positions = end_positions
         self.max_bias = max_bias
-    
+
     def check(self, results: CleanlinessResults) -> CheckResult:
         """Check for excessive nucleotide bias at read ends.
 
@@ -385,17 +385,17 @@ class EndBiasCheck(BaseCheck):
 
 class SoftClippingCheck(BaseCheck):
     """Check for excessive soft-clipping in alignments."""
-    
+
     def __init__(self, max_clip_rate: float = 0.1, max_mean_clips: float = 1.0):
         """Initialize soft-clipping check.
-        
+
         Args:
             max_clip_rate: Maximum fraction of reads with soft clips
             max_mean_clips: Maximum mean soft clips per read
         """
         self.max_clip_rate = max_clip_rate
         self.max_mean_clips = max_mean_clips
-    
+
     def check(self, alignment_stats: Dict[str, Any]) -> CheckResult:
         """Check soft-clipping statistics from alignment."""
         if "total_reads_analyzed" not in alignment_stats:
@@ -404,33 +404,33 @@ class SoftClippingCheck(BaseCheck):
                 message="Soft-clipping statistics not available",
                 details={}
             )
-        
+
         total_reads = alignment_stats["total_reads_analyzed"]
         reads_with_clips = alignment_stats["reads_with_soft_clips"]
         mean_5prime = alignment_stats["mean_5prime_clips"]
         mean_3prime = alignment_stats["mean_3prime_clips"]
-        
+
         if total_reads == 0:
             clip_rate = 0
         else:
             clip_rate = reads_with_clips / total_reads
-        
+
         mean_total_clips = mean_5prime + mean_3prime
-        
+
         problems = []
         if clip_rate > self.max_clip_rate:
             problems.append(f"High soft-clipping rate: {clip_rate:.1%}")
-        
+
         if mean_total_clips > self.max_mean_clips:
             problems.append(f"High mean soft clips: {mean_total_clips:.1f}")
-        
+
         if problems:
             status = Status.FAIL
             message = "; ".join(problems)
         else:
             status = Status.PASS
             message = "Soft-clipping within acceptable limits"
-        
+
         return CheckResult(
             status=status,
             message=message,
@@ -445,15 +445,15 @@ class SoftClippingCheck(BaseCheck):
 
 def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
     """Categorize sample by failure type for seqspec batch processing.
-    
+
     Args:
         results: Dictionary mapping check names to results
-        
+
     Returns:
         Dictionary with failure categories
     """
     failure_categories = []
-    
+
     for check_name, result in results.items():
         if result.status == Status.FAIL:
             if "length" in check_name.lower():
@@ -474,7 +474,7 @@ def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
                 failure_categories.append("base_composition")
             else:
                 failure_categories.append("other")
-    
+
     return {
         "failure_categories": failure_categories,
         "primary_failure": failure_categories[0] if failure_categories else None,
@@ -492,7 +492,7 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
     with open(output, "w") as f:
         # Write summary
         f.write("=== RPF Data Check Results ===\n\n")
-        
+
         # Add cleanliness status
         categories = categorize_failures(results)
         f.write(f"Sample Status: {'CLEAN' if categories['is_clean'] else 'NEEDS_SEQSPEC'}\n")
@@ -500,7 +500,7 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
             f.write(f"Primary Failure Type: {categories['primary_failure']}\n")
             f.write(f"All Failure Types: {', '.join(categories['failure_categories'])}\n")
         f.write("\n")
-        
+
         f.write("Check Summary:\n")
         for check_name, result in results.items():
             f.write(f"{check_name:30} [{result.status.value}]\n")
@@ -528,11 +528,11 @@ def run_all_cleanliness_checks(
     alignment_stats: Optional[Dict[str, Any]] = None
 ) -> Dict[str, CheckResult]:
     """Run all cleanliness checks and return results.
-    
+
     Args:
         sequence_results: Results from sequence analysis
         alignment_stats: Optional alignment statistics
-        
+
     Returns:
         Dictionary mapping check names to results
     """
@@ -543,16 +543,16 @@ def run_all_cleanliness_checks(
         "base_composition": BaseCompositionCheck(),
         "gc_content": GCContentCheck()
     }
-    
+
     results = {}
-    
+
     # Run sequence-based checks
     for check_name, check in checks.items():
         results[check_name] = check.check(sequence_results)
-    
+
     # Run alignment-based checks if available
     if alignment_stats:
         soft_clip_check = SoftClippingCheck()
         results["soft_clipping"] = soft_clip_check.check(alignment_stats)
-    
+
     return results

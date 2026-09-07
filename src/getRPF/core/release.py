@@ -62,7 +62,11 @@ def check_self_consistency(
         if not entropies:
             continue
 
-        baseline_region = entropies[baseline_offset:] if len(entropies) > baseline_offset else entropies
+        baseline_region = (
+            entropies[baseline_offset:]
+            if len(entropies) > baseline_offset
+            else entropies
+        )
         if not baseline_region:
             continue
         median_baseline = statistics.median(baseline_region)
@@ -124,7 +128,9 @@ def classify_release(
     if not applied_rules:
         return "clean_no_trim"
 
-    trim_values = {r["trim_bases"] for r in applied_rules if r.get("trim_bases") is not None}
+    trim_values = {
+        r["trim_bases"] for r in applied_rules if r.get("trim_bases") is not None
+    }
     if len(trim_values) <= 1:
         return "clean_after_terminal_trim"
     return "clean_after_per_length_terminal_trim"
@@ -154,8 +160,12 @@ def build_evidence(
     )
 
     release_class = classify_release(
-        applied_rules, proposed_rules, self_consistency, biological_screen,
-        quality_evidence, retained_fraction,
+        applied_rules,
+        proposed_rules,
+        self_consistency,
+        biological_screen,
+        quality_evidence,
+        retained_fraction,
     )
 
     return {
@@ -197,15 +207,27 @@ def write_cohort_tsvs(evidence_list: List[Dict], output_dir: Path) -> Dict[str, 
     summary_path = output_dir / "release_qc_summary.tsv"
     with open(summary_path, "w", newline="") as f:
         writer = csv.writer(f, delimiter="\t")
-        writer.writerow([
-            "sample_id", "release_class", "biological_confirmation",
-            "read_count_input", "read_count_output", "retained_fraction",
-        ])
+        writer.writerow(
+            [
+                "sample_id",
+                "release_class",
+                "biological_confirmation",
+                "read_count_input",
+                "read_count_output",
+                "retained_fraction",
+            ]
+        )
         for e in evidence_list:
-            writer.writerow([
-                e["sample_id"], e["release_class"], e["biological_confirmation"],
-                e["read_count_input"], e["read_count_output"], e["retained_fraction"],
-            ])
+            writer.writerow(
+                [
+                    e["sample_id"],
+                    e["release_class"],
+                    e["biological_confirmation"],
+                    e["read_count_input"],
+                    e["read_count_output"],
+                    e["retained_fraction"],
+                ]
+            )
     paths["release_qc_summary"] = summary_path
 
     flags_path = output_dir / "release_qc_flags.tsv"
@@ -216,21 +238,31 @@ def write_cohort_tsvs(evidence_list: List[Dict], output_dir: Path) -> Dict[str, 
             failed = [
                 k for k, v in (e.get("self_consistency") or {}).items() if v is False
             ]
-            writer.writerow([
-                e["sample_id"], ";".join(e.get("warnings", [])), ";".join(failed),
-            ])
+            writer.writerow(
+                [
+                    e["sample_id"],
+                    ";".join(e.get("warnings", [])),
+                    ";".join(failed),
+                ]
+            )
     paths["release_qc_flags"] = flags_path
 
     adapter_path = output_dir / "adapter_protocol_summary.tsv"
     with open(adapter_path, "w", newline="") as f:
         writer = csv.writer(f, delimiter="\t")
-        writer.writerow(["sample_id", "protocol_source", "protocol_name", "protocol_confidence"])
+        writer.writerow(
+            ["sample_id", "protocol_source", "protocol_name", "protocol_confidence"]
+        )
         for e in evidence_list:
             protocol = e.get("protocol") or {}
-            writer.writerow([
-                e["sample_id"], protocol.get("source"), protocol.get("name"),
-                protocol.get("confidence"),
-            ])
+            writer.writerow(
+                [
+                    e["sample_id"],
+                    protocol.get("source"),
+                    protocol.get("name"),
+                    protocol.get("confidence"),
+                ]
+            )
     paths["adapter_protocol_summary"] = adapter_path
 
     seqspec_path = output_dir / "samples_needing_seqspec.tsv"

@@ -29,29 +29,33 @@ STATE_NAMES = {
     STATE_BARCODE: "BARCODE",
     STATE_RPF: "RPF",
     STATE_ADAPTER: "ADAPTER",
-    STATE_END: "END"
+    STATE_END: "END",
 }
+
 
 @dataclass
 class SegmenterConfig:
     """Configuration for HMM transition and emission probabilities."""
+
     # Priors
     # Informative priors (can be overridden by adaptive start logic):
-    p_umi_start: float = 0.2     # Baseline prior for 5' UMI presence
-    p_rpf_start: float = 0.7     # Baseline prior for direct RPF start
-    p_adapter_start: float = 0.1 # Rare (short read or pre-trimmed tail)
-    p_umi_len_mu: float = 6.0    # Expected UMI length (if present)
-    p_rpf_len_mu: float = 30.0   # Expected RPF length
-    min_umi_len: int = 4         # Do not allow UMI->RPF before this many bases
-    min_rpf_len: int = 22        # (Advisory) minimal RPF before adapter
+    p_umi_start: float = 0.2  # Baseline prior for 5' UMI presence
+    p_rpf_start: float = 0.7  # Baseline prior for direct RPF start
+    p_adapter_start: float = 0.1  # Rare (short read or pre-trimmed tail)
+    p_umi_len_mu: float = 6.0  # Expected UMI length (if present)
+    p_rpf_len_mu: float = 30.0  # Expected RPF length
+    min_umi_len: int = 4  # Do not allow UMI->RPF before this many bases
+    min_rpf_len: int = 22  # (Advisory) minimal RPF before adapter
 
     # Emission profiles (Entropy means)
-    mu_entropy_umi: float = 1.8   # High entropy
-    mu_entropy_rpf: float = 1.2   # Medium/Variable entropy
+    mu_entropy_umi: float = 1.8  # High entropy
+    mu_entropy_rpf: float = 1.2  # Medium/Variable entropy
     mu_entropy_adapter: float = 0.2  # Low entropy (consensus)
 
     # Composition markers
-    adapter_consensus_threshold: float = 0.8 # Min freq to be considered 'consed' adapter base
+    adapter_consensus_threshold: float = (
+        0.8  # Min freq to be considered 'consed' adapter base
+    )
 
 
 class ProbabilisticSegmenter:
@@ -84,7 +88,7 @@ class ProbabilisticSegmenter:
             return []
 
         N = len(STATE_NAMES)
-        viterbi = [[-float('inf')] * N for _ in range(T)]
+        viterbi = [[-float("inf")] * N for _ in range(T)]
         backpointer = [[0] * N for _ in range(T)]
 
         # Adaptive start prior: high early entropy favours a UMI, otherwise RPF.
@@ -135,30 +139,37 @@ class ProbabilisticSegmenter:
 
         def logsumexp(vals):
             m = max(vals)
-            if m == -float('inf'):
+            if m == -float("inf"):
                 return m
             return m + math.log(sum(math.exp(v - m) for v in vals))
 
         # Forward (time-inhomogeneous transitions allowed via t)
-        fwd = [[-float('inf')] * N for _ in range(T)]
+        fwd = [[-float("inf")] * N for _ in range(T)]
         # init: START not explicit; allow UMI/RPF starts
         fwd[0][STATE_UMI] = math.log(self.config.p_umi_start) + emit[0][STATE_UMI]
         fwd[0][STATE_RPF] = math.log(self.config.p_rpf_start) + emit[0][STATE_RPF]
 
         for t in range(1, T):
             for s in range(N):
-                prevs = [fwd[t-1][ps] + self._log_transition(ps, s, t) for ps in range(N)]
+                prevs = [
+                    fwd[t - 1][ps] + self._log_transition(ps, s, t) for ps in range(N)
+                ]
                 fwd[t][s] = emit[t][s] + logsumexp(prevs)
 
         logZ = logsumexp(fwd[-1])
 
         # Backward
-        bwd = [[-float('inf')] * N for _ in range(T)]
+        bwd = [[-float("inf")] * N for _ in range(T)]
         for s in range(N):
-            bwd[T-1][s] = 0.0  # log(1)
-        for t in range(T-2, -1, -1):
+            bwd[T - 1][s] = 0.0  # log(1)
+        for t in range(T - 2, -1, -1):
             for s in range(N):
-                nexts = [self._log_transition(s, ns, t+1) + emit[t+1][ns] + bwd[t+1][ns] for ns in range(N)]
+                nexts = [
+                    self._log_transition(s, ns, t + 1)
+                    + emit[t + 1][ns]
+                    + bwd[t + 1][ns]
+                    for ns in range(N)
+                ]
                 bwd[t][s] = logsumexp(nexts)
 
         # Posteriors gamma[t][s]
@@ -183,7 +194,11 @@ class ProbabilisticSegmenter:
                 "entropy": stats.entropy_5p[i],
                 # Add composition info?
                 # e.g. "max_freq" to detect low entropy conservation
-                "max_freq": max(stats.composition_5p[i].values()) if stats.composition_5p[i] else 0.0
+                "max_freq": (
+                    max(stats.composition_5p[i].values())
+                    if stats.composition_5p[i]
+                    else 0.0
+                ),
             }
             obs.append(o)
         return obs
@@ -207,14 +222,17 @@ class ProbabilisticSegmenter:
             mu = self.config.mu_entropy_adapter
             sigma = 0.4
         else:
-            return -10.0 # Unlikely observation for placeholder states
+            return -10.0  # Unlikely observation for placeholder states
 
         # Log Gaussian PDF: -0.5 * ((x-mu)/sigma)^2 - log(sigma * sqrt(2pi))
         # Ignore constant terms for comparison
         log_prob = -0.5 * ((entropy - mu) / sigma) ** 2
 
         # Boost adapter probability if high single-nucleotide frequency (composition consensus)
-        if state == STATE_ADAPTER and max_freq > self.config.adapter_consensus_threshold:
+        if (
+            state == STATE_ADAPTER
+            and max_freq > self.config.adapter_consensus_threshold
+        ):
             log_prob += 2.0
 
         return log_prob
@@ -236,32 +254,32 @@ class ProbabilisticSegmenter:
                 return math.log(stay)
             elif curr_s == STATE_RPF:
                 if t < self.config.min_umi_len:
-                    return -float('inf')
+                    return -float("inf")
                 return math.log(0.4)  # encourage transition once min length met
             else:
-                return -float('inf')
+                return -float("inf")
 
         elif prev_s == STATE_RPF:
             if curr_s == STATE_RPF:
-                return math.log(0.95) # RPFs are long
+                return math.log(0.95)  # RPFs are long
             elif curr_s == STATE_ADAPTER:
                 # Soft encouragement to remain in RPF until emissions demand adapter
                 return math.log(0.05)
             else:
-                return -float('inf')
+                return -float("inf")
 
         elif prev_s == STATE_ADAPTER:
             # No transitions out of adapter; terminal region
             if curr_s == STATE_ADAPTER:
                 return math.log(0.999)
             else:
-                return -float('inf')
+                return -float("inf")
 
         elif prev_s == STATE_START:
             # Should rely on initialization
-            return -float('inf')
+            return -float("inf")
 
-        return -float('inf')
+        return -float("inf")
 
     def _path_to_segments(self, path: List[int]) -> List[SegmentInfo]:
         """Convert state path to SegmentInfo objects."""
@@ -275,7 +293,7 @@ class ProbabilisticSegmenter:
         for t, state in enumerate(path):
             if state != current_state:
                 # End of segment
-                if current_state in STATE_NAMES: # Valid states
+                if current_state in STATE_NAMES:  # Valid states
                     name = STATE_NAMES[current_state].lower()
                     if name != "end" and name != "start":
                         # TODO: Add confidence score per segment
@@ -289,8 +307,8 @@ class ProbabilisticSegmenter:
         if current_state in STATE_NAMES:
             name = STATE_NAMES[current_state].lower()
             if name != "end" and name != "start":
-                 seg = SegmentInfo(name, start_pos, len(path), 0.9)
-                 segments.append(seg)
+                seg = SegmentInfo(name, start_pos, len(path), 0.9)
+                segments.append(seg)
 
         return segments
 

@@ -179,14 +179,19 @@ def parse_collapsed_fasta(
 
 class CollapsedFASTAProcessor:
     """Legacy wrapper for backward compatibility."""
+
     def __init__(self, count_pattern: Optional[str] = None):
         self.collapser = TwoStageCollapser()
         self.count_pattern = count_pattern or "seq{id}_x{count}"
 
-    def expand_to_fastq(self, input_file: Path, output_file: Path, max_reads: Optional[int] = None) -> None:
+    def expand_to_fastq(
+        self, input_file: Path, output_file: Path, max_reads: Optional[int] = None
+    ) -> None:
         """Expand collapsed FASTA to FASTQ."""
-        raw_counts = self.collapser.collapse_raw(input_file, format="collapsed", max_reads=max_reads)
-        with open(output_file, 'w') as fout:
+        raw_counts = self.collapser.collapse_raw(
+            input_file, format="collapsed", max_reads=max_reads
+        )
+        with open(output_file, "w") as fout:
             for idx, (seq, count) in enumerate(raw_counts.items(), 1):
                 for i in range(count):
                     fout.write(f"@seq{idx}_c{i+1}\n{seq}\n+\n{'I' * len(seq)}\n")
@@ -204,10 +209,7 @@ class TwoStageCollapser:
         self.logger = logger or logging.getLogger(__name__)
 
     def collapse_raw(
-        self,
-        input_file: Path,
-        format: str = "fastq",
-        max_reads: Optional[int] = None
+        self, input_file: Path, format: str = "fastq", max_reads: Optional[int] = None
     ) -> Counter:
         """Stage 1: Extract and count raw sequences from file."""
         counts: Counter = Counter()
@@ -226,7 +228,7 @@ class TwoStageCollapser:
                 raise ValueError(f"Unsupported format: {format}")
 
             for seq in iterator:
-                if isinstance(seq, tuple): # (sequence, count) from collapsed
+                if isinstance(seq, tuple):  # (sequence, count) from collapsed
                     counts[seq[0]] += seq[1]
                 else:
                     counts[seq] += 1
@@ -235,7 +237,9 @@ class TwoStageCollapser:
                 if max_reads and processed >= max_reads:
                     break
 
-        self.logger.info(f"  Processed {processed} reads -> {len(counts)} unique raw sequences")
+        self.logger.info(
+            f"  Processed {processed} reads -> {len(counts)} unique raw sequences"
+        )
         return counts
 
     def _iter_fasta_or_collapsed(self, fh, is_collapsed: bool):
@@ -276,8 +280,10 @@ class TwoStageCollapser:
 
         for raw_seq, count in raw_counts.items():
             trimmed_seq = trim_func(raw_seq)
-            if trimmed_seq and len(trimmed_seq) >= min_length and (
-                max_length is None or len(trimmed_seq) <= max_length
+            if (
+                trimmed_seq
+                and len(trimmed_seq) >= min_length
+                and (max_length is None or len(trimmed_seq) <= max_length)
             ):
                 final_counts[trimmed_seq] += count
 
@@ -285,10 +291,7 @@ class TwoStageCollapser:
         return final_counts
 
     def write_collapsed_fasta(
-        self,
-        counts: Counter,
-        output_file: Path,
-        prefix: str = "seq"
+        self, counts: Counter, output_file: Path, prefix: str = "seq"
     ) -> Dict[str, Union[int, str]]:
         """Stage 4: Write final collapsed results to FASTA."""
         total_reads = sum(counts.values())
@@ -315,9 +318,11 @@ class TwoStageCollapser:
         stats = {
             "unique_sequences": unique,
             "total_reads": total_reads,
-            "output_path": str(output_file)
+            "output_path": str(output_file),
         }
-        self.logger.info(f"  Wrote {stats['unique_sequences']} sequences to {output_file}")
+        self.logger.info(
+            f"  Wrote {stats['unique_sequences']} sequences to {output_file}"
+        )
         return stats
 
 

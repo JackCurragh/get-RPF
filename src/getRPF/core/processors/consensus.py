@@ -13,9 +13,11 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class TrimConsensus:
     """Consensus trim parameters with confidence/reasoning."""
+
     trim_5p: int
     trim_3p: int
     adapter_sequence: Optional[str]
@@ -23,13 +25,12 @@ class TrimConsensus:
     method: str  # "agreement", "architecture_dominant", "alignment_dominant"
     details: Dict[str, Any]
 
+
 class TrimDecider:
     """Compatibility wrapper for :func:`decide_trim_consensus`."""
 
     def decide(
-        self,
-        architecture_result: Dict[str, Any],
-        alignment_result: Dict[str, Any]
+        self, architecture_result: Dict[str, Any], alignment_result: Dict[str, Any]
     ) -> TrimConsensus:
         return decide_trim_consensus(architecture_result, alignment_result)
 

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MatchResult:
     """Result of an architecture match attempt."""
+
     architecture: ReadArchitecture
     is_match: bool
     confidence: float
@@ -29,7 +30,9 @@ class ArchitectureMatcher:
     def __init__(self, confidence_threshold: float = 0.8):
         self.threshold = confidence_threshold
 
-    def match(self, stats: SignalStats, architectures: List[ReadArchitecture]) -> Optional[MatchResult]:
+    def match(
+        self, stats: SignalStats, architectures: List[ReadArchitecture]
+    ) -> Optional[MatchResult]:
         """Find the best matching architecture from a list.
 
         Args:
@@ -47,7 +50,9 @@ class ArchitectureMatcher:
 
             # Log the decision trace
             status = "MATCH" if result.is_match else "REJECT"
-            logger.debug(f"Architecture {arch.protocol_name}: {status} (Score: {result.confidence:.2f})")
+            logger.debug(
+                f"Architecture {arch.protocol_name}: {status} (Score: {result.confidence:.2f})"
+            )
             for reason in result.reasons:
                 logger.debug(f"  - {reason}")
 
@@ -57,7 +62,9 @@ class ArchitectureMatcher:
 
         return best_result
 
-    def _evaluate_architecture(self, stats: SignalStats, arch: ReadArchitecture) -> MatchResult:
+    def _evaluate_architecture(
+        self, stats: SignalStats, arch: ReadArchitecture
+    ) -> MatchResult:
         """Evaluate a single architecture against the signals.
 
         This matcher uses composition-based fuzzy matching strategy:
@@ -86,7 +93,7 @@ class ArchitectureMatcher:
 
         # If adapter expected but not found, reject
         if adapter_score == 0.0 and arch.adapter_sequences:
-             return MatchResult(arch, False, 0.0, reasons)
+            return MatchResult(arch, False, 0.0, reasons)
 
         score += adapter_score * 0.6
 
@@ -94,7 +101,9 @@ class ArchitectureMatcher:
 
         return MatchResult(arch, is_match, score, reasons)
 
-    def _check_umi_profile(self, stats: SignalStats, arch: ReadArchitecture, reasons: List[str]) -> float:
+    def _check_umi_profile(
+        self, stats: SignalStats, arch: ReadArchitecture, reasons: List[str]
+    ) -> float:
         """Verify UMI entropy profile."""
         if not arch.umi_positions:
             reasons.append("No UMI expected (Pass)")
@@ -108,19 +117,25 @@ class ArchitectureMatcher:
 
             region_entropy = stats.entropy_5p[start:end]
             if not region_entropy:
-                 reasons.append(f"UMI region {start}-{end} out of bounds")
-                 return 0.0
+                reasons.append(f"UMI region {start}-{end} out of bounds")
+                return 0.0
 
             avg_entropy = sum(region_entropy) / len(region_entropy)
             if avg_entropy < 1.0:
-                reasons.append(f"UMI region {start}-{end} has low entropy ({avg_entropy:.2f} < 1.0)")
+                reasons.append(
+                    f"UMI region {start}-{end} has low entropy ({avg_entropy:.2f} < 1.0)"
+                )
                 return 0.0
             else:
-                reasons.append(f"UMI region {start}-{end} has high entropy ({avg_entropy:.2f})")
+                reasons.append(
+                    f"UMI region {start}-{end} has high entropy ({avg_entropy:.2f})"
+                )
 
         return 1.0
 
-    def _check_adapter_composition(self, stats: SignalStats, arch: ReadArchitecture, reasons: List[str]) -> float:
+    def _check_adapter_composition(
+        self, stats: SignalStats, arch: ReadArchitecture, reasons: List[str]
+    ) -> float:
         """Check if consensus composition matches expected adapter."""
         if not arch.adapter_sequences:
             return 1.0
@@ -152,7 +167,9 @@ class ArchitectureMatcher:
             for i in range(match_len):
                 expected_base = rev_adapter[i]
                 # Check frequency of this base at pos i from 3' end
-                if stats.composition_3p[i].get(expected_base, 0) > 0.4: # Consensus threshold
+                if (
+                    stats.composition_3p[i].get(expected_base, 0) > 0.4
+                ):  # Consensus threshold
                     matches += 1
 
             # If we see > 50% of the adapter bases in the consensus, that's a strong signal
@@ -166,17 +183,23 @@ class ArchitectureMatcher:
                 best_adapter_score = score
 
         if best_adapter_score > 0.7:
-             reasons.append(f"Strong 3' adapter signal found (Score: {best_adapter_score:.2f})")
-             return 1.0
+            reasons.append(
+                f"Strong 3' adapter signal found (Score: {best_adapter_score:.2f})"
+            )
+            return 1.0
         elif best_adapter_score > 0.4:
-             reasons.append(f"Weak 3' adapter signal found (Score: {best_adapter_score:.2f})")
-             return 0.5
+            reasons.append(
+                f"Weak 3' adapter signal found (Score: {best_adapter_score:.2f})"
+            )
+            return 0.5
         else:
-             # It's possible the adapter is variable position (internal), not strictly at 3' end.
-             # Or it's not present (clean data?).
-             # For strict matching, if we DON'T see it, we might reject if we expect raw data.
-             reasons.append(f"Adapter footprint not found at 3' end (Score: {best_adapter_score:.2f})")
-             return 0.0
+            # It's possible the adapter is variable position (internal), not strictly at 3' end.
+            # Or it's not present (clean data?).
+            # For strict matching, if we DON'T see it, we might reject if we expect raw data.
+            reasons.append(
+                f"Adapter footprint not found at 3' end (Score: {best_adapter_score:.2f})"
+            )
+            return 0.0
 
 
 def match_architecture(

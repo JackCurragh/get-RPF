@@ -26,6 +26,7 @@ import yaml
 
 try:
     import pysam
+
     PYSAM_AVAILABLE = True
 except ImportError:
     PYSAM_AVAILABLE = False
@@ -50,9 +51,11 @@ logger = logging.getLogger(__name__)
 # Data Structures (Local to this module)
 # =============================================================================
 
+
 @dataclass
 class AdapterInfo:
     """Adapter detection results for reporting."""
+
     detected_adapters: List[Dict]
     total_reads_scanned: int
     no_adapter_fraction: float
@@ -60,20 +63,21 @@ class AdapterInfo:
     @property
     def top_adapter(self) -> Optional[str]:
         if self.detected_adapters:
-            return self.detected_adapters[0]['name']
+            return self.detected_adapters[0]["name"]
         return None
 
     def to_dict(self) -> Dict:
         return {
-            'detected_adapters': self.detected_adapters,
-            'total_reads_scanned': self.total_reads_scanned,
-            'no_adapter_fraction': self.no_adapter_fraction
+            "detected_adapters": self.detected_adapters,
+            "total_reads_scanned": self.total_reads_scanned,
+            "no_adapter_fraction": self.no_adapter_fraction,
         }
 
 
 @dataclass
 class TrimBoundaries:
     """Consensus trim boundaries from alignment."""
+
     consensus_5p: int
     consensus_3p: int
     per_length: Dict[int, Dict[str, int]]
@@ -81,16 +85,17 @@ class TrimBoundaries:
 
     def to_dict(self) -> Dict:
         return {
-            'consensus_5p': self.consensus_5p,
-            'consensus_3p': self.consensus_3p,
-            'per_length': self.per_length,
-            'confidence': self.confidence
+            "consensus_5p": self.consensus_5p,
+            "consensus_3p": self.consensus_3p,
+            "per_length": self.per_length,
+            "confidence": self.confidence,
         }
 
 
 @dataclass
 class UMIInfo:
     """UMI detection results."""
+
     detected: bool
     positions: Optional[Tuple[int, int]]
     entropy: float
@@ -99,17 +104,18 @@ class UMIInfo:
 
     def to_dict(self) -> Dict:
         return {
-            'umi_detected': self.detected,
-            'positions': list(self.positions) if self.positions else None,
-            'entropy': self.entropy,
-            'confidence': self.confidence,
-            'sample_sequences': self.sample_sequences[:10]
+            "umi_detected": self.detected,
+            "positions": list(self.positions) if self.positions else None,
+            "entropy": self.entropy,
+            "confidence": self.confidence,
+            "sample_sequences": self.sample_sequences[:10],
         }
 
 
 @dataclass
 class ExtractionResult:
     """Complete extraction results."""
+
     input_reads: int
     extracted_rpfs: int
     extraction_rate: float
@@ -125,23 +131,25 @@ class ExtractionResult:
         def serialize(obj):
             if isinstance(obj, Path):
                 return str(obj)
-            if hasattr(obj, 'to_dict'):
+            if hasattr(obj, "to_dict"):
                 return obj.to_dict()
             return obj
 
         return {
-            'extraction_summary': {
-                'input_reads': self.input_reads,
-                'extracted_rpfs': self.extracted_rpfs,
-                'extraction_rate': self.extraction_rate,
-                'sample_size': self.sample_size,
-                'method': self.method
+            "extraction_summary": {
+                "input_reads": self.input_reads,
+                "extracted_rpfs": self.extracted_rpfs,
+                "extraction_rate": self.extraction_rate,
+                "sample_size": self.sample_size,
+                "method": self.method,
             },
-            'trim_boundaries': self.trim_boundaries.to_dict(),
-            'learned_structure': self.learned_structure.to_dict(),
-            'adapter_scan': self.adapter_info.to_dict() if self.adapter_info else None,
-            'umi_detection': self.umi_info.to_dict() if self.umi_info else None,
-            'alignment_statistics': {k: serialize(v) for k, v in self.alignment_stats.items()}
+            "trim_boundaries": self.trim_boundaries.to_dict(),
+            "learned_structure": self.learned_structure.to_dict(),
+            "adapter_scan": self.adapter_info.to_dict() if self.adapter_info else None,
+            "umi_detection": self.umi_info.to_dict() if self.umi_info else None,
+            "alignment_statistics": {
+                k: serialize(v) for k, v in self.alignment_stats.items()
+            },
         }
 
 
@@ -171,6 +179,7 @@ KNOWN_ADAPTERS = [
 # Main Extractor Class
 # =============================================================================
 
+
 class AlignmentBasedExtractor:
     """
     Primary RPF extraction using alignment as ground truth.
@@ -182,12 +191,12 @@ class AlignmentBasedExtractor:
     """
 
     # Thresholds for structure classification
-    ENTROPY_RANDOM_THRESHOLD = 1.7    # Above this = random (UMI-like)
+    ENTROPY_RANDOM_THRESHOLD = 1.7  # Above this = random (UMI-like)
     ENTROPY_CONSERVED_THRESHOLD = 0.5  # Below this = conserved (adapter-like)
-    DOMINANT_FREQ_THRESHOLD = 0.8      # Dominant base frequency for conserved
-    MIN_COVERAGE_FRACTION = 0.10       # Minimum fraction of aligned reads for classification
-    MIN_COVERAGE_FLOOR = 30            # Absolute minimum regardless of fraction
-    ADAPTER_MATCH_THRESHOLD = 0.8      # Minimum identity for adapter database match
+    DOMINANT_FREQ_THRESHOLD = 0.8  # Dominant base frequency for conserved
+    MIN_COVERAGE_FRACTION = 0.10  # Minimum fraction of aligned reads for classification
+    MIN_COVERAGE_FLOOR = 30  # Absolute minimum regardless of fraction
+    ADAPTER_MATCH_THRESHOLD = 0.8  # Minimum identity for adapter database match
 
     def __init__(self, adapters: Optional[List[Tuple[str, str]]] = None):
         """Initialize extractor."""
@@ -204,7 +213,7 @@ class AlignmentBasedExtractor:
         report_adapters: bool = True,
         star_threads: int = 1,
         collapse_output: bool = True,
-        collapsed_only: bool = False
+        collapsed_only: bool = False,
     ) -> ExtractionResult:
         """
         Extract RPF sequences using alignment-based structure learning.
@@ -262,31 +271,37 @@ class AlignmentBasedExtractor:
                 reads=subset_reads,
                 star_index=star_index,
                 threads=star_threads,
-                output_prefix=output_file
+                output_prefix=output_file,
             )
 
             if verified_result:
                 logger.info("  Trimmed alignment successful! Using this for analysis.")
                 alignment_result = verified_result
-                bam_file = Path(alignment_result['bam_file'])
+                bam_file = Path(alignment_result["bam_file"])
                 is_trimmed_alignment = True
 
         # PATH 2: Raw Alignment (Fallback)
         if not bam_file:
-            logger.info("  [METHODOLOGY] Falling back to 'Raw Alignment' strategy (Path 2).")
+            logger.info(
+                "  [METHODOLOGY] Falling back to 'Raw Alignment' strategy (Path 2)."
+            )
             logger.info("  Aligning raw subset with STAR...")
-            subset_bam_path = output_file.with_suffix('.subset.bam')
+            subset_bam_path = output_file.with_suffix(".subset.bam")
             alignment_result = self._align_subset(
                 subset_reads, star_index, star_threads, subset_bam_path
             )
-            bam_file = Path(alignment_result['bam_file'])
-            logger.info(f"    Aligned: {alignment_result['aligned_reads']}/{alignment_result['total_reads']} "
-                       f"({alignment_result['alignment_rate']:.1%})")
+            bam_file = Path(alignment_result["bam_file"])
+            logger.info(
+                f"    Aligned: {alignment_result['aligned_reads']}/{alignment_result['total_reads']} "
+                f"({alignment_result['alignment_rate']:.1%})"
+            )
 
         # Phase 2c. Analyze soft-clipping on the CHOSEN BAM
         logger.info("  Analyzing soft-clipping patterns...")
         boundaries = self._analyze_soft_clipping(bam_file)
-        logger.info(f"    Consensus: 5'={boundaries.consensus_5p}nt, 3'={boundaries.consensus_3p}nt")
+        logger.info(
+            f"    Consensus: 5'={boundaries.consensus_5p}nt, 3'={boundaries.consensus_3p}nt"
+        )
 
         # Phase 3: Structure Learning
         logger.info("Phase 3/4: Learning read structure (per-position entropy)...")
@@ -301,27 +316,29 @@ class AlignmentBasedExtractor:
             # If soft-clipping found extra bases, boundaries.consensus_3p > 0
             # But the MAIN adapter is what we checked
             adapter_name = adapter_info.top_adapter
-            adapter_seq = next(seq for name, seq in self.adapters if name == adapter_name)
+            adapter_seq = next(
+                seq for name, seq in self.adapters if name == adapter_name
+            )
 
             three_prime = RegionClassification(
-                region_type='adapter',
-                length=0, # Variable
+                region_type="adapter",
+                length=0,  # Variable
                 confidence=0.95,
                 consensus_sequence=adapter_seq,
                 adapter_name=adapter_name,
                 evidence={
-                    'method': 'alignment_verification',
-                    'align_rate': alignment_result['alignment_rate'],
-                    'extra_soft_clip': boundaries.consensus_3p
-                }
+                    "method": "alignment_verification",
+                    "align_rate": alignment_result["alignment_rate"],
+                    "extra_soft_clip": boundaries.consensus_3p,
+                },
             )
 
             learned_structure = LearnedStructure(
-                five_prime=partial_structure.five_prime, # Trust 5' analysis
-                three_prime=three_prime, # Enforce validated adapter
+                five_prime=partial_structure.five_prime,  # Trust 5' analysis
+                three_prime=three_prime,  # Enforce validated adapter
                 rpf_length_distribution=partial_structure.rpf_length_distribution,
-                overall_confidence='high',
-                validation_warnings=[]
+                overall_confidence="high",
+                validation_warnings=[],
             )
         else:
             # Standard path: Learn from raw soft-clips
@@ -334,11 +351,15 @@ class AlignmentBasedExtractor:
         # Rationale: producing empty outputs is confusing; if the structure
         # isn't confidently learned, guide the user to increase sample size or
         # verify alignment rather than proceed.
-        if learned_structure.overall_confidence != 'high':
+        if learned_structure.overall_confidence != "high":
             # Build a helpful error with actionable suggestions
-            aligned = alignment_result.get('aligned_reads', 0) if alignment_result else 0
-            total = alignment_result.get('total_reads', 0) if alignment_result else 0
-            rate = alignment_result.get('alignment_rate', 0.0) if alignment_result else 0.0
+            aligned = (
+                alignment_result.get("aligned_reads", 0) if alignment_result else 0
+            )
+            total = alignment_result.get("total_reads", 0) if alignment_result else 0
+            rate = (
+                alignment_result.get("alignment_rate", 0.0) if alignment_result else 0.0
+            )
 
             suggestions = [
                 "Increase --sample-size (e.g., 200000 or higher).",
@@ -365,8 +386,8 @@ class AlignmentBasedExtractor:
         # adapter scan clearly detected one, use the scan result directly.
         if config.trim_3p_adapter is None and adapter_info and adapter_info.top_adapter:
             top = adapter_info.detected_adapters[0]
-            if top['frequency'] > 0.50:
-                fallback_seq = top['sequence']
+            if top["frequency"] > 0.50:
+                fallback_seq = top["sequence"]
                 logger.warning(
                     f"  Structure learning did not resolve 3' adapter, but adapter "
                     f"scan detected '{top['name']}' in {top['frequency']:.0%} of reads. "
@@ -375,11 +396,14 @@ class AlignmentBasedExtractor:
                 config.trim_3p_adapter = fallback_seq
 
         extraction_stats = self._extract_with_config(
-            input_file, output_file, config, preserve_umi,
+            input_file,
+            output_file,
+            config,
+            preserve_umi,
             collapse_output=collapse_output,
-            collapsed_only=collapsed_only
+            collapsed_only=collapsed_only,
         )
-        if extraction_stats.get('extracted_rpfs', 0) == 0:
+        if extraction_stats.get("extracted_rpfs", 0) == 0:
             # Provide actionable context on likely causes
             adapter_note = (
                 "Adapter not confidently detected; try increasing --sample-size, "
@@ -391,24 +415,30 @@ class AlignmentBasedExtractor:
                 f"Subset alignment rate: {alignment_result.get('alignment_rate', 0.0):.1%}. "
                 + adapter_note
             )
-        logger.info(f"  Extracted {extraction_stats['extracted_rpfs']} RPFs from "
-                   f"{extraction_stats['total_reads']} reads ({extraction_stats['extraction_rate']:.1%})")
+        logger.info(
+            f"  Extracted {extraction_stats['extracted_rpfs']} RPFs from "
+            f"{extraction_stats['total_reads']} reads ({extraction_stats['extraction_rate']:.1%})"
+        )
 
         # Export seqspec YAML
-        seqspec_path = output_file.with_suffix('.seqspec.yaml')
+        seqspec_path = output_file.with_suffix(".seqspec.yaml")
         self._export_seqspec(learned_structure, seqspec_path)
         logger.info(f"  Exported learned structure to {seqspec_path}")
 
         # UMI detection (for reporting)
         umi_info = None
         if preserve_umi and learned_structure.five_prime:
-            if learned_structure.five_prime.region_type == 'umi':
+            if learned_structure.five_prime.region_type == "umi":
                 umi_info = UMIInfo(
                     detected=True,
                     positions=(0, learned_structure.five_prime.length),
-                    entropy=learned_structure.five_prime.evidence.get('avg_entropy', 0.0),
+                    entropy=learned_structure.five_prime.evidence.get(
+                        "avg_entropy", 0.0
+                    ),
                     confidence=learned_structure.overall_confidence,
-                    sample_sequences=learned_structure.five_prime.evidence.get('sample_sequences', [])
+                    sample_sequences=learned_structure.five_prime.evidence.get(
+                        "sample_sequences", []
+                    ),
                 )
 
         logger.info("=" * 60)
@@ -416,29 +446,31 @@ class AlignmentBasedExtractor:
         logger.info("=" * 60)
 
         return ExtractionResult(
-            input_reads=extraction_stats['total_reads'],
-            extracted_rpfs=extraction_stats['extracted_rpfs'],
-            extraction_rate=extraction_stats['extraction_rate'],
+            input_reads=extraction_stats["total_reads"],
+            extracted_rpfs=extraction_stats["extracted_rpfs"],
+            extraction_rate=extraction_stats["extraction_rate"],
             sample_size=len(subset_reads),
             trim_boundaries=boundaries,
             learned_structure=learned_structure,
             adapter_info=adapter_info,
             umi_info=umi_info,
             alignment_stats=alignment_result,
-            method="structure_learning"
+            method="structure_learning",
         )
 
     # =========================================================================
     # Phase 1: Sampling
     # =========================================================================
 
-    def _sample_reads(self, input_file: Path, sample_size: int) -> List[Tuple[str, str]]:
+    def _sample_reads(
+        self, input_file: Path, sample_size: int
+    ) -> List[Tuple[str, str]]:
         """Sample reads from input file."""
         reads = []
         format_type = self._detect_format(input_file)
 
         opener = get_file_opener(input_file)
-        with opener(input_file, 'rt') as f:
+        with opener(input_file, "rt") as f:
             for i, record in enumerate(SeqIO.parse(f, format_type)):
                 if i >= sample_size:
                     break
@@ -449,11 +481,11 @@ class AlignmentBasedExtractor:
     def _detect_format(self, input_file: Path) -> str:
         """Detect file format from extension."""
         name = input_file.name.lower()
-        if name.endswith('.gz'):
+        if name.endswith(".gz"):
             name = name[:-3]
-        if name.endswith(('.fq', '.fastq')):
-            return 'fastq'
-        return 'fasta'
+        if name.endswith((".fq", ".fastq")):
+            return "fastq"
+        return "fasta"
 
     # =========================================================================
     # Phase 2a: Adapter Scanning
@@ -468,42 +500,46 @@ class AlignmentBasedExtractor:
             for read_id, sequence in reads:
                 hit = self._find_adapter_in_read(sequence, adapter_seq)
                 if hit:
-                    adapter_hits[adapter_name].append({
-                        'read_id': read_id,
-                        'position': hit[0],
-                        'match_length': hit[1],
-                        'mismatches': hit[2]
-                    })
+                    adapter_hits[adapter_name].append(
+                        {
+                            "read_id": read_id,
+                            "position": hit[0],
+                            "match_length": hit[1],
+                            "mismatches": hit[2],
+                        }
+                    )
                     reads_with_adapter.add(read_id)
 
         detected = []
         for adapter_name, hits in adapter_hits.items():
             frequency = len(hits) / len(reads)
             if frequency > 0.10:
-                positions = [h['position'] for h in hits]
-                detected.append({
-                    'name': adapter_name,
-                    'sequence': next(seq for name, seq in self.adapters if name == adapter_name),
-                    'frequency': frequency,
-                    'mean_position': sum(positions) / len(positions),
-                    'position_std': self._std(positions) if len(positions) > 1 else 0.0
-                })
+                positions = [h["position"] for h in hits]
+                detected.append(
+                    {
+                        "name": adapter_name,
+                        "sequence": next(
+                            seq for name, seq in self.adapters if name == adapter_name
+                        ),
+                        "frequency": frequency,
+                        "mean_position": sum(positions) / len(positions),
+                        "position_std": (
+                            self._std(positions) if len(positions) > 1 else 0.0
+                        ),
+                    }
+                )
 
-        detected.sort(key=lambda x: x['frequency'], reverse=True)
+        detected.sort(key=lambda x: x["frequency"], reverse=True)
         no_adapter_fraction = 1.0 - (len(reads_with_adapter) / len(reads))
 
         return AdapterInfo(
             detected_adapters=detected,
             total_reads_scanned=len(reads),
-            no_adapter_fraction=no_adapter_fraction
+            no_adapter_fraction=no_adapter_fraction,
         )
 
     def _find_adapter_in_read(
-        self,
-        sequence: str,
-        adapter: str,
-        min_overlap: int = 8,
-        max_mismatches: int = 2
+        self, sequence: str, adapter: str, min_overlap: int = 8, max_mismatches: int = 2
     ) -> Optional[Tuple[int, int, int]]:
         """Find adapter in read using seed-and-extend."""
         seq_len = len(sequence)
@@ -511,7 +547,7 @@ class AlignmentBasedExtractor:
 
         for pos in range(seq_len - min_overlap + 1):
             for match_len in range(min_overlap, min(adapter_len, seq_len - pos) + 1):
-                seq_part = sequence[pos:pos + match_len]
+                seq_part = sequence[pos : pos + match_len]
                 adapter_part = adapter[:match_len]
                 mismatches = sum(1 for a, b in zip(seq_part, adapter_part) if a != b)
                 if mismatches <= max_mismatches:
@@ -529,7 +565,7 @@ class AlignmentBasedExtractor:
         reads: List[Tuple[str, str]],
         star_index: Path,
         threads: int,
-        output_prefix: Path
+        output_prefix: Path,
     ) -> Optional[Dict]:
         """
         Trim adapter from subset and align to genome.
@@ -545,7 +581,7 @@ class AlignmentBasedExtractor:
             match = self._find_adapter_in_read(seq, adapter_seq)
             if match:
                 # Trim at match start
-                trimmed_seq = seq[:match[0]]
+                trimmed_seq = seq[: match[0]]
                 if 20 <= len(trimmed_seq) <= 40:  # Valid RPF length
                     trimmed_reads.append((read_id, trimmed_seq))
             else:
@@ -556,26 +592,26 @@ class AlignmentBasedExtractor:
             logger.warning("    No reads contained the adapter - hypothesis rejected")
             return None
 
-        logger.info(f"    Trimming found adapter in {len(trimmed_reads)}/{len(reads)} reads")
+        logger.info(
+            f"    Trimming found adapter in {len(trimmed_reads)}/{len(reads)} reads"
+        )
 
         # 2. Align trimmed reads
-        temp_trimmed = output_prefix.with_suffix('.trimmed.fastq')
+        temp_trimmed = output_prefix.with_suffix(".trimmed.fastq")
         if not temp_trimmed.parent.exists():
             temp_trimmed.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(temp_trimmed, 'w') as f:
+        with open(temp_trimmed, "w") as f:
             for read_id, seq in trimmed_reads:
                 f.write(f"@{read_id}\n{seq}\n+\n{'I' * len(seq)}\n")
 
         logger.info(f"    Saved trimmed subset for debugging to: {temp_trimmed}")
 
-        bam_path = output_prefix.with_suffix('.trimmed.bam')
+        bam_path = output_prefix.with_suffix(".trimmed.bam")
         aligner = STARAligner(star_index=star_index, threads=threads)
         try:
             result = aligner.align_reads(
-                input_file=temp_trimmed,
-                format='fastq',
-                save_bam_path=bam_path
+                input_file=temp_trimmed, format="fastq", save_bam_path=bam_path
             )
         except Exception as e:
             logger.warning(f"    Verification alignment failed: {e}")
@@ -589,13 +625,15 @@ class AlignmentBasedExtractor:
         # rRNA contamination. A low threshold accepts this reality while
         # still rejecting truly wrong adapters (which give ~0% alignment).
         if align_rate > 0.02:
-            logger.info(f"    Adapter verification PASSED: {align_rate:.1%} alignment rate "
-                        f"({result.aligned_reads} reads)")
+            logger.info(
+                f"    Adapter verification PASSED: {align_rate:.1%} alignment rate "
+                f"({result.aligned_reads} reads)"
+            )
             return {
-                'total_reads': len(trimmed_reads),
-                'aligned_reads': result.aligned_reads,
-                'alignment_rate': align_rate,
-                'bam_file': str(bam_path)
+                "total_reads": len(trimmed_reads),
+                "aligned_reads": result.aligned_reads,
+                "alignment_rate": align_rate,
+                "bam_file": str(bam_path),
             }
 
         logger.info(f"    Adapter verification FAILED: {align_rate:.1%} alignment rate")
@@ -606,33 +644,27 @@ class AlignmentBasedExtractor:
         reads: List[Tuple[str, str]],
         star_index: Path,
         threads: int,
-        save_bam_path: Path
+        save_bam_path: Path,
     ) -> Dict:
         """Align subset of reads with STAR."""
-        temp_fastq = create_temp_file(suffix='.fastq')
-        with open(temp_fastq, 'w') as f:
+        temp_fastq = create_temp_file(suffix=".fastq")
+        with open(temp_fastq, "w") as f:
             for read_id, sequence in reads:
                 f.write(f"@{read_id}\n{sequence}\n+\n{'I' * len(sequence)}\n")
 
         logger.info(f"    Saved subset for alignment to: {temp_fastq}")
 
-        aligner = STARAligner(
-            star_index=star_index,
-            threads=threads,
-            max_reads=None
-        )
+        aligner = STARAligner(star_index=star_index, threads=threads, max_reads=None)
 
         result = aligner.align_reads(
-            input_file=temp_fastq,
-            format='fastq',
-            save_bam_path=save_bam_path
+            input_file=temp_fastq, format="fastq", save_bam_path=save_bam_path
         )
 
         return {
-            'total_reads': len(reads),
-            'aligned_reads': result.aligned_reads,
-            'alignment_rate': result.alignment_rate,
-            'bam_file': str(result.output_files[0]) if result.output_files else None
+            "total_reads": len(reads),
+            "aligned_reads": result.aligned_reads,
+            "alignment_rate": result.alignment_rate,
+            "bam_file": str(result.output_files[0]) if result.output_files else None,
         }
 
     # =========================================================================
@@ -651,7 +683,7 @@ class AlignmentBasedExtractor:
 
         clip_5p = Counter()
         clip_3p = Counter()
-        per_length_clips = defaultdict(lambda: {'5p': [], '3p': []})
+        per_length_clips = defaultdict(lambda: {"5p": [], "3p": []})
 
         with pysam.AlignmentFile(bam_file, "rb") as bam:
             for read in bam:
@@ -667,26 +699,26 @@ class AlignmentBasedExtractor:
                 # 5' soft-clipping
                 if cigar[0][0] == 4:
                     clip_5p[cigar[0][1]] += 1
-                    per_length_clips[read_length]['5p'].append(cigar[0][1])
+                    per_length_clips[read_length]["5p"].append(cigar[0][1])
                 else:
                     clip_5p[0] += 1
-                    per_length_clips[read_length]['5p'].append(0)
+                    per_length_clips[read_length]["5p"].append(0)
 
                 # 3' soft-clipping
                 if cigar[-1][0] == 4:
                     clip_3p[cigar[-1][1]] += 1
-                    per_length_clips[read_length]['3p'].append(cigar[-1][1])
+                    per_length_clips[read_length]["3p"].append(cigar[-1][1])
                 else:
                     clip_3p[0] += 1
-                    per_length_clips[read_length]['3p'].append(0)
+                    per_length_clips[read_length]["3p"].append(0)
 
         # Per-length consensus
         per_length_dict = {}
         high_confidence_count = 0
 
         for length in sorted(per_length_clips.keys()):
-            clips_5p = per_length_clips[length]['5p']
-            clips_3p = per_length_clips[length]['3p']
+            clips_5p = per_length_clips[length]["5p"]
+            clips_3p = per_length_clips[length]["3p"]
             n_reads = len(clips_5p)
 
             if n_reads < MIN_READS_PER_LENGTH:
@@ -707,19 +739,19 @@ class AlignmentBasedExtractor:
                 continue
 
             if min_freq >= 0.80:
-                conf_level = 'high'
+                conf_level = "high"
                 high_confidence_count += 1
             elif min_freq >= MIN_MODE_FREQUENCY:
-                conf_level = 'medium'
+                conf_level = "medium"
             else:
-                conf_level = 'low'
+                conf_level = "low"
 
             per_length_dict[length] = {
-                'trim_5p': mode_5p,
-                'trim_3p': mode_3p,
-                'rpf_length': rpf_length,
-                'n_reads': n_reads,
-                'confidence_level': conf_level
+                "trim_5p": mode_5p,
+                "trim_3p": mode_3p,
+                "rpf_length": rpf_length,
+                "n_reads": n_reads,
+                "confidence_level": conf_level,
             }
 
         consensus_5p = clip_5p.most_common(1)[0][0] if clip_5p else 0
@@ -728,19 +760,19 @@ class AlignmentBasedExtractor:
         if per_length_dict:
             high_conf_pct = high_confidence_count / len(per_length_dict)
             if high_conf_pct >= 0.80:
-                overall_confidence = 'high'
+                overall_confidence = "high"
             elif high_conf_pct >= 0.50:
-                overall_confidence = 'medium'
+                overall_confidence = "medium"
             else:
-                overall_confidence = 'low'
+                overall_confidence = "low"
         else:
-            overall_confidence = 'low'
+            overall_confidence = "low"
 
         return TrimBoundaries(
             consensus_5p=consensus_5p,
             consensus_3p=consensus_3p,
             per_length=per_length_dict,
-            confidence=overall_confidence
+            confidence=overall_confidence,
         )
 
     # =========================================================================
@@ -781,7 +813,9 @@ class AlignmentBasedExtractor:
                 cigar = read.cigartuples
 
                 # Track aligned (RPF) length
-                aligned_len = sum(length for op, length in cigar if op in (0, 7, 8))  # M, =, X
+                aligned_len = sum(
+                    length for op, length in cigar if op in (0, 7, 8)
+                )  # M, =, X
                 rpf_lengths[aligned_len] += 1
 
                 # 5' soft-clip: aligned from 5' end (position 0 = first base of read)
@@ -799,10 +833,11 @@ class AlignmentBasedExtractor:
         # Compute coverage threshold proportional to aligned reads
         total_aligned = sum(rpf_lengths.values())
         min_coverage = max(
-            int(total_aligned * self.MIN_COVERAGE_FRACTION),
-            self.MIN_COVERAGE_FLOOR
+            int(total_aligned * self.MIN_COVERAGE_FRACTION), self.MIN_COVERAGE_FLOOR
         )
-        logger.info(f"    {total_aligned} aligned reads, coverage threshold: {min_coverage}")
+        logger.info(
+            f"    {total_aligned} aligned reads, coverage threshold: {min_coverage}"
+        )
 
         # Step 2: Find dominant 5' clip length (need sufficient coverage)
         dominant_5p_len = self._find_dominant_length(clips_5p_by_length, min_coverage)
@@ -814,43 +849,39 @@ class AlignmentBasedExtractor:
             clips_5p_by_length.get(dominant_5p_len, []),
             dominant_5p_len,
             validation_warnings,
-            min_coverage
+            min_coverage,
         )
 
         # Step 4: Classify 3' region (aligned from 3' end - REVERSED)
         three_prime = self._classify_region_3prime(
-            clips_3p_all,
-            validation_warnings,
-            min_coverage
+            clips_3p_all, validation_warnings, min_coverage
         )
 
         # Step 5: Determine overall confidence
         if five_prime.confidence > 0.8 and three_prime.confidence > 0.8:
-            overall_confidence = 'high'
+            overall_confidence = "high"
         elif five_prime.confidence > 0.5 or three_prime.confidence > 0.5:
-            overall_confidence = 'medium'
+            overall_confidence = "medium"
         else:
-            overall_confidence = 'low'
+            overall_confidence = "low"
 
         # Additional validation: RPF length distribution
         if rpf_lengths:
             median_rpf = sorted(rpf_lengths.keys())[len(rpf_lengths) // 2]
             if median_rpf < 20 or median_rpf > 40:
                 validation_warnings.append(f"Unusual median RPF length: {median_rpf}")
-                overall_confidence = 'low'
+                overall_confidence = "low"
 
         return LearnedStructure(
             five_prime=five_prime,
             three_prime=three_prime,
             rpf_length_distribution=dict(rpf_lengths),
             overall_confidence=overall_confidence,
-            validation_warnings=validation_warnings
+            validation_warnings=validation_warnings,
         )
 
     def _find_dominant_length(
-        self,
-        clips_by_length: Dict[int, List[str]],
-        min_coverage: int = 30
+        self, clips_by_length: Dict[int, List[str]], min_coverage: int = 30
     ) -> Optional[int]:
         """Find the most common clip length with sufficient coverage."""
         if not clips_by_length:
@@ -872,7 +903,7 @@ class AlignmentBasedExtractor:
         sequences: List[str],
         length: Optional[int],
         warnings: List[str],
-        min_coverage: int = 30
+        min_coverage: int = 30,
     ) -> RegionClassification:
         """
         Classify 5' region using per-position entropy (aligned from 5' end).
@@ -885,20 +916,22 @@ class AlignmentBasedExtractor:
         # No clips = no region
         if not sequences or length is None or length == 0:
             return RegionClassification(
-                region_type='none',
+                region_type="none",
                 length=0,
                 confidence=1.0,
-                evidence={'reason': 'no_clips_detected'}
+                evidence={"reason": "no_clips_detected"},
             )
 
         # Insufficient coverage
         if len(sequences) < min_coverage:
-            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {min_coverage})")
+            warnings.append(
+                f"{region_name} has only {len(sequences)} sequences (need {min_coverage})"
+            )
             return RegionClassification(
-                region_type='unknown',
+                region_type="unknown",
                 length=length,
                 confidence=0.3,
-                evidence={'reason': 'insufficient_coverage', 'count': len(sequences)}
+                evidence={"reason": "insufficient_coverage", "count": len(sequences)},
             )
 
         # Build per-position profiles (forward direction)
@@ -910,13 +943,12 @@ class AlignmentBasedExtractor:
                 profile = PositionProfile.from_bases(pos, bases)
                 profiles.append(profile)
 
-        return self._classify_from_profiles(profiles, length, region_name, sequences, warnings)
+        return self._classify_from_profiles(
+            profiles, length, region_name, sequences, warnings
+        )
 
     def _classify_region_3prime(
-        self,
-        sequences: List[str],
-        warnings: List[str],
-        min_coverage: int = 30
+        self, sequences: List[str], warnings: List[str], min_coverage: int = 30
     ) -> RegionClassification:
         """
         Classify 3' region by trying BOTH orientations.
@@ -935,20 +967,22 @@ class AlignmentBasedExtractor:
         # No clips = no region
         if not sequences:
             return RegionClassification(
-                region_type='none',
+                region_type="none",
                 length=0,
                 confidence=1.0,
-                evidence={'reason': 'no_clips_detected'}
+                evidence={"reason": "no_clips_detected"},
             )
 
         # Insufficient coverage
         if len(sequences) < min_coverage:
-            warnings.append(f"{region_name} has only {len(sequences)} sequences (need {min_coverage})")
+            warnings.append(
+                f"{region_name} has only {len(sequences)} sequences (need {min_coverage})"
+            )
             return RegionClassification(
-                region_type='unknown',
+                region_type="unknown",
                 length=0,
                 confidence=0.3,
-                evidence={'reason': 'insufficient_coverage', 'count': len(sequences)}
+                evidence={"reason": "insufficient_coverage", "count": len(sequences)},
             )
 
         # Find the dominant length for reporting
@@ -967,23 +1001,31 @@ class AlignmentBasedExtractor:
         reversed_seqs = [seq[::-1] for seq in sequences]
         reversed_profiles = self._build_profiles_forward(reversed_seqs, min_coverage)
         reversed_result = self._classify_from_profiles(
-            reversed_profiles, dominant_length, f"{region_name} (reversed)", reversed_seqs, []
+            reversed_profiles,
+            dominant_length,
+            f"{region_name} (reversed)",
+            reversed_seqs,
+            [],
         )
 
         # Pick the better result based on confidence and clarity
         # Prefer adapter detection (most common) if both are similar
-        logger.debug(f"  3' forward: {forward_result.region_type} (conf={forward_result.confidence:.2f})")
-        logger.debug(f"  3' reversed: {reversed_result.region_type} (conf={reversed_result.confidence:.2f})")
+        logger.debug(
+            f"  3' forward: {forward_result.region_type} (conf={forward_result.confidence:.2f})"
+        )
+        logger.debug(
+            f"  3' reversed: {reversed_result.region_type} (conf={reversed_result.confidence:.2f})"
+        )
 
         # Decision logic:
         # 1. If one is clearly adapter and other is unknown/low-conf, use the adapter
         # 2. If one is clearly UMI and other is unknown, use the UMI
         # 3. If both similar, prefer forward (adapter at boundary is more common)
 
-        if forward_result.region_type == 'adapter' and forward_result.confidence > 0.5:
+        if forward_result.region_type == "adapter" and forward_result.confidence > 0.5:
             # Adapter detected at RPF boundary - most common case
             return forward_result
-        elif reversed_result.region_type == 'umi' and reversed_result.confidence > 0.7:
+        elif reversed_result.region_type == "umi" and reversed_result.confidence > 0.7:
             # UMI at 3' end of read - need to un-reverse consensus if any
             return reversed_result
         elif forward_result.confidence >= reversed_result.confidence:
@@ -997,11 +1039,13 @@ class AlignmentBasedExtractor:
                     confidence=reversed_result.confidence,
                     consensus_sequence=reversed_result.consensus_sequence[::-1],
                     adapter_name=reversed_result.adapter_name,
-                    evidence=reversed_result.evidence
+                    evidence=reversed_result.evidence,
                 )
             return reversed_result
 
-    def _build_profiles_forward(self, sequences: List[str], min_coverage: int = 30) -> List[PositionProfile]:
+    def _build_profiles_forward(
+        self, sequences: List[str], min_coverage: int = 30
+    ) -> List[PositionProfile]:
         """Build per-position profiles aligned from start of sequences."""
         max_len = max(len(s) for s in sequences) if sequences else 0
         min_bases_per_pos = max(min_coverage // 2, 10)
@@ -1019,7 +1063,7 @@ class AlignmentBasedExtractor:
         length: int,
         region_name: str,
         sequences: List[str],
-        warnings: List[str]
+        warnings: List[str],
     ) -> RegionClassification:
         """
         Classify a region based on per-position entropy profiles.
@@ -1029,10 +1073,10 @@ class AlignmentBasedExtractor:
         if not profiles:
             warnings.append(f"{region_name} has no valid position profiles")
             return RegionClassification(
-                region_type='unknown',
+                region_type="unknown",
                 length=length,
                 confidence=0.2,
-                evidence={'reason': 'no_valid_profiles'}
+                evidence={"reason": "no_valid_profiles"},
             )
 
         # Analyze entropy distribution
@@ -1048,74 +1092,75 @@ class AlignmentBasedExtractor:
             # Most positions are random -> UMI
             confidence = min(0.5 + random_fraction / 2, 0.95)
             return RegionClassification(
-                region_type='umi',
+                region_type="umi",
                 length=length,
                 confidence=confidence,
                 evidence={
-                    'avg_entropy': avg_entropy,
-                    'random_fraction': random_fraction,
-                    'conserved_fraction': conserved_fraction,
-                    'sample_sequences': sequences[:20]
-                }
+                    "avg_entropy": avg_entropy,
+                    "random_fraction": random_fraction,
+                    "conserved_fraction": conserved_fraction,
+                    "sample_sequences": sequences[:20],
+                },
             )
 
         elif conserved_fraction > 0.5:
             # Most positions are conserved -> Adapter
-            consensus = ''.join(p.dominant_base for p in profiles)
+            consensus = "".join(p.dominant_base for p in profiles)
 
             # Validate against known adapter database
             adapter_match = self._match_adapter_database(consensus)
             if adapter_match:
                 confidence = min(0.6 + conserved_fraction / 2.5, 0.95)
                 return RegionClassification(
-                    region_type='adapter',
+                    region_type="adapter",
                     length=length,
                     confidence=confidence,
                     consensus_sequence=consensus,
                     adapter_name=adapter_match[0],
                     evidence={
-                        'avg_entropy': avg_entropy,
-                        'random_fraction': random_fraction,
-                        'conserved_fraction': conserved_fraction,
-                        'database_match': adapter_match[0],
-                        'match_score': adapter_match[1]
-                    }
+                        "avg_entropy": avg_entropy,
+                        "random_fraction": random_fraction,
+                        "conserved_fraction": conserved_fraction,
+                        "database_match": adapter_match[0],
+                        "match_score": adapter_match[1],
+                    },
                 )
             else:
                 # Conserved but not in database - warn but accept
-                warnings.append(f"{region_name} adapter not found in database: {consensus[:20]}...")
+                warnings.append(
+                    f"{region_name} adapter not found in database: {consensus[:20]}..."
+                )
                 confidence = conserved_fraction * 0.7  # Lower confidence
                 return RegionClassification(
-                    region_type='adapter',
+                    region_type="adapter",
                     length=length,
                     confidence=confidence,
                     consensus_sequence=consensus,
                     evidence={
-                        'avg_entropy': avg_entropy,
-                        'random_fraction': random_fraction,
-                        'conserved_fraction': conserved_fraction,
-                        'database_match': None
-                    }
+                        "avg_entropy": avg_entropy,
+                        "random_fraction": random_fraction,
+                        "conserved_fraction": conserved_fraction,
+                        "database_match": None,
+                    },
                 )
 
         else:
             # Ambiguous entropy pattern
-            warnings.append(f"{region_name} has ambiguous entropy (random={random_fraction:.1%}, conserved={conserved_fraction:.1%})")
+            warnings.append(
+                f"{region_name} has ambiguous entropy (random={random_fraction:.1%}, conserved={conserved_fraction:.1%})"
+            )
             return RegionClassification(
-                region_type='unknown',
+                region_type="unknown",
                 length=length,
                 confidence=0.4,
                 evidence={
-                    'avg_entropy': avg_entropy,
-                    'random_fraction': random_fraction,
-                    'conserved_fraction': conserved_fraction
-                }
+                    "avg_entropy": avg_entropy,
+                    "random_fraction": random_fraction,
+                    "conserved_fraction": conserved_fraction,
+                },
             )
 
-    def _match_adapter_database(
-        self,
-        consensus: str
-    ) -> Optional[Tuple[str, float]]:
+    def _match_adapter_database(self, consensus: str) -> Optional[Tuple[str, float]]:
         """Match consensus sequence against known adapter database."""
         best_match = None
         best_score = 0.0
@@ -1161,12 +1206,14 @@ class AlignmentBasedExtractor:
         # 5' region
         if structure.five_prime:
             fp = structure.five_prime
-            if fp.region_type == 'umi':
-                logger.info(f"    5' End: UMI (length={fp.length}bp, entropy={fp.evidence.get('avg_entropy', 0):.2f})")
-            elif fp.region_type == 'adapter':
+            if fp.region_type == "umi":
+                logger.info(
+                    f"    5' End: UMI (length={fp.length}bp, entropy={fp.evidence.get('avg_entropy', 0):.2f})"
+                )
+            elif fp.region_type == "adapter":
                 logger.info(f"    5' End: ADAPTER ({fp.adapter_name or 'unknown'})")
                 logger.info(f"             Sequence: {fp.consensus_sequence}")
-            elif fp.region_type == 'none':
+            elif fp.region_type == "none":
                 logger.info("    5' End: None (no soft-clipping)")
             else:
                 logger.info("    5' End: UNKNOWN (ambiguous)")
@@ -1174,12 +1221,12 @@ class AlignmentBasedExtractor:
         # 3' region
         if structure.three_prime:
             tp = structure.three_prime
-            if tp.region_type == 'umi':
+            if tp.region_type == "umi":
                 logger.info(f"    3' End: UMI (length={tp.length}bp)")
-            elif tp.region_type == 'adapter':
+            elif tp.region_type == "adapter":
                 logger.info(f"    3' End: ADAPTER ({tp.adapter_name or 'unknown'})")
                 logger.info(f"             Sequence: {tp.consensus_sequence}")
-            elif tp.region_type == 'none':
+            elif tp.region_type == "none":
                 logger.info("    3' End: None (no soft-clipping)")
             else:
                 logger.info("    3' End: UNKNOWN (ambiguous)")
@@ -1192,8 +1239,8 @@ class AlignmentBasedExtractor:
     # Phase 4: Extraction with Learned Configuration
     # =========================================================================
 
-# Deleted duplicated broken extract method.
-        # ...
+    # Deleted duplicated broken extract method.
+    # ...
 
     def _extract_with_config(
         self,
@@ -1202,7 +1249,7 @@ class AlignmentBasedExtractor:
         config: TrimmerConfig,
         preserve_umi: bool,
         collapse_output: bool = True,
-        collapsed_only: bool = False
+        collapsed_only: bool = False,
     ) -> Dict:
         """Extract RPFs using Two-Stage Collapsing for alignment-based results."""
         from .collapsed import TwoStageCollapser
@@ -1222,13 +1269,16 @@ class AlignmentBasedExtractor:
                     remaining_seq,
                     config.trim_3p_adapter,
                     config.trim_3p_adapter_min_overlap,
-                    config.trim_3p_adapter_max_mismatches
+                    config.trim_3p_adapter_max_mismatches,
                 )
                 if adapter_pos >= 0:
                     end_idx = start_idx + adapter_pos
 
             rpf_seq = seq[start_idx:end_idx]
-            if len(rpf_seq) < config.min_rpf_length or len(rpf_seq) > config.max_rpf_length:
+            if (
+                len(rpf_seq) < config.min_rpf_length
+                or len(rpf_seq) > config.max_rpf_length
+            ):
                 return None
             return rpf_seq
 
@@ -1243,7 +1293,7 @@ class AlignmentBasedExtractor:
 
         # Stage 4: Write outputs
         if collapse_output:
-            collapsed_path = output_file.with_suffix('.collapsed.fa')
+            collapsed_path = output_file.with_suffix(".collapsed.fa")
             collapser.write_collapsed_fasta(final_counts, collapsed_path)
 
         total_extracted = sum(final_counts.values())
@@ -1254,24 +1304,22 @@ class AlignmentBasedExtractor:
             # Note: UMI preservation in headers would need more careful tracking of
             # original headers per unique sequence if implemented here.
             # For pure performance/disk savings, we focus on the sequences.
-            with open(output_file, 'w') as fout:
+            with open(output_file, "w") as fout:
                 for idx, (seq, count) in enumerate(final_counts.items(), 1):
                     for i in range(count):
-                        fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
+                        fout.write(
+                            f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n"
+                        )
 
         return {
-            'total_reads': total_input,
-            'extracted_rpfs': total_extracted,
-            'extraction_rate': total_extracted / total_input if total_input > 0 else 0,
-            'unique_rpf': len(final_counts)
+            "total_reads": total_input,
+            "extracted_rpfs": total_extracted,
+            "extraction_rate": total_extracted / total_input if total_input > 0 else 0,
+            "unique_rpf": len(final_counts),
         }
 
     def _find_adapter_best_match(
-        self,
-        sequence: str,
-        adapter: str,
-        min_overlap: int,
-        max_mismatches: int
+        self, sequence: str, adapter: str, min_overlap: int, max_mismatches: int
     ) -> int:
         """
         Find adapter position - optimized for speed.
@@ -1310,7 +1358,7 @@ class AlignmentBasedExtractor:
                 if match_len < min_overlap:
                     continue
 
-                seq_part = sequence[pos:pos + match_len]
+                seq_part = sequence[pos : pos + match_len]
                 adapter_part = adapter[:match_len]
 
                 mismatches = sum(1 for a, b in zip(seq_part, adapter_part) if a != b)
@@ -1328,7 +1376,7 @@ class AlignmentBasedExtractor:
         """Export learned structure as seqspec YAML."""
         seqspec_data = structure.to_seqspec_yaml()
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             yaml.dump(seqspec_data, f, default_flow_style=False, sort_keys=False)
 
     # =========================================================================

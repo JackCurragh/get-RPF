@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import pysam
+
     PYSAM_AVAILABLE = True
 except ImportError:
     PYSAM_AVAILABLE = False
@@ -57,17 +58,16 @@ class AlignmentResults:
             "per_length_analysis": self.per_length_analysis,
             "detected_features": self.features,
             "output_files": [str(f) for f in self.output_files if Path(f).exists()],
-            "metadata": {
-                "soft_clipping_analysis_available": self.pysam_available
-            }
+            "metadata": {"soft_clipping_analysis_available": self.pysam_available},
         }
 
         if format.lower() == "json":
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(report_data, f, indent=2)
         elif format.lower() == "csv":
             import csv
-            with open(output_path, 'w', newline='') as f:
+
+            with open(output_path, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["metric", "value"])
                 for key, value in report_data["alignment_statistics"].items():
@@ -112,11 +112,18 @@ class STARAligner:
     def _validate_star_index(self) -> None:
         """Validate STAR index directory exists and has required files."""
         if not self.star_index.exists():
-            raise FileNotFoundError(f"STAR index directory not found: {self.star_index}")
+            raise FileNotFoundError(
+                f"STAR index directory not found: {self.star_index}"
+            )
 
         required_files = [
-            "chrName.txt", "chrLength.txt", "chrStart.txt",
-            "Genome", "genomeParameters.txt", "SA", "SAindex"
+            "chrName.txt",
+            "chrLength.txt",
+            "chrStart.txt",
+            "Genome",
+            "genomeParameters.txt",
+            "SA",
+            "SAindex",
         ]
 
         for required_file in required_files:
@@ -124,10 +131,7 @@ class STARAligner:
                 logger.warning(f"Missing STAR index file: {required_file}")
 
     def _prepare_input_file(
-        self,
-        input_file: Path,
-        format: str,
-        count_pattern: Optional[str] = None
+        self, input_file: Path, format: str, count_pattern: Optional[str] = None
     ) -> Path:
         """Prepare input file for STAR alignment.
 
@@ -159,7 +163,7 @@ class STARAligner:
             temp_fastq = create_temp_file(suffix=".fastq")
             self.temp_files.append(temp_fastq)
 
-            with open(input_file, 'r') as fin, open(temp_fastq, 'w') as fout:
+            with open(input_file, "r") as fin, open(temp_fastq, "w") as fout:
                 lines = fin.readlines()
                 for i in range(0, len(lines), 2):
                     if i + 1 < len(lines):
@@ -167,8 +171,8 @@ class STARAligner:
                         sequence = lines[i + 1].strip()
 
                         # Convert to FASTQ format
-                        fastq_header = header.replace('>', '@', 1)
-                        quality = 'I' * len(sequence)  # High quality scores
+                        fastq_header = header.replace(">", "@", 1)
+                        quality = "I" * len(sequence)  # High quality scores
 
                         fout.write(f"{fastq_header}\n")
                         fout.write(f"{sequence}\n")
@@ -196,20 +200,34 @@ class STARAligner:
         # STAR command with ribosome profiling optimized parameters
         star_cmd = [
             self.star_executable,
-            "--runThreadN", str(self.threads),
-            "--genomeDir", str(self.star_index),
-            "--readFilesIn", str(input_fastq),
-            "--outFileNamePrefix", str(temp_dir / "Aligned_"),
-            "--outSAMtype", "BAM", "SortedByCoordinate",
-            "--alignIntronMax", "1",  # No introns for most prokaryotes
-            "--alignEndsType", "Local",  # Allow soft-clipping for adapters
-            "--outFilterMultimapNmax", "1",  # Only unique alignments
-            "--outFilterMismatchNmax", "1",  # Allow 1 mismatch
-            "--seedSearchStartLmax", "20",  # Shorter seed for short reads
+            "--runThreadN",
+            str(self.threads),
+            "--genomeDir",
+            str(self.star_index),
+            "--readFilesIn",
+            str(input_fastq),
+            "--outFileNamePrefix",
+            str(temp_dir / "Aligned_"),
+            "--outSAMtype",
+            "BAM",
+            "SortedByCoordinate",
+            "--alignIntronMax",
+            "1",  # No introns for most prokaryotes
+            "--alignEndsType",
+            "Local",  # Allow soft-clipping for adapters
+            "--outFilterMultimapNmax",
+            "1",  # Only unique alignments
+            "--outFilterMismatchNmax",
+            "1",  # Allow 1 mismatch
+            "--seedSearchStartLmax",
+            "20",  # Shorter seed for short reads
             # Relaxed specific filters for RPF extraction
-            "--outFilterScoreMinOverLread", "0",
-            "--outFilterMatchNminOverLread", "0",
-            "--outFilterMatchNmin", "16",
+            "--outFilterScoreMinOverLread",
+            "0",
+            "--outFilterMatchNminOverLread",
+            "0",
+            "--outFilterMatchNmin",
+            "16",
         ]
 
         # Handle compressed input
@@ -273,24 +291,26 @@ class STARAligner:
             return stats
 
         try:
-            with open(log_file, 'r') as f:
+            with open(log_file, "r") as f:
                 for line in f:
                     line = line.strip()
                     if "Number of input reads" in line:
-                        stats["input_reads"] = int(line.split('\t')[-1])
+                        stats["input_reads"] = int(line.split("\t")[-1])
                     elif "Uniquely mapped reads number" in line:
-                        stats["uniquely_mapped"] = int(line.split('\t')[-1])
+                        stats["uniquely_mapped"] = int(line.split("\t")[-1])
                     elif "Number of reads mapped to multiple loci" in line:
-                        stats["multimapping"] = int(line.split('\t')[-1])
+                        stats["multimapping"] = int(line.split("\t")[-1])
                     elif "Number of reads unmapped" in line:
-                        stats["unmapped"] = int(line.split('\t')[-1])
+                        stats["unmapped"] = int(line.split("\t")[-1])
 
         except Exception as e:
             logger.warning(f"Error parsing STAR log: {e}")
 
         return stats
 
-    def _analyze_soft_clipping(self, bam_file: Path, threshold: float = 0.85) -> Dict[str, Any]:
+    def _analyze_soft_clipping(
+        self, bam_file: Path, threshold: float = 0.85
+    ) -> Dict[str, Any]:
         """Analyze soft-clipping patterns in aligned reads with per-length analysis.
 
         Args:
@@ -344,17 +364,21 @@ class STARAligner:
 
                         # Track per length
                         if read_length not in per_length_data:
-                            per_length_data[read_length] = {'5p': [], '3p': []}
-                        per_length_data[read_length]['5p'].append(clip_5)
-                        per_length_data[read_length]['3p'].append(clip_3)
+                            per_length_data[read_length] = {"5p": [], "3p": []}
+                        per_length_data[read_length]["5p"].append(clip_5)
+                        per_length_data[read_length]["3p"].append(clip_3)
 
                         if clip_5 > 0 or clip_3 > 0:
                             reads_with_clips += 1
 
                 if clip_5prime:
                     soft_clip_stats["reads_with_soft_clips"] = reads_with_clips
-                    soft_clip_stats["mean_5prime_clips"] = sum(clip_5prime) / len(clip_5prime)
-                    soft_clip_stats["mean_3prime_clips"] = sum(clip_3prime) / len(clip_3prime)
+                    soft_clip_stats["mean_5prime_clips"] = sum(clip_5prime) / len(
+                        clip_5prime
+                    )
+                    soft_clip_stats["mean_3prime_clips"] = sum(clip_3prime) / len(
+                        clip_3prime
+                    )
                     soft_clip_stats["max_5prime_clips"] = max(clip_5prime)
                     soft_clip_stats["max_3prime_clips"] = max(clip_3prime)
 
@@ -370,9 +394,7 @@ class STARAligner:
         return soft_clip_stats
 
     def _calculate_trim_recommendations(
-        self,
-        per_length_data: Dict[int, Dict[str, List[int]]],
-        threshold: float = 0.85
+        self, per_length_data: Dict[int, Dict[str, List[int]]], threshold: float = 0.85
     ) -> Dict[str, Any]:
         """Calculate trim recommendations from per-length soft-clipping data.
 
@@ -401,8 +423,8 @@ class STARAligner:
         length_recommendations = {}
 
         for length in sorted(per_length_data.keys()):
-            clips_5p = per_length_data[length]['5p']
-            clips_3p = per_length_data[length]['3p']
+            clips_5p = per_length_data[length]["5p"]
+            clips_3p = per_length_data[length]["3p"]
 
             if not clips_5p:
                 continue
@@ -426,7 +448,9 @@ class STARAligner:
                 "pct_cleaned_by_trim": min(pct_cleaned_5p, pct_cleaned_3p),
             }
 
-            recommendations["per_length_analysis"][str(length)] = length_recommendations[length]
+            recommendations["per_length_analysis"][str(length)] = (
+                length_recommendations[length]
+            )
 
         # Detect global consensus pattern
         if length_recommendations:
@@ -457,8 +481,7 @@ class STARAligner:
         return sorted_clips[min(target_idx, len(sorted_clips) - 1)]
 
     def _detect_global_consensus(
-        self,
-        length_recommendations: Dict[int, Dict[str, Any]]
+        self, length_recommendations: Dict[int, Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Detect if there's a global consensus trim pattern across read lengths.
 
@@ -489,6 +512,7 @@ class STARAligner:
 
         # Calculate mode (most common value) weighted by reads
         from collections import Counter
+
         counter_5p = Counter(trim_5p_values)
         counter_3p = Counter(trim_3p_values)
 
@@ -510,7 +534,7 @@ class STARAligner:
         # If we have many read lengths but only 1-2 unique trim values, that's strong consensus
         n_lengths = len(length_recommendations)
         if n_lengths >= 3:
-            variance_check = (unique_5p <= 2 and unique_3p <= 2)
+            variance_check = unique_5p <= 2 and unique_3p <= 2
             global_pattern_detected = global_pattern_detected and variance_check
 
         result = {
@@ -538,7 +562,7 @@ class STARAligner:
         input_file: Path,
         format: str,
         count_pattern: Optional[str] = None,
-        save_bam_path: Optional[Path] = None
+        save_bam_path: Optional[Path] = None,
     ) -> AlignmentResults:
         """Perform STAR alignment on input reads.
 
@@ -563,7 +587,9 @@ class STARAligner:
             results.uniquely_aligned = star_stats.get("uniquely_mapped", 0)
             results.multimapping_reads = star_stats.get("multimapping", 0)
             results.unmapped_reads = star_stats.get("unmapped", 0)
-            results.aligned_reads = results.uniquely_aligned + results.multimapping_reads
+            results.aligned_reads = (
+                results.uniquely_aligned + results.multimapping_reads
+            )
 
             if results.input_reads > 0:
                 results.alignment_rate = results.aligned_reads / results.input_reads
@@ -592,7 +618,7 @@ class STARAligner:
             # TODO: Add feature detection on aligned reads
             results.features = {
                 "feature_detection": "not_implemented",
-                "note": "Feature detection will be added in next iteration"
+                "note": "Feature detection will be added in next iteration",
             }
 
             return results

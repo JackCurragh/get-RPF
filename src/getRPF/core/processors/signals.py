@@ -30,7 +30,9 @@ class SignalStats:
 class SignalProcessor:
     """Calculates informative signals from read populations."""
 
-    def process_reads(self, reads: List[str], compute_dinucleotide: bool = True) -> SignalStats:
+    def process_reads(
+        self, reads: List[str], compute_dinucleotide: bool = True
+    ) -> SignalStats:
         """Calculate signal statistics for a set of reads.
 
         Args:
@@ -65,15 +67,17 @@ class SignalProcessor:
             composition_5p=composition_5p,
             dinucleotide_5p=(
                 self._calculate_dinucleotides(sample_reads, align="5p")
-                if compute_dinucleotide else []
+                if compute_dinucleotide
+                else []
             ),
             entropy_3p=entropy_3p,
             composition_3p=composition_3p,
             dinucleotide_3p=(
                 self._calculate_dinucleotides(sample_reads, align="3p")
-                if compute_dinucleotide else []
+                if compute_dinucleotide
+                else []
             ),
-            sample_size=len(sample_reads)
+            sample_size=len(sample_reads),
         )
 
     def _calculate_metrics(
@@ -138,7 +142,9 @@ class SignalProcessor:
 
         return entropies
 
-    def _calculate_composition(self, reads: List[str], align: str = "5p") -> List[Dict[str, float]]:
+    def _calculate_composition(
+        self, reads: List[str], align: str = "5p"
+    ) -> List[Dict[str, float]]:
         """Calculate per-position nucleotide frequencies."""
         length = self._get_max_len(reads)
         compositions = []
@@ -156,7 +162,9 @@ class SignalProcessor:
 
         return compositions
 
-    def _calculate_dinucleotides(self, reads: List[str], align: str = "5p") -> List[Dict[str, float]]:
+    def _calculate_dinucleotides(
+        self, reads: List[str], align: str = "5p"
+    ) -> List[Dict[str, float]]:
         """Calculate per-position dinucleotide frequencies."""
         length = self._get_max_len(reads)
         di_freqs = []
@@ -173,7 +181,7 @@ class SignalProcessor:
                 # Check bounds
                 if 0 <= idx < len(read) and 0 <= next_idx < len(read):
                     if align == "5p":
-                        d = read[idx:idx+2]
+                        d = read[idx : idx + 2]
                     else:
                         # For 3', we iterate backwards but read sequence forwards
                         # If index is 0 (last base), we want base at -2,-1
@@ -187,7 +195,7 @@ class SignalProcessor:
                         # We want dinuc starting at that pos?
                         # Let's define 3' dinuc at pos i as: base at -(i+2) and -(i+1)
                         # e.g. pos 0 is last 2 bases.
-                        p1 = -(i+2)
+                        p1 = -(i + 2)
                         p2 = -(i)
                         # slice notation [low:high]
                         if abs(p1) <= len(read):
@@ -216,7 +224,7 @@ class SignalProcessor:
             if align == "5p":
                 if pos < len(read):
                     bases.append(read[pos])
-            else: # 3p
+            else:  # 3p
                 # pos 0 is the last base (index -1)
                 # pos 1 is second to last (index -2)
                 idx = -(pos + 1)

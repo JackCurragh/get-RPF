@@ -11,18 +11,16 @@ def test_observed_protocols_load_as_builtin_architectures():
     db = ArchitectureDatabase()
 
     observed = [
-        arch
-        for arch in db.architectures
-        if arch.protocol_name.startswith("observed_")
+        arch for arch in db.architectures if arch.protocol_name.startswith("observed_")
     ]
 
     assert len(observed) == 18
     assert all(arch.expected_rpf_length == (15, 40) for arch in observed)
     assert all(arch.adapter_sequences for arch in observed)
-    assert all("U" not in adapter for arch in observed for adapter in arch.adapter_sequences)
-    assert "observed_ctgtaggc_3p_adapter" in {
-        arch.protocol_name for arch in observed
-    }
+    assert all(
+        "U" not in adapter for arch in observed for adapter in arch.adapter_sequences
+    )
+    assert "observed_ctgtaggc_3p_adapter" in {arch.protocol_name for arch in observed}
 
 
 def test_observed_dual_ligation_loader_keeps_5p_adapter_out_of_trim_targets():
@@ -45,15 +43,16 @@ def test_observed_dual_ligation_loader_keeps_5p_adapter_out_of_trim_targets():
 def test_loader_records_post_rpf_technical_regions():
     db = ArchitectureDatabase()
     mcglincy = next(
-        arch for arch in db.architectures
+        arch
+        for arch in db.architectures
         if arch.protocol_name == "mcglincy_ingolia_2017"
     )
     tcp = next(
-        arch for arch in db.architectures
-        if arch.protocol_name == "tcp_seq_se100"
+        arch for arch in db.architectures if arch.protocol_name == "tcp_seq_se100"
     )
     arabidopsis = next(
-        arch for arch in db.architectures
+        arch
+        for arch in db.architectures
         if arch.protocol_name == "arabidopsis_thaliana_timeseries_2024"
     )
 

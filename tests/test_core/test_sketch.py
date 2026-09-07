@@ -91,9 +91,9 @@ def test_sketch_quality_profile_flags_polyg_dark_cycle(tmp_path):
     sketch = SketchBuilder(max_reads=1000).build_from_file(path, format="fastq")
 
     entropy_tail = sketch.pooled.entropy_3p[0]
-    dominant_base = max(
-        sketch.pooled.composition_3p[0].items(), key=lambda kv: kv[1]
-    )[0]
+    dominant_base = max(sketch.pooled.composition_3p[0].items(), key=lambda kv: kv[1])[
+        0
+    ]
     quality_tail = sketch.quality_3p[0]
 
     assert entropy_tail < 0.5

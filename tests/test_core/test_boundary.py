@@ -19,7 +19,9 @@ def _cycled_seq(i: int, length: int) -> str:
 
 def _per_length_stats(reads_by_length):
     proc = SignalProcessor()
-    stats = {length: proc.process_reads(reads) for length, reads in reads_by_length.items()}
+    stats = {
+        length: proc.process_reads(reads) for length, reads in reads_by_length.items()
+    }
     support = {length: len(reads) for length, reads in reads_by_length.items()}
     return stats, support
 
@@ -145,7 +147,11 @@ def test_five_prime_never_trims_without_named_element():
     assert decisions_no_named[28].decision != "safe_to_trim"
 
     decisions_named = estimate_boundaries(
-        stats, support, end="5p", s_min=1000, support_floor=200,
+        stats,
+        support,
+        end="5p",
+        s_min=1000,
+        support_floor=200,
         named_element_lengths={28},
     )
     assert decisions_named[28].decision == "safe_to_trim"

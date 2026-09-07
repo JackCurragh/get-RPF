@@ -28,12 +28,16 @@ def _cycled_seq(i: int, length: int) -> str:
 def _write_fastq(path, sequences, qualities=None):
     lines = []
     for i, seq in enumerate(sequences):
-        quals = "".join(chr(33 + q) for q in qualities[i]) if qualities else "I" * len(seq)
+        quals = (
+            "".join(chr(33 + q) for q in qualities[i]) if qualities else "I" * len(seq)
+        )
         lines.append(f"@r{i}\n{seq}\n+\n{quals}\n")
     path.write_text("".join(lines))
 
 
-def test_duplication_and_length_shape_use_weighted_counts_not_unique_sequences(tmp_path):
+def test_duplication_and_length_shape_use_weighted_counts_not_unique_sequences(
+    tmp_path,
+):
     # 900 raw reads that are all the *same* 30nt sequence (heavy true
     # duplication), plus 100 raw reads that are each a *distinct* 40nt
     # sequence (no duplication). Unique-sequence counting would see the

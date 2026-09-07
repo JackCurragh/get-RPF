@@ -294,14 +294,20 @@ def ingest_evidence(
     )
 
 
-def ingest_cohort(db_path: Path, evidence_dir: Path, pattern: str = "*.evidence.json") -> Path:
+def ingest_cohort(
+    db_path: Path, evidence_dir: Path, pattern: str = "*.evidence.json"
+) -> Path:
     """Batch-ingest a directory of `{sample}.evidence.json` files (M6's
     samplesheet cohort output) into the DuckDB store. Unlike `ingest_all`,
     this does not require one CLI invocation per sample."""
     evidence_dir = Path(evidence_dir)
     con = _ensure_db(Path(db_path))
     for evidence_path in sorted(evidence_dir.glob(pattern)):
-        sample_id = evidence_path.name[: -len(pattern) + 1] if pattern.startswith("*") else evidence_path.stem
+        sample_id = (
+            evidence_path.name[: -len(pattern) + 1]
+            if pattern.startswith("*")
+            else evidence_path.stem
+        )
         try:
             data = json.loads(evidence_path.read_text())
             sample_id = data.get("sample_id", sample_id)
@@ -313,7 +319,9 @@ def ingest_cohort(db_path: Path, evidence_dir: Path, pattern: str = "*.evidence.
     return Path(db_path)
 
 
-def upsert_sample(con: duckdb.DuckDBPyConnection, sample_id: str, source_path: Path) -> None:
+def upsert_sample(
+    con: duckdb.DuckDBPyConnection, sample_id: str, source_path: Path
+) -> None:
     con.execute(
         """
         INSERT INTO samples (sample_id, source_path) VALUES (?, ?)
@@ -341,4 +349,3 @@ def ingest_all(
         ingest_extraction_json(con, sample_id, extraction_json)
     con.close()
     return Path(db_path)
-

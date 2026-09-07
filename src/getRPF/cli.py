@@ -144,9 +144,13 @@ def cli():
 )
 @click.option("--max-reads", "-n", type=int, default=None)
 @click.option("--star-index", type=click.Path(exists=True, path_type=Path))
-@click.option("--star-threads", type=int, default=None, help="Threads for STAR verification")
+@click.option(
+    "--star-threads", type=int, default=None, help="Threads for STAR verification"
+)
 @click.option("--threads", type=int, default=1, help="Alias for --star-threads")
-@click.option("--output-report", type=click.Path(path_type=Path), help="Legacy report path alias")
+@click.option(
+    "--output-report", type=click.Path(path_type=Path), help="Legacy report path alias"
+)
 @click.option("--collapse/--no-collapse", default=True)
 @click.option("--collapsed-only", is_flag=True)
 @click.option(
@@ -303,26 +307,39 @@ def sketch(
 @cli.command()
 @click.argument("samplesheet", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "--output", "-o", "output_dir",
-    type=click.Path(path_type=Path), required=True,
+    "--output",
+    "-o",
+    "output_dir",
+    type=click.Path(path_type=Path),
+    required=True,
     help="Output directory for per-sample outputs and cohort roll-ups",
 )
 @click.option(
-    "--infer-reads", type=int, default=500_000, show_default=True,
+    "--infer-reads",
+    type=int,
+    default=500_000,
+    show_default=True,
     help="Subsample depth for boundary-estimation inference (Stage 0/1)",
 )
-@click.option("--max-reads", type=int, default=None, help="Cap on reads streamed per sample")
 @click.option(
-    "--audit-only", is_flag=True,
+    "--max-reads", type=int, default=None, help="Cap on reads streamed per sample"
+)
+@click.option(
+    "--audit-only",
+    is_flag=True,
     help="Infer + screen, apply nothing (rule development / new-family validation)",
 )
 @click.option(
-    "--rules", type=click.Path(exists=True, path_type=Path),
+    "--rules",
+    type=click.Path(exists=True, path_type=Path),
     help="Override mode: JSON file of {sample_id: {length: {trim_5p, trim_3p}}}",
 )
 @click.option(
-    "--fail-on", type=click.Choice(["none", "review", "hold"]), default="none",
-    show_default=True, help="Process exit-code threshold",
+    "--fail-on",
+    type=click.Choice(["none", "review", "hold"]),
+    default="none",
+    show_default=True,
+    help="Process exit-code threshold",
 )
 @click.option("--collapse/--no-collapse", default=True)
 def run(
@@ -346,9 +363,13 @@ def run(
     from .core.samplesheet import run_cohort
 
     result = run_cohort(
-        samplesheet, output_dir,
-        audit_only=audit_only, rules_path=rules,
-        infer_reads=infer_reads, max_reads=max_reads, collapse=collapse,
+        samplesheet,
+        output_dir,
+        audit_only=audit_only,
+        rules_path=rules,
+        infer_reads=infer_reads,
+        max_reads=max_reads,
+        collapse=collapse,
     )
 
     for e in result.evidence:
@@ -470,7 +491,7 @@ def check_cleanliness(
     write_check_report(basic_check_results, rpf_report_path)
 
     # Print summary
-    if categories['is_clean']:
+    if categories["is_clean"]:
         click.echo(f"✅ CLEAN: {input_file.name} passed all cleanliness checks")
         click.echo(f"📄 Report: {report_path}")
     else:
@@ -731,10 +752,15 @@ def align_detect(
         max_reads=max_reads,
     )
 
+
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
-@click.option("--star-index", "-s", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--format", "-f", type=click.Choice(["fastq", "fasta", "collapsed"]), required=True)
+@click.option(
+    "--star-index", "-s", type=click.Path(exists=True, path_type=Path), required=True
+)
+@click.option(
+    "--format", "-f", type=click.Choice(["fastq", "fasta", "collapsed"]), required=True
+)
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True)
 @click.option("--max-reads", "-n", type=int, default=10000)
 def decide_trim(input_file, star_index, format, output, max_reads):
@@ -750,7 +776,7 @@ def decide_trim(input_file, star_index, format, output, max_reads):
         star_index=star_index,
         format=format,
         output=output,
-        max_reads=max_reads
+        max_reads=max_reads,
     )
 
 
@@ -772,10 +798,27 @@ def decide_trim(input_file, star_index, format, output, max_reads):
 )
 @click.option("--max-reads", "-n", type=int, default=20000, help="Max reads to sample")
 @click.option("--title", type=str, default=None, help="Optional plot title")
-@click.option("--show-segments/--no-show-segments", default=False, help="Overlay HMM segments")
-@click.option("--show-freq/--no-show-freq", default=True, help="Overlay A/C/G/T frequencies")
-@click.option("--show-posteriors/--no-show-posteriors", default=False, help="Overlay per-state posterior ribbons")
-def plot_hmm(input_file: Path, format: str, output: Path, max_reads: int, title: str, show_segments: bool, show_freq: bool, show_posteriors: bool):
+@click.option(
+    "--show-segments/--no-show-segments", default=False, help="Overlay HMM segments"
+)
+@click.option(
+    "--show-freq/--no-show-freq", default=True, help="Overlay A/C/G/T frequencies"
+)
+@click.option(
+    "--show-posteriors/--no-show-posteriors",
+    default=False,
+    help="Overlay per-state posterior ribbons",
+)
+def plot_hmm(
+    input_file: Path,
+    format: str,
+    output: Path,
+    max_reads: int,
+    title: str,
+    show_segments: bool,
+    show_freq: bool,
+    show_posteriors: bool,
+):
     """Plot per-position entropy with HMM segment overlays.
 
     Example:
@@ -790,9 +833,14 @@ def plot_hmm(input_file: Path, format: str, output: Path, max_reads: int, title:
                 "Install with: pip install getRPF[viz]  (or)  conda install matplotlib seaborn"
             ) from e
         out = plot_hmm_entropy(
-            input_file, format, output,
-            max_reads=max_reads, title=title,
-            show_segments=show_segments, show_freq=show_freq, show_posteriors=show_posteriors
+            input_file,
+            format,
+            output,
+            max_reads=max_reads,
+            title=title,
+            show_segments=show_segments,
+            show_freq=show_freq,
+            show_posteriors=show_posteriors,
         )
         click.echo(f"✅ Wrote HMM entropy plot: {out}")
     except Exception as e:
@@ -803,11 +851,35 @@ def plot_hmm(input_file: Path, format: str, output: Path, max_reads: int, title:
 @cli.command()
 @click.argument("sample_id")
 @click.argument("db_path", type=click.Path(path_type=Path))
-@click.option("--source", type=click.Path(path_type=Path), required=True, help="Source FASTQ/FASTA path")
-@click.option("--clean-report", type=click.Path(exists=True, path_type=Path), help="check-cleanliness report .txt")
-@click.option("--align-json", type=click.Path(exists=True, path_type=Path), help="align-detect JSON report")
-@click.option("--extract-json", type=click.Path(exists=True, path_type=Path), help="extract/extract_rpf JSON")
-def ingest_duckdb(sample_id: str, db_path: Path, source: Path, clean_report: Path, align_json: Path, extract_json: Path):
+@click.option(
+    "--source",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Source FASTQ/FASTA path",
+)
+@click.option(
+    "--clean-report",
+    type=click.Path(exists=True, path_type=Path),
+    help="check-cleanliness report .txt",
+)
+@click.option(
+    "--align-json",
+    type=click.Path(exists=True, path_type=Path),
+    help="align-detect JSON report",
+)
+@click.option(
+    "--extract-json",
+    type=click.Path(exists=True, path_type=Path),
+    help="extract/extract_rpf JSON",
+)
+def ingest_duckdb(
+    sample_id: str,
+    db_path: Path,
+    source: Path,
+    clean_report: Path,
+    align_json: Path,
+    extract_json: Path,
+):
     """Ingest getRPF/STAR outputs into a DuckDB for QC review.
 
     Example:
@@ -834,19 +906,38 @@ def ingest_duckdb(sample_id: str, db_path: Path, source: Path, clean_report: Pat
             extraction_json=extract_json,
         )
         click.echo(f"✅ Ingested into DuckDB: {out_db}")
-        click.echo("   Tables: samples, getrpf_checks, alignment_stats, extraction_summary; view: qc_overview")
+        click.echo(
+            "   Tables: samples, getrpf_checks, alignment_stats, extraction_summary; view: qc_overview"
+        )
     except Exception as e:
         click.echo(f"❌ Ingest failed: {e}", err=True)
         raise click.Abort()
 
 
 @cli.command(name="plot-softclips")
-@click.option("--align-json", type=click.Path(exists=True, path_type=Path), required=True, help="align-detect JSON report")
-@click.option("--bam", type=click.Path(exists=True, path_type=Path), help="Aligned BAM (optional for heatmap)")
+@click.option(
+    "--align-json",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="align-detect JSON report",
+)
+@click.option(
+    "--bam",
+    type=click.Path(exists=True, path_type=Path),
+    help="Aligned BAM (optional for heatmap)",
+)
 @click.option("--no-heatmap", is_flag=True, help="Disable heatmap even if BAM provided")
-@click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Output PNG path")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output PNG path",
+)
 @click.option("--title", type=str, default=None, help="Optional figure title")
-def plot_softclips(align_json: Path, bam: Path, no_heatmap: bool, output: Path, title: str):
+def plot_softclips(
+    align_json: Path, bam: Path, no_heatmap: bool, output: Path, title: str
+):
     """Plot alignment soft-clipping summary and optional heatmap.
 
     Examples:

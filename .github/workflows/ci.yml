@@ -1,0 +1,224 @@
+name: CI
+
+# THE gate. Every check the project enforces is defined here, exactly once.
+#
+# It runs on its own for pushes and PRs, and is *called* by release.yml
+# (`workflow_call`) so a tagged release re-runs the identical gate rather than
+# a drifting copy of it. Jobs added here are automatically enforced at release
+# time; there is no second place to update.
+#
+# The `image` job publishes the moving `:main` / `:sha-<short>` container tags
+# and is gated on lint+test. Release tags (`:vX.Y.Z`, `:X.Y`, `:latest`) are
+# published by release.yml instead (REPO_CONTRACT.md 5.5). The workflow this
+# replaced, build_container.yml, wrote both sets from one file and pushed on
+# `v*` tags with no test gate at all.
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff + black)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install linters
+        run: python -m pip install --upgrade pip 'ruff>=0.6' 'black>=24.0'
+      - name: ruff
+        run: ruff check src tests
+      - name: black
+        run: black --check src tests
+
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip mypy
+          pip install -e '.[dev]'
+      # Fatal (REPO_CONTRACT.md 4b). The 96 errors that stood before this
+      # workflow existed were cleared first; several were real bugs, see the
+      # CHANGELOG. Do not reintroduce `|| true` -- fix the types instead.
+      - name: mypy
+        run: mypy --config-file mypy.ini src/getRPF
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The declared floor in requires-python, and the highest supported
+        # version (REPO_CONTRACT.md 4b).
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Run tests
+        if: matrix.python-version != '3.12'
+        run: pytest -q
+
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.12'
+        run: pytest --cov=getRPF --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      # `twine check` alone does NOT catch a non-normalised wheel filename.
+      # PyPI rejects it with a 400 at upload, after a fully green build --
+      # that is what silently killed three translonscorer releases. hatchling
+      # used to normalise this for us; setuptools does not, so assert it here
+      # (REPO_CONTRACT.md 5.3).
+      - name: Check metadata and wheel filename normalisation
+        run: |
+          twine check dist/*
+          set -euo pipefail
+          for f in dist/*.whl dist/*.tar.gz; do
+            base="$(basename "$f")"
+            case "$base" in
+              getrpf-*) ;;
+              *) echo "::error::$base is not normalised; PyPI requires the 'getrpf-' prefix (check [project] name in pyproject.toml)"; exit 1 ;;
+            esac
+          done
+          echo "dist filenames normalised:"; ls -1 dist
+
+      # The architecture YAMLs are read through importlib.resources at
+      # runtime, so a packaging change that drops them produces a package
+      # that imports cleanly and then finds zero built-in architectures.
+      - name: Assert package data is present in the wheel
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import glob, sys, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = [n for n in zipfile.ZipFile(wheel).namelist()
+                   if n.startswith("getRPF/architectures/") and n.endswith(".yaml")]
+          print(f"{len(names)} architecture YAMLs in {wheel}")
+          if not names:
+              sys.exit("::error::no architecture YAMLs in the wheel; check [tool.setuptools.package-data]")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  image:
+    name: Publish :main container
+    # Moving tags for the tip of main only. Release tags come from
+    # release.yml. Gated on lint+test so a broken tree cannot reach the
+    # registry -- build_container.yml had no test gate whatsoever.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image name (GHCR requires lowercase)
+        id: img
+        # github.repository_owner preserves the account's casing
+        # ("JackCurragh") and GitHub expressions have no lower() function.
+        # docker/metadata-action lowercases its own tag outputs, so the push
+        # works either way -- but a raw `docker run <IMAGE>@<digest>` does
+        # not, and fails with "repository name must be lowercase".
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/get-rpf" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.name }}
+          tags: |
+            type=raw,value=main
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Carried over from build_container.yml: the CLI surface these options
+      # belong to is what downstream Nextflow modules call.
+      - name: Smoke test pushed image
+        run: |
+          set -euo pipefail
+          image="${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}"
+          docker run --rm "$image" getRPF --version
+          for sub in extract extract-rpf; do
+            docker run --rm "$image" getRPF "$sub" --help > "/tmp/help_$sub.txt"
+            for opt in --format --generate-seqspec --output-format \
+                       --star-index --star-threads --collapsed-only; do
+              grep -q -- "$opt" "/tmp/help_$sub.txt"
+            done
+          done

@@ -1,0 +1,140 @@
+name: Release
+
+# The single release path. Pushing a `vX.Y.Z` tag (which `bump2version`
+# creates) produces, in this order and only if each step passes:
+#
+#   gate    -> the full CI gate, re-run on the tag (calls ci.yml; not a copy)
+#   pypi    -> sdist + wheel to PyPI via Trusted Publishing (OIDC, no token)
+#   image   -> ghcr.io/<owner>/get-rpf:vX.Y.Z, :X.Y and :latest
+#   release -> a GitHub Release with the distributions attached
+#
+# `:latest` means "the most recent release" and is written here only. The tip
+# of main is published as `:main` / `:sha-<short>` by ci.yml. Nothing else in
+# the repo pushes a container tag (REPO_CONTRACT.md 5.5).
+#
+# One-time PyPI setup is NOT done yet: `getrpf` does not exist on PyPI, so the
+# first release needs the *pending* publisher flow at
+# pypi.org/manage/account/publishing/ -- there is no project page to add a
+# publisher to until the project exists (5.4). Workflow name is the filename,
+# `release.yml`, not the `name:` above; the environment must be `pypi`.
+#
+# Do not push a tag until the tool is ready to be used by someone else
+# (REPO_CONTRACT.md 9.1). Everything else here is live now.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: CI gate
+    uses: ./.github/workflows/ci.yml
+    # A called workflow's jobs may not request more permission than the
+    # calling job grants, and GitHub validates that at STARTUP -- before any
+    # job-level `if` is evaluated. ci.yml's `image` job declares
+    # `packages: write`, so omitting it here fails the entire run as
+    # startup_failure with zero jobs and a message naming neither the job nor
+    # the permission. Grant it so the file validates; the `if` still keeps
+    # that job from running on a tag.
+    permissions:
+      contents: read
+      packages: write
+
+  pypi:
+    name: Publish to PyPI
+    needs: gate
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for Trusted Publishing
+    steps:
+      # Built once by the gate's `build` job; artifacts are shared across the
+      # run, so the published bits are byte-identical to the checked ones.
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  image:
+    name: Publish release container
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image name (GHCR requires lowercase)
+        id: img
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/get-rpf" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test pushed image
+        run: |
+          set -euo pipefail
+          image="${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}"
+          docker run --rm "$image" getRPF --version
+          for sub in extract extract-rpf; do
+            docker run --rm "$image" getRPF "$sub" --help > "/tmp/help_$sub.txt"
+            for opt in --format --generate-seqspec --output-format \
+                       --star-index --star-threads --collapsed-only; do
+              grep -q -- "$opt" "/tmp/help_$sub.txt"
+            done
+          done
+
+  release:
+    name: GitHub Release
+    needs: [pypi, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

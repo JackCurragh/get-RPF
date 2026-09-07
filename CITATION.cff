@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use getRPF, please cite it as below."
+title: "getRPF: automated ribosome protected fragment extraction from Ribo-seq reads"
+authors:
+  - family-names: Tierney
+    given-names: Jack
+    email: jackcurragh@gmail.com
+version: 0.3.1
+date-released: "2026-09-07"
+license: MIT
+repository-code: "https://github.com/JackCurragh/get-RPF"
+keywords:
+  - Ribo-seq
+  - ribosome profiling
+  - RPF
+  - adapter trimming
+  - bioinformatics

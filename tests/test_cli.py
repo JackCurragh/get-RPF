@@ -4,6 +4,7 @@ import gzip
 
 import pytest
 from click.testing import CliRunner
+
 from getRPF.cli import cli
 
 

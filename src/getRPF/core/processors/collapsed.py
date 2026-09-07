@@ -3,9 +3,9 @@
 import bz2
 import gzip
 import logging
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
-from collections import Counter
 from typing import Dict, Optional, TextIO, Tuple, Union
 
 from getRPF.utils.file_utils import check_file_readability
@@ -182,7 +182,7 @@ class CollapsedFASTAProcessor:
     def __init__(self, count_pattern: Optional[str] = None):
         self.collapser = TwoStageCollapser()
         self.count_pattern = count_pattern or "seq{id}_x{count}"
-    
+
     def expand_to_fastq(self, input_file: Path, output_file: Path, max_reads: Optional[int] = None) -> None:
         """Expand collapsed FASTA to FASTQ."""
         raw_counts = self.collapser.collapse_raw(input_file, format="collapsed", max_reads=max_reads)
@@ -194,7 +194,7 @@ class CollapsedFASTAProcessor:
 
 class TwoStageCollapser:
     """High-performance collapser that implements Two-Stage Collapsing.
-    
+
     Stage 1: Raw collapse (count unique raw reads)
     Stage 2: Unique trimming (trim each unique sequence once)
     Stage 3: Final merge (aggregate counts of identical trimmed sequences)
@@ -204,17 +204,17 @@ class TwoStageCollapser:
         self.logger = logger or logging.getLogger(__name__)
 
     def collapse_raw(
-        self, 
-        input_file: Path, 
-        format: str = "fastq", 
+        self,
+        input_file: Path,
+        format: str = "fastq",
         max_reads: Optional[int] = None
     ) -> Counter:
         """Stage 1: Extract and count raw sequences from file."""
         counts: Counter = Counter()
         processed = 0
-        
+
         self.logger.info(f"Stage 1: Collapsing raw reads from {input_file}...")
-        
+
         file_opener = gzip.open if str(input_file).endswith(".gz") else open
         with file_opener(str(input_file), "rt") as fh:
             if format == "fastq":
@@ -230,11 +230,11 @@ class TwoStageCollapser:
                     counts[seq[0]] += seq[1]
                 else:
                     counts[seq] += 1
-                
+
                 processed += 1
                 if max_reads and processed >= max_reads:
                     break
-                    
+
         self.logger.info(f"  Processed {processed} reads -> {len(counts)} unique raw sequences")
         return counts
 
@@ -243,28 +243,29 @@ class TwoStageCollapser:
         parser = CollapsedHeaderParser() if is_collapsed else None
         current_seq = []
         current_count = 1
-        
+
         for line in fh:
             line = line.strip()
-            if not line: continue
-            
+            if not line:
+                continue
+
             if line.startswith(">"):
                 if current_seq:
                     yield ("".join(current_seq).upper(), current_count)
-                
+
                 if is_collapsed:
                     cnt = parser.extract_count(line[1:])
                     current_count = cnt if cnt is not None else 1
                 current_seq = []
             else:
                 current_seq.append(line)
-        
+
         if current_seq:
             yield ("".join(current_seq).upper(), current_count)
 
     def apply_trimming(
-        self, 
-        raw_counts: Counter, 
+        self,
+        raw_counts: Counter,
         trim_func: callable,
         min_length: int = 20,
         max_length: Optional[int] = None,
@@ -272,20 +273,20 @@ class TwoStageCollapser:
         """Stage 2 & 3: Trim unique sequences and merge results."""
         self.logger.info("Stage 2: Trimming unique sequences and merging...")
         final_counts: Counter = Counter()
-        
+
         for raw_seq, count in raw_counts.items():
             trimmed_seq = trim_func(raw_seq)
             if trimmed_seq and len(trimmed_seq) >= min_length and (
                 max_length is None or len(trimmed_seq) <= max_length
             ):
                 final_counts[trimmed_seq] += count
-                
+
         self.logger.info(f"  Post-trimming: {len(final_counts)} unique sequences")
         return final_counts
 
     def write_collapsed_fasta(
-        self, 
-        counts: Counter, 
+        self,
+        counts: Counter,
         output_file: Path,
         prefix: str = "seq"
     ) -> Dict[str, Union[int, str]]:
@@ -310,7 +311,7 @@ class TwoStageCollapser:
             for idx, (seq, count) in enumerate(counts.most_common(), 1):
                 fout.write(f">{prefix}{idx}_x{count}\n")
                 fout.write(f"{seq}\n")
-        
+
         stats = {
             "unique_sequences": unique,
             "total_reads": total_reads,

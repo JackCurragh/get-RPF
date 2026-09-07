@@ -4,10 +4,11 @@ This module implements an HMM-based segmenter to identify read components
 (UMI, Barcode, RPF, Adapter) by decoding observed signal statistics.
 """
 
-import math
 import logging
+import math
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from .signals import SignalStats
 from .types import SegmentInfo
 
@@ -26,7 +27,7 @@ STATE_NAMES = {
     STATE_START: "START",
     STATE_UMI: "UMI",
     STATE_BARCODE: "BARCODE",
-    STATE_RPF: "RPF", 
+    STATE_RPF: "RPF",
     STATE_ADAPTER: "ADAPTER",
     STATE_END: "END"
 }
@@ -43,12 +44,12 @@ class SegmenterConfig:
     p_rpf_len_mu: float = 30.0   # Expected RPF length
     min_umi_len: int = 4         # Do not allow UMI->RPF before this many bases
     min_rpf_len: int = 22        # (Advisory) minimal RPF before adapter
-    
+
     # Emission profiles (Entropy means)
     mu_entropy_umi: float = 1.8   # High entropy
     mu_entropy_rpf: float = 1.2   # Medium/Variable entropy
     mu_entropy_adapter: float = 0.2  # Low entropy (consensus)
-    
+
     # Composition markers
     adapter_consensus_threshold: float = 0.8 # Min freq to be considered 'consed' adapter base
 
@@ -61,19 +62,19 @@ class ProbabilisticSegmenter:
 
     def segment(self, stats: SignalStats) -> List[SegmentInfo]:
         """Infer segmentation from signal stats using Viterbi decoding.
-        
+
         Args:
             stats: Signal statistics object
-            
+
         Returns:
             List of detected segments
         """
         # We work primarily with 5' aligned signals for the forward pass
         obs_seq = self._prepare_observations(stats)
-        
+
         if not obs_seq:
             return []
-            
+
         return self._path_to_segments(self._viterbi_path(obs_seq))
 
     def _viterbi_path(self, obs_seq: List[Dict]) -> List[int]:
@@ -180,7 +181,7 @@ class ProbabilisticSegmenter:
         for i in range(len(stats.entropy_5p)):
             o = {
                 "entropy": stats.entropy_5p[i],
-                # Add composition info? 
+                # Add composition info?
                 # e.g. "max_freq" to detect low entropy conservation
                 "max_freq": max(stats.composition_5p[i].values()) if stats.composition_5p[i] else 0.0
             }
@@ -191,7 +192,7 @@ class ProbabilisticSegmenter:
         """Calculate log emission probability P(observation | state)."""
         entropy = obs["entropy"]
         max_freq = obs["max_freq"]
-        
+
         # Gaussian approx for entropy
         if state == STATE_UMI:
             # Expect high entropy
@@ -207,15 +208,15 @@ class ProbabilisticSegmenter:
             sigma = 0.4
         else:
             return -10.0 # Unlikely observation for placeholder states
-            
+
         # Log Gaussian PDF: -0.5 * ((x-mu)/sigma)^2 - log(sigma * sqrt(2pi))
         # Ignore constant terms for comparison
         log_prob = -0.5 * ((entropy - mu) / sigma) ** 2
-        
+
         # Boost adapter probability if high single-nucleotide frequency (composition consensus)
         if state == STATE_ADAPTER and max_freq > self.config.adapter_consensus_threshold:
             log_prob += 2.0
-            
+
         return log_prob
 
     def _log_transition(self, prev_s: int, curr_s: int, t: int) -> float:
@@ -226,7 +227,7 @@ class ProbabilisticSegmenter:
         # RPF -> RPF (stay)
         # RPF -> ADAPTER
         # ADAPTER -> ADAPTER (stay)
-        
+
         if prev_s == STATE_UMI:
             # Enforce minimal UMI span before moving to RPF
             if curr_s == STATE_UMI:
@@ -255,11 +256,11 @@ class ProbabilisticSegmenter:
                 return math.log(0.999)
             else:
                 return -float('inf')
-                
+
         elif prev_s == STATE_START:
             # Should rely on initialization
             return -float('inf')
-            
+
         return -float('inf')
 
     def _path_to_segments(self, path: List[int]) -> List[SegmentInfo]:
@@ -267,10 +268,10 @@ class ProbabilisticSegmenter:
         segments = []
         if not path:
             return segments
-            
+
         current_state = path[0]
         start_pos = 0
-        
+
         for t, state in enumerate(path):
             if state != current_state:
                 # End of segment
@@ -278,19 +279,19 @@ class ProbabilisticSegmenter:
                     name = STATE_NAMES[current_state].lower()
                     if name != "end" and name != "start":
                         # TODO: Add confidence score per segment
-                        seg = SegmentInfo(name, start_pos, t, 0.9) 
+                        seg = SegmentInfo(name, start_pos, t, 0.9)
                         segments.append(seg)
-                
+
                 current_state = state
                 start_pos = t
-        
+
         # Add last segment
         if current_state in STATE_NAMES:
             name = STATE_NAMES[current_state].lower()
             if name != "end" and name != "start":
                  seg = SegmentInfo(name, start_pos, len(path), 0.9)
                  segments.append(seg)
-                 
+
         return segments
 
 

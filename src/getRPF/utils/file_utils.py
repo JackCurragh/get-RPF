@@ -9,10 +9,10 @@ This module provides utilities for:
 import bz2
 import gzip
 import os
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
 
 
 def check_file_readability(file_path: Union[str, Path]) -> bool:
@@ -59,11 +59,11 @@ def get_file_opener(filepath: Path):
 
 def create_temp_file(suffix: str = "", prefix: str = "getRPF_") -> Path:
     """Create a temporary file and return its path.
-    
+
     Args:
         suffix: File suffix/extension
         prefix: Filename prefix
-        
+
     Returns:
         Path to temporary file
     """
@@ -74,7 +74,7 @@ def create_temp_file(suffix: str = "", prefix: str = "getRPF_") -> Path:
 
 def cleanup_temp_files(file_paths: List[Path]) -> None:
     """Clean up temporary files and directories.
-    
+
     Args:
         file_paths: List of paths to clean up
     """

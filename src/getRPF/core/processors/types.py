@@ -1,11 +1,10 @@
 """Shared types and dataclasses for RPF processing."""
 
-from dataclasses import dataclass, asdict, field
-from typing import List, Tuple, Dict, Optional, Any, Literal
-from pathlib import Path
 import json
 import math
-
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 # =============================================================================
 # Structure Learning Types (New Reliable Algorithm)
@@ -275,7 +274,7 @@ class ReadArchitecture:
 @dataclass
 class SegmentInfo:
     """Information about a detected segment in reads."""
-    
+
     segment_type: str        # "umi", "barcode", "adapter", "rpf", "unknown"
     start_pos: int          # start position in read
     end_pos: int            # end position in read
@@ -286,7 +285,7 @@ class SegmentInfo:
 @dataclass
 class RPFExtractionResult:
     """Results from RPF extraction process."""
-    
+
     input_reads: int
     processed_reads: int
     extracted_rpfs: int
@@ -300,7 +299,7 @@ class RPFExtractionResult:
     adapter_source: Optional[str] = None
     adapter_conflict: Optional[Dict[str, Any]] = None
     adapter_evidence_candidates: Optional[List[Dict[str, Any]]] = None
-    
+
     def write_report(self, output_path: Path, format: str = "json") -> None:
         """Write extraction results to file."""
         def serialize_types(obj):
@@ -313,7 +312,7 @@ class RPFExtractionResult:
             return obj
 
         report_data = serialize_types(asdict(self))
-        
+
         if format.lower() == "json":
             with open(output_path, 'w') as f:
                 json.dump(report_data, f, indent=2)

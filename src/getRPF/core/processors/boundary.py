@@ -292,7 +292,7 @@ def estimate_boundaries(
     decisions: Dict[int, LengthClassDecision] = {}
     for length, stats in per_length_stats.items():
         estimates = dict(raw_estimates[length])
-        other_trims = {l: t for l, t in provisional_trims.items() if l != length}
+        other_trims = {ln: t for ln, t in provisional_trims.items() if ln != length}
         lenmode_trim = _b_lenmode(length, other_trims)
         if lenmode_trim is not None:
             estimates["b_lenmode"] = lenmode_trim

@@ -9,20 +9,20 @@ from pathlib import Path
 from typing import List
 
 from .signals import SignalStats
-from .types import SegmentInfo, ReadArchitecture
+from .types import ReadArchitecture, SegmentInfo
 
 
 class Reporter:
     """Generates human-readable interaction reports."""
 
-    def generate_cli_report(self, 
-                            architecture: ReadArchitecture, 
-                            segments: List[SegmentInfo], 
+    def generate_cli_report(self,
+                            architecture: ReadArchitecture,
+                            segments: List[SegmentInfo],
                             stats: SignalStats) -> str:
         """Generate a Rich-text compatible string for CLI output."""
         report = []
         report.append(f"✓ Architecture Detect: [bold green]{architecture.protocol_name}[/bold green]")
-        
+
         # Structure Map
         structure_str = ""
         for seg in segments:
@@ -32,26 +32,26 @@ class Reporter:
             else:
                  length = seg.end_pos - seg.start_pos
                  structure_str += f"[{name}:{length}]--"
-            
+
         report.append(f"  Structure: {structure_str[:-2]}") # Remove last --
-        
+
         # ASCII Sparkline for Entropy
         sparkline = self._ascii_sparkline(stats.entropy_5p[:50])
         report.append(f"  Entropy Signal (5'): {sparkline}")
-        
+
         return "\n".join(report)
 
-    def generate_html_report(self, 
+    def generate_html_report(self,
                              output_path: Path,
                              architecture: ReadArchitecture,
                              segments: List[SegmentInfo],
                              stats: SignalStats,
                              trace_log: List[str]):
         """Generate a single-file interactive HTML report."""
-        
+
         # Prepare data for JS embedding
         entropy_data = list(stats.entropy_5p)
-        
+
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -105,7 +105,7 @@ class Reporter:
 </body>
 </html>
         """
-        
+
         with open(output_path, "w") as f:
             f.write(html_content)
 
@@ -117,7 +117,7 @@ class Reporter:
         min_val, max_val = min(data), max(data)
         if max_val == min_val:
             max_val += 1e-6
-            
+
         spark = ""
         for x in data:
             idx = int((x - min_val) / (max_val - min_val) * (len(chars) - 1))
@@ -129,7 +129,7 @@ class Reporter:
         html_segs = []
         for seg in segments:
             type_class = seg.segment_type.lower()
-            
+
             # Handle placeholder/dynamic lengths
             if seg.end_pos == -1:
                 length_str = "Variable / End"
@@ -139,7 +139,7 @@ class Reporter:
                     length_str = "Unknown"
                 else:
                     length_str = f"{length}nt"
-            
+
             html_segs.append(f'<div class="segment {type_class}">{seg.segment_type.upper()}<br>{length_str}</div>')
         return html_segs
 
@@ -150,7 +150,7 @@ class Reporter:
         if max_val <= 0:
             max_val = 1
         width_pct = 100 / len(data) if data else 0
-        
+
         for i, val in enumerate(data):
             height_pct = (val / max_val) * 100
             left_pct = i * width_pct

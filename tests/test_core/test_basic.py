@@ -6,7 +6,7 @@ from getRPF.core.processors.rpf_extractor import (
     RPFExtractor,
     resolve_architecture_choice,
 )
-from getRPF.core.processors.types import ExtractionEmptyError, ReadArchitecture
+from getRPF.core.processors.types import ReadArchitecture
 
 
 def test_initial_setup():

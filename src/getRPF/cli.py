@@ -46,9 +46,10 @@ import click
 
 from .core.handlers import (
     handle_adapter_detection,
-    handle_cleanliness_check,
     handle_align_detect,
+    handle_cleanliness_check,
 )
+
 # NOTE: Plotting modules pull in heavy optional deps (matplotlib, seaborn).
 # Import them lazily inside the specific subcommands so that core commands
 # like `extract`, `check`, and `align-detect` do not require those packages.
@@ -200,6 +201,7 @@ def extract(
 ):
     """Extract trimmed reads without applying the final RPF length gate."""
     from shutil import move
+
     from .core.handlers import handle_extract_rpf
     from .core.samplesheet import compute_exit_code
 
@@ -399,42 +401,42 @@ def check_cleanliness(
     max_reads: int = 1000,
 ):
     """Enhanced cleanliness checking with failure categorization.
-    
+
     This command runs comprehensive RPF cleanliness checks and categorizes
     failures by type for batch seqspec generation. Essential for scaling
     to thousands of samples.
-    
+
     The system checks:
     - Read length distribution (RPF size expectations)
-    - Information content uniformity (no repetitive sequences)  
+    - Information content uniformity (no repetitive sequences)
     - End bias detection (5'/3' nucleotide bias)
     - Base composition uniformity (no positional bias)
     - GC content within normal range
-    
+
     Results:
     - CLEAN samples: Pass all checks, ready for analysis
     - NEEDS_SEQSPEC samples: Categorized by failure type for batch processing
-    
+
     Examples:
         # Check sample cleanliness with categorization
         getRPF check-cleanliness input.fastq -f fastq -o reports/
-        
+
         # Check collapsed format with limited reads
         getRPF check-cleanliness input.fasta -f collapsed -o reports/ --max-reads 5000
     """
-    from .core.processors.check import analyze_file
     from .core.checkers import (
-        run_all_cleanliness_checks, 
-        categorize_failures, 
-        write_check_report,
-        LengthDistributionCheck,
         BaseCompositionCheck,
-        GCContentCheck
+        GCContentCheck,
+        LengthDistributionCheck,
+        categorize_failures,
+        run_all_cleanliness_checks,
+        write_check_report,
     )
-    
+    from .core.processors.check import analyze_file
+
     # Create output directory
     output.mkdir(exist_ok=True)
-    
+
     # Run sequence analysis
     sequence_results = analyze_file(
         input_file,
@@ -442,10 +444,10 @@ def check_cleanliness(
         max_reads=max_reads,
         count_pattern=count_pattern if format == "collapsed" else None,
     )
-    
+
     # Run all cleanliness checks (enhanced version)
     check_results = run_all_cleanliness_checks(sequence_results)
-    
+
     # Also run basic RPF checks for compatibility (.rpf_checks.txt format)
     basic_checks = {
         "Length Distribution": LengthDistributionCheck(),
@@ -455,18 +457,18 @@ def check_cleanliness(
     basic_check_results = {
         name: check.check(sequence_results) for name, check in basic_checks.items()
     }
-    
+
     # Categorize failures
     categories = categorize_failures(check_results)
-    
+
     # Write detailed report (enhanced format)
     report_path = output / f"{input_file.stem}_cleanliness_report.txt"
     write_check_report(check_results, report_path)
-    
+
     # Write basic RPF check report (.rpf_checks.txt format for compatibility)
     rpf_report_path = output / f"{input_file.stem}_cleanliness_report.rpf_checks.txt"
     write_check_report(basic_check_results, rpf_report_path)
-    
+
     # Print summary
     if categories['is_clean']:
         click.echo(f"✅ CLEAN: {input_file.name} passed all cleanliness checks")
@@ -476,7 +478,7 @@ def check_cleanliness(
         click.echo(f"🔍 Primary failure: {categories['primary_failure']}")
         click.echo(f"📋 All failures: {', '.join(categories['failure_categories'])}")
         click.echo(f"📄 Report: {report_path}")
-        click.echo(f"💡 Batch process with similar failures for seqspec generation")
+        click.echo("💡 Batch process with similar failures for seqspec generation")
 
 
 @cli.command()
@@ -737,12 +739,12 @@ def align_detect(
 @click.option("--max-reads", "-n", type=int, default=10000)
 def decide_trim(input_file, star_index, format, output, max_reads):
     """Auto-configure trimming by combining methods.
-    
+
     Runs both architecture detection and alignment verification to determine
     the optimal trimming parameters.
     """
     from .core.handlers import handle_decide_trim
-    
+
     handle_decide_trim(
         input_file=input_file,
         star_index=star_index,

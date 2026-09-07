@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import duckdb
-
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS samples (

@@ -6,6 +6,7 @@ import pytest
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+
 from getRPF.core.handlers import handle_cleanliness_check
 
 

@@ -7,27 +7,27 @@ This module implements the core RPF extraction system that combines:
 4. Explainable Reporting
 """
 
-import logging
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+import logging
 from collections import Counter
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from ...utils.file_utils import get_file_opener
 from ..seqspec_generator import SeqSpecGenerator
 from ..seqspec_loader import SeqSpecArchitectureLoader
+from .matcher import MatchResult, match_architecture
+from .reporting import generate_cli_report, write_html_report
+from .segmenter import segment_reads
+from .signals import process_reads
 
 # Import types and components
 from .types import (
     ExtractionEmptyError,
     ReadArchitecture,
-    SegmentInfo,
     RPFExtractionResult,
+    SegmentInfo,
 )
-from .signals import process_reads
-from .matcher import MatchResult, match_architecture
-from .segmenter import segment_reads
-from .reporting import generate_cli_report, write_html_report
 
 logger = logging.getLogger(__name__)
 
@@ -127,20 +127,20 @@ def resolve_architecture_choice(
 
 class ArchitectureDatabase:
     """Database of known read architectures."""
-    
+
     def __init__(self, db_path: Optional[Path] = None, seqspec_dir: Optional[Path] = None):
         self.architectures: List[ReadArchitecture] = []
         self.db_path = db_path
         self.seqspec_dir = seqspec_dir
         self.seqspec_loader = SeqSpecArchitectureLoader()
         self._load_architectures()
-    
+
     def _load_architectures(self) -> None:
         if self.db_path and self.db_path.exists():
             self._load_from_file()
         else:
             self._initialize_builtin_architectures()
-    
+
     def _load_from_file(self) -> None:
         try:
             with open(self.db_path, 'r') as f:
@@ -152,7 +152,7 @@ class ArchitectureDatabase:
         except Exception as e:
             logger.warning(f"Failed to load architectures from {self.db_path}: {e}")
             self._initialize_builtin_architectures()
-    
+
     def _initialize_builtin_architectures(self) -> None:
         """Initialize architectures from the internal package directory."""
         try:
@@ -163,24 +163,24 @@ class ArchitectureDatabase:
             else:
                 # Fallback maybe not needed if >=3.10 is required
                 raise ImportError("Requires Python 3.9+ for importlib.resources.files")
-                
+
             self.load_from_seqspec_directory(arch_dir)
-            
+
             # Ensure comprehensive check is first (if loaded)
             comprehensive = next((a for a in self.architectures if a.protocol_name == "comprehensive_adapter_check"), None)
             if comprehensive:
                 self.architectures.remove(comprehensive)
                 self.architectures.insert(0, comprehensive)
-                
+
             logger.info(f"Initialized {len(self.architectures)} built-in architectures from package resources")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize built-in architectures: {e}")
             self.architectures = []
 
         if self.seqspec_dir and self.seqspec_dir.exists():
             self.load_from_seqspec_directory(self.seqspec_dir)
-            
+
     def load_from_seqspec_directory(self, seqspec_dir: Any) -> int:
         seqspec_architectures = self.seqspec_loader.load_from_directory(seqspec_dir)
         self.architectures.extend(seqspec_architectures)
@@ -189,11 +189,11 @@ class ArchitectureDatabase:
 
 class RPFExtractor:
     """Main RPF extraction processor."""
-    
+
     def __init__(self, architecture_db_path: Optional[Path] = None, seqspec_dir: Optional[Path] = None):
         self.architecture_db = ArchitectureDatabase(db_path=architecture_db_path, seqspec_dir=seqspec_dir)
         self.seqspec_generator = SeqSpecGenerator()
-        
+
         # New components
 
     def infer_architecture(
@@ -214,7 +214,7 @@ class RPFExtractor:
             match_result, adapter_evidence
         )
         return architecture, method, trace_log, adapter_evidence
-    
+
     def extract_rpfs(
         self,
         input_file: Path,
@@ -239,7 +239,7 @@ class RPFExtractor:
                 docs/release_qc_and_terminal_trimming_plan.md M3.
         """
         logger.info(f"Starting RPF extraction from {input_file}")
-        
+
         # 1. Reuse the bounded analysis sample when the caller already built
         # one (the pipeline does this after sketching). Direct callers retain
         # the original file-loading behavior.
@@ -251,7 +251,7 @@ class RPFExtractor:
         else:
             sample_reads = sample_reads[:50000]
             sample_headers = sample_headers or []
-        
+
         # 2. Generate Signals (Entropy, Composition)
         logger.info("Generating signal metrics...")
         signals = process_reads(sample_reads, compute_dinucleotide=False)
@@ -266,7 +266,7 @@ class RPFExtractor:
             adapter_evidence,
         ) = self.infer_architecture(sample_reads, signals)
         best_adapter_evidence = adapter_evidence[0] if adapter_evidence else None
-        
+
         # 3. Match against known architectures
         logger.info("Matching architectures...")
         extracted_segments = []
@@ -307,30 +307,30 @@ class RPFExtractor:
             # Fallback to Probabilistic Segmentation
             logger.info("No strict architecture match found. Attempting probabilistic segmentation...")
             method = "probabilistic_hmm"
-            
+
             # IMPROVEMENT: Multi-Scale Binning Strategy
             # Variable read lengths can smear the signal. We bin reads by length and detect on each bin independently.
             reads_by_length: Dict[int, List[str]] = {}
             for read in sample_reads:
                 reads_by_length.setdefault(len(read), []).append(read)
             length_counts = sample_length_counts
-            
+
             # Select bins with sufficient coverage (>1000 reads)
-            valid_bins = [l for l, c in length_counts.items() if c > 1000]
+            valid_bins = [ln for ln, c in length_counts.items() if c > 1000]
             valid_bins.sort()
-            
+
             detected_segments_per_bin = []
-            
+
             if len(valid_bins) > 1:
                 logger.info(f"Multi-scale detection: analyzing {len(valid_bins)} length bins: {valid_bins}")
                 for length in valid_bins:
                     bin_reads = reads_by_length[length]
                     bin_signals = process_reads(bin_reads, compute_dinucleotide=False)
                     bin_segments = segment_reads(bin_signals)
-                    
+
                     if bin_segments:
                         detected_segments_per_bin.append(bin_segments)
-                
+
                 # Consensus logic: Do the bins agree on structure?
                 # We enforce that UMI structures must be consistent across length bins.
                 if detected_segments_per_bin:
@@ -343,15 +343,15 @@ class RPFExtractor:
                         rpf_starts = [s.start_pos for s in segs if s.segment_type == 'rpf']
                         rpf_start = rpf_starts[0] if rpf_starts else 0
                         bin_votes.append((umi_len, rpf_start))
-                    
+
                     # Find majority vote
                     vote_counts = Counter(bin_votes)
                     most_common, count = vote_counts.most_common(1)[0]
                     consensus_ratio = count / len(bin_votes)
-                    
+
                     if consensus_ratio > 0.5:
                         logger.info(f"Multi-scale Consensus: {consensus_ratio:.0%} of bins agree on UMI length {most_common[0]}.")
-                        
+
                         # Find a representative bin that matches the consensus
                         for segs in detected_segments_per_bin:
                             bg_umis = [s for s in segs if s.segment_type == 'umi']
@@ -365,7 +365,7 @@ class RPFExtractor:
                          extracted_segments = []
 
                     trace_log.append(f"Used multi-scale segmentation across {len(valid_bins)} bins (Consensus: {consensus_ratio:.2f}).")
-            
+
             if not extracted_segments:
                  # Try global signal if binning failed or was skipped
                  extracted_segments = segment_reads(signals)
@@ -391,10 +391,10 @@ class RPFExtractor:
             rpf_found = any(s.segment_type == 'rpf' for s in extracted_segments)
             if not rpf_found or (extracted_segments and extracted_segments[0].segment_type == 'umi' and extracted_segments[0].end_pos > 40):
                 logger.info("Suspicious structure detected (No RPF or giant UMI). Running brute-force adapter scan...")
-                
+
                 # We need to import AdapterDetector here or implementing a quick check
                 # A quick check is better given we have loaded Sample Reads
-                
+
                 if (
                     best_adapter_evidence
                     and best_adapter_evidence["hit_fraction"] >= MIN_ADAPTER_EVIDENCE_FRACTION
@@ -405,7 +405,7 @@ class RPFExtractor:
                         f"{best_adapter_evidence['hit_count']} reads. Overriding HMM."
                     )
                     adapter_seq = best_adapter_evidence["adapter"]
-                    
+
                     # Construct override architecture
                     final_architecture = ReadArchitecture(
                         protocol_name=f"fallback_detected_{best_adapter_evidence['protocol_name']}",
@@ -428,7 +428,7 @@ class RPFExtractor:
                         "Override: Found dominant adapter "
                         f"{best_adapter_evidence['protocol_name']}."
                     )
-        
+
         # 4. Generate Reports
         if final_architecture and extracted_segments:
             # CLI Report
@@ -436,14 +436,14 @@ class RPFExtractor:
                 final_architecture, extracted_segments, signals
             )
             logger.info("\n" + cli_report)
-            
+
             # HTML Report
             html_report_path = output_file.with_suffix(".report.html")
             write_html_report(
                 html_report_path, final_architecture, extracted_segments, signals, trace_log
             )
             logger.info(f"Interactive report written to {html_report_path}")
-            
+
             # Seqspec
             seqspec_data = None
             if generate_seqspec:
@@ -481,7 +481,7 @@ class RPFExtractor:
                 collapsed_only=collapsed_only,
                 override_trims=override_trims,
             )
-            
+
             adapter_report = self._adapter_reporting(
                 final_architecture,
                 method,
@@ -536,7 +536,7 @@ class RPFExtractor:
                 adapter_conflict=adapter_report["adapter_conflict"],
                 adapter_evidence_candidates=adapter_report["adapter_evidence_candidates"],
             )
-            
+
         else:
             logger.error("Architecture detection failed.")
             raise RuntimeError("Could not determine read architecture.")
@@ -548,7 +548,7 @@ class RPFExtractor:
             segments.append(SegmentInfo("umi", start, end, 1.0))
         for start, end in arch.barcode_positions:
             segments.append(SegmentInfo("barcode", start, end, 1.0))
-            
+
         # RPF
         segments.append(SegmentInfo(
             "rpf", arch.rpf_start, arch.rpf_end if arch.rpf_end > 0 else -1, 1.0
@@ -560,11 +560,11 @@ class RPFExtractor:
         rpf_segments = [s for s in segments if s.segment_type == "rpf"]
         if not rpf_segments:
             return {"recommended_5prime_trim": 0, "recommended_3prime_trim": 0}
-        
+
         rpf = rpf_segments[0]
         return {
             "recommended_5prime_trim": rpf.start_pos,
-            "recommended_3prime_trim": 0, 
+            "recommended_3prime_trim": 0,
             "note": "Use detected adapter sequences for 3' trimming"
         }
 
@@ -850,13 +850,14 @@ class RPFExtractor:
         headers = []
         count = 0
         opener = get_file_opener(input_file)
-        
+
         try:
             with opener(input_file, 'rt' if input_file.suffix in ['.gz', '.bz2'] else 'r') as f:
                 if format == "fastq":
                     while count < sample_size:
                         header = f.readline().strip()
-                        if not header: break
+                        if not header:
+                            break
                         sequence = f.readline().strip()
                         f.readline() # plus
                         f.readline() # qual
@@ -883,7 +884,7 @@ class RPFExtractor:
                         headers.append(current_header)
         except Exception as e:
             logger.warning(f"Error loading sample reads: {e}")
-            
+
         return reads, headers
 
     def _extract_rpfs_from_reads(
@@ -941,10 +942,10 @@ class RPFExtractor:
                 return sequence[rpf_start + trim_5p:rpf_end]
 
         collapser = TwoStageCollapser(logger=logger)
-        
+
         # Stage 1: Raw collapse
         raw_counts = collapser.collapse_raw(input_file, format=format, max_reads=max_reads)
-        
+
         # Stage 2 & 3: Trim unique and merge. Do not apply the RPF length gate
         # here; callers/workflows should decide which trimmed reads are released.
         final_counts = collapser.apply_trimming(
@@ -960,15 +961,15 @@ class RPFExtractor:
                 if MIN_RPF_LENGTH <= len(seq) <= MAX_RPF_LENGTH
             }
         )
-        
+
         # Stage 4: Write outputs (skip empty)
         if collapse_output:
             collapsed_path = output_file.with_suffix('.collapsed.fa')
             collapser.write_collapsed_fasta(final_counts, collapsed_path)
-            
+
         total_extracted = sum(final_counts.values())
         raw_total = sum(raw_counts.values())
-        
+
         if not collapsed_only:
             logger.info(f"Writing expanded FASTQ output to {output_file}...")
             # We need to write the expanded FASTQ. Since we already have final_counts,
@@ -977,7 +978,7 @@ class RPFExtractor:
                 for idx, (seq, count) in enumerate(final_counts.items(), 1):
                     for i in range(count):
                         fout.write(f"@seq{idx}_c{i+1}_RPF\n{seq}\n+\n{'I' * len(seq)}\n")
-        
+
         logger.info(f"Extracted {total_extracted} RPF sequences ({len(final_counts)} unique)")
         if total_extracted == 0:
             raise ExtractionEmptyError(

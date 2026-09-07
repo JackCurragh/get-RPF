@@ -5,25 +5,25 @@ from a sample of reads to drive architecture detection.
 """
 
 import math
+from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, List
-from collections import Counter
 
 
 @dataclass
 class SignalStats:
     """Container for per-base signal statistics."""
-    
+
     # 5' aligned metrics (index 0 is read start)
     entropy_5p: List[float]
     composition_5p: List[Dict[str, float]]
     dinucleotide_5p: List[Dict[str, float]]
-    
+
     # 3' aligned metrics (index 0 is read end)
     entropy_3p: List[float]
     composition_3p: List[Dict[str, float]]
     dinucleotide_3p: List[Dict[str, float]]
-    
+
     sample_size: int
 
 
@@ -119,57 +119,57 @@ class SignalProcessor:
         """Calculate per-position Shannon entropy."""
         length = self._get_max_len(reads)
         entropies = []
-        
+
         for i in range(length):
             bases = self._get_bases_at_pos(reads, i, align)
             if not bases:
                 entropies.append(0.0)
                 continue
-                
+
             counts = Counter(bases)
             total = len(bases)
             entropy = 0.0
-            
+
             for count in counts.values():
                 p = count / total
                 entropy -= p * math.log2(p)
-                
+
             entropies.append(entropy)
-            
+
         return entropies
 
     def _calculate_composition(self, reads: List[str], align: str = "5p") -> List[Dict[str, float]]:
         """Calculate per-position nucleotide frequencies."""
         length = self._get_max_len(reads)
         compositions = []
-        
+
         for i in range(length):
             bases = self._get_bases_at_pos(reads, i, align)
             if not bases:
                 compositions.append({})
                 continue
-                
+
             counts = Counter(bases)
             total = len(bases)
             freqs = {base: count / total for base, count in counts.items()}
             compositions.append(freqs)
-            
+
         return compositions
 
     def _calculate_dinucleotides(self, reads: List[str], align: str = "5p") -> List[Dict[str, float]]:
         """Calculate per-position dinucleotide frequencies."""
         length = self._get_max_len(reads)
         di_freqs = []
-        
+
         for i in range(length - 1):
             # For dinucleotides, we need position i and i+1
-            start_pos = i 
-            
+            start_pos = i
+
             dinucs = []
             for read in reads:
                 idx = start_pos if align == "5p" else (len(read) - 1 - start_pos)
                 next_idx = idx + 1 if align == "5p" else idx - 1
-                
+
                 # Check bounds
                 if 0 <= idx < len(read) and 0 <= next_idx < len(read):
                     if align == "5p":
@@ -177,14 +177,14 @@ class SignalProcessor:
                     else:
                         # For 3', we iterate backwards but read sequence forwards
                         # If index is 0 (last base), we want base at -2,-1
-                        # idx is distance from end. 
-                        # Real indices: 
+                        # idx is distance from end.
+                        # Real indices:
                         # 5' aligned: 0,1 -> 1,2 ...
                         # 3' aligned: (len-1, len) -> (len-2, len-1)
                         # Actually simpler: just grab the slice relative to end
                         # idx is 0-based index from end. 0 is last base.
                         # so pos i means (len - 1 - i).
-                        # We want dinuc starting at that pos? 
+                        # We want dinuc starting at that pos?
                         # Let's define 3' dinuc at pos i as: base at -(i+2) and -(i+1)
                         # e.g. pos 0 is last 2 bases.
                         p1 = -(i+2)
@@ -194,7 +194,7 @@ class SignalProcessor:
                             d = read[p1:p2] if p2 != 0 else read[p1:]
                         else:
                             continue
-                    
+
                     if len(d) == 2:
                         dinucs.append(d)
 
@@ -206,7 +206,7 @@ class SignalProcessor:
             total = len(dinucs)
             df = {d: count / total for d, count in counts.items()}
             di_freqs.append(df)
-            
+
         return di_freqs
 
     def _get_bases_at_pos(self, reads: List[str], pos: int, align: str) -> List[str]:

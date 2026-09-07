@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -80,8 +81,8 @@ def _compute_clip_distributions_from_bam(bam_path: Path):
         for read in bam.fetch(until_eof=True):
             if read.is_unmapped or not read.cigartuples:
                 continue
-            l = read.query_length
-            lengths.append(l)
+            ln = read.query_length
+            lengths.append(ln)
             cig = read.cigartuples
             c5 = cig[0][1] if cig[0][0] == 4 else 0
             c3 = cig[-1][1] if cig[-1][0] == 4 else 0
@@ -101,8 +102,8 @@ def _compute_clip_distributions_from_bam(bam_path: Path):
         for read in bam.fetch(until_eof=True):
             if read.is_unmapped or not read.cigartuples:
                 continue
-            l = read.query_length
-            idx = l - min_len
+            ln = read.query_length
+            idx = ln - min_len
             cig = read.cigartuples
             c5 = cig[0][1] if cig[0][0] == 4 else 0
             c3 = cig[-1][1] if cig[-1][0] == 4 else 0
@@ -133,7 +134,7 @@ def plot_softclips(
     title: Optional[str] = None,
 ):
     jd = _load_align_json(Path(align_json))
-    stats, trims, perlen = jd["stats"], jd["trims"], jd["perlen"]
+    trims, perlen = jd["trims"], jd["perlen"]
 
     # Prepare per-length arrays from summary
     lengths = []
@@ -232,7 +233,7 @@ def plot_softclips(
                 ax2.text(0.5, 0.5, "No aligned reads for heatmap", ha='center', va='center')
             else:
                 min_len, max_len = H["min_len"], H["max_len"]
-                heat5, heat3 = H["heat5"], H["heat3"]
+                heat5 = H["heat5"]
                 # Build a 2-row heatmap (5' top, 3' bottom) stacked vertically in same axis
                 # Simpler: show 5' only; 3' only; or combine—as a quick MVP show 5'.
                 im = ax2.imshow(heat5, aspect='auto', origin='lower',

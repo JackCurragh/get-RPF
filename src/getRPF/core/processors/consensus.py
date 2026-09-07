@@ -8,8 +8,8 @@ To produce a single, trustworthy set of trimming parameters.
 """
 
 import logging
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class TrimDecider:
     """Compatibility wrapper for :func:`decide_trim_consensus`."""
 
     def decide(
-        self, 
-        architecture_result: Dict[str, Any], 
+        self,
+        architecture_result: Dict[str, Any],
         alignment_result: Dict[str, Any]
     ) -> TrimConsensus:
         return decide_trim_consensus(architecture_result, alignment_result)

@@ -59,7 +59,9 @@ def test_degradome_like_contaminated_library_is_inconsistent():
 
     kmer_sets = {"rRNA": {rrna_kmer[i : i + 20] for i in range(len(rrna_kmer) - 19)}}
 
-    result = identity_screen(reads, length_distribution, contamination_kmer_sets=kmer_sets)
+    result = identity_screen(
+        reads, length_distribution, contamination_kmer_sets=kmer_sets
+    )
 
     assert result["length_shape"] == "peaked"
     assert result["contamination_screened"] is True

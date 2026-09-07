@@ -255,64 +255,71 @@ def handle_extract_rpf(
         if seqspec_dir and architecture_db:
             raise ValueError("Cannot specify both --architecture-db and --seqspec-dir")
 
-        extractor = RPFExtractor(architecture_db_path=architecture_db, seqspec_dir=seqspec_dir)
+        extractor = RPFExtractor(
+            architecture_db_path=architecture_db, seqspec_dir=seqspec_dir
+        )
 
         if star_index:
-             # Whole Shebang Mode
-             logger.info("=== Running 'Whole Shebang' Verification ===")
-             from dataclasses import asdict
+            # Whole Shebang Mode
+            logger.info("=== Running 'Whole Shebang' Verification ===")
+            from dataclasses import asdict
 
-             # Step A: Detect Architecture (Dry run on sample or just use extraction machinery)
-             # We run a sample extraction to a temp file just to get the report
-             from ..utils.file_utils import cleanup_temp_files, create_temp_file
-             from .processors.consensus import decide_trim_consensus
-             temp_rpf = create_temp_file(suffix=".fastq")
+            # Step A: Detect Architecture (Dry run on sample or just use extraction machinery)
+            # We run a sample extraction to a temp file just to get the report
+            from ..utils.file_utils import cleanup_temp_files, create_temp_file
+            from .processors.consensus import decide_trim_consensus
 
-             logger.info("Step 1/3: Detecting read architecture...")
-             arch_results = extractor.extract_rpfs(
-                 input_file=input_file,
-                 output_file=temp_rpf,
-                 format=format,
-                 max_reads=10000, # Use limited reads for speed
-                 generate_seqspec=False
-             )
-             arch_data = asdict(arch_results)
+            temp_rpf = create_temp_file(suffix=".fastq")
 
-             # Step B: Alignment Verification
-             logger.info("Step 2/3: Verifying with STAR alignment...")
-             aligner = STARAligner(star_index=star_index, threads=star_threads, max_reads=10000)
-             align_results = aligner.align_reads(
-                 input_file=input_file,
-                 format=format,
-                 save_bam_path=None
-             )
+            logger.info("Step 1/3: Detecting read architecture...")
+            arch_results = extractor.extract_rpfs(
+                input_file=input_file,
+                output_file=temp_rpf,
+                format=format,
+                max_reads=10000,  # Use limited reads for speed
+                generate_seqspec=False,
+            )
+            arch_data = asdict(arch_results)
 
-             align_data = {
+            # Step B: Alignment Verification
+            logger.info("Step 2/3: Verifying with STAR alignment...")
+            aligner = STARAligner(
+                star_index=star_index, threads=star_threads, max_reads=10000
+            )
+            align_results = aligner.align_reads(
+                input_file=input_file, format=format, save_bam_path=None
+            )
+
+            align_data = {
                 "trim_recommendations": align_results.trim_recommendations,
-             }
+            }
 
-             # Step C: Consensus
-             logger.info("Step 3/3: Calculating consensus...")
-             consensus = decide_trim_consensus(arch_data, align_data)
+            # Step C: Consensus
+            logger.info("Step 3/3: Calculating consensus...")
+            consensus = decide_trim_consensus(arch_data, align_data)
 
-             logger.info("Alignment Verification Complete.")
-             logger.info(f"Original Detection: 5' trim={arch_data.get('trim_recommendations', {}).get('recommended_5prime_trim')}")
-             logger.info(f"Alignment Suggestion: 5' trim={align_results.trim_recommendations.get('recommended_5prime_trim')}")
-             logger.info(f"Consensus Decision: 5' trim={consensus.trim_5p}")
+            logger.info("Alignment Verification Complete.")
+            logger.info(
+                f"Original Detection: 5' trim={arch_data.get('trim_recommendations', {}).get('recommended_5prime_trim')}"
+            )
+            logger.info(
+                f"Alignment Suggestion: 5' trim={align_results.trim_recommendations.get('recommended_5prime_trim')}"
+            )
+            logger.info(f"Consensus Decision: 5' trim={consensus.trim_5p}")
 
-             # This alignment-based consensus is logged as a cross-check
-             # only; the actual applied trims come from the reference-free
-             # per-length boundary plan computed below (run_sample), per
-             # section 12 (FASTQ stage stays reference-free).
-             if consensus.trim_5p:
-                 logger.info(
-                     "Alignment consensus suggests a 5' trim of "
-                     f"{consensus.trim_5p}, which the reference-free "
-                     "boundary estimator does not apply (5' trims require "
-                     "a named seqspec element)."
-                 )
+            # This alignment-based consensus is logged as a cross-check
+            # only; the actual applied trims come from the reference-free
+            # per-length boundary plan computed below (run_sample), per
+            # section 12 (FASTQ stage stays reference-free).
+            if consensus.trim_5p:
+                logger.info(
+                    "Alignment consensus suggests a 5' trim of "
+                    f"{consensus.trim_5p}, which the reference-free "
+                    "boundary estimator does not apply (5' trims require "
+                    "a named seqspec element)."
+                )
 
-             cleanup_temp_files([temp_rpf])
+            cleanup_temp_files([temp_rpf])
 
         # Full pipeline: sketch -> boundary plan -> apply -> identity
         # screen -> evidence/release class (M1-M5). Shared with the `run`
@@ -356,7 +363,9 @@ def handle_extract_rpf(
         results.write_report(report_path, format=output_format)
 
         logger.info("RPF extraction completed successfully")
-        logger.info(f"Extracted {results.extracted_rpfs} RPFs from {results.input_reads} reads")
+        logger.info(
+            f"Extracted {results.extracted_rpfs} RPFs from {results.input_reads} reads"
+        )
         logger.info(f"Extraction method: {results.extraction_method}")
         if results.architecture_match:
             logger.info(f"Matched architecture: {results.architecture_match}")
@@ -395,6 +404,7 @@ def handle_decide_trim(
         # We process a small sample to be fast, but we need the report
         # We can use a temp file for the RPF output as we only care about the report
         from ..utils.file_utils import cleanup_temp_files, create_temp_file
+
         temp_rpf = create_temp_file(suffix=".fastq")
 
         arch_results = extractor.extract_rpfs(
@@ -402,7 +412,7 @@ def handle_decide_trim(
             output_file=temp_rpf,
             format=format,
             max_reads=max_reads,
-            generate_seqspec=False
+            generate_seqspec=False,
         )
         arch_data = asdict(arch_results)
 
@@ -414,7 +424,7 @@ def handle_decide_trim(
         align_results_obj = aligner.align_reads(
             input_file=input_file,
             format=format,
-            save_bam_path=None # No need to save BAM for config decision
+            save_bam_path=None,  # No need to save BAM for config decision
         )
 
         # Convert alignment results to dict
@@ -423,8 +433,8 @@ def handle_decide_trim(
             "alignment_statistics": {
                 "input_reads": align_results_obj.input_reads,
                 "aligned_reads": align_results_obj.aligned_reads,
-                "alignment_rate": align_results_obj.alignment_rate
-            }
+                "alignment_rate": align_results_obj.alignment_rate,
+            },
         }
 
         # 3. Consensus Decision
@@ -433,10 +443,12 @@ def handle_decide_trim(
 
         # Write Output
         output_data = asdict(consensus)
-        with open(output, 'w') as f:
+        with open(output, "w") as f:
             json.dump(output_data, f, indent=2)
 
-        logger.info(f"Consensus decision: 5' trim={consensus.trim_5p}, 3' trim={consensus.trim_3p}")
+        logger.info(
+            f"Consensus decision: 5' trim={consensus.trim_5p}, 3' trim={consensus.trim_3p}"
+        )
         logger.info(f"Report written to {output}")
 
         # Cleanup

@@ -45,7 +45,9 @@ def _sample_reads(
     """
     collapser = TwoStageCollapser()
     # Limit read scan to avoid pulling entire files for big runs
-    counts = collapser.collapse_raw(Path(input_file), format=format, max_reads=max_reads)
+    counts = collapser.collapse_raw(
+        Path(input_file), format=format, max_reads=max_reads
+    )
 
     if not counts:
         return []
@@ -146,7 +148,7 @@ def plot_hmm_entropy(
         nt_lines = []
         for b in bases:
             yb = [pos.get(b, 0.0) for pos in stats.composition_5p]
-            ln, = ax2.plot(x, yb, lw=1.2, alpha=0.7, color=colors_nt[b], label=b)
+            (ln,) = ax2.plot(x, yb, lw=1.2, alpha=0.7, color=colors_nt[b], label=b)
             nt_lines.append(ln)
         lines.extend(nt_lines)
 
@@ -165,14 +167,22 @@ def plot_hmm_entropy(
     # Optional: per-state posterior ribbons (stacked area)
     if show_posteriors and posteriors:
         import numpy as np
+
         P = np.array(posteriors)
         # We’ll plot UMI, RPF, ADAPTER; ignore START/END/BARCODE for clarity
-        state_ix = {"UMI":1, "RPF":3, "ADAPTER":4}
+        state_ix = {"UMI": 1, "RPF": 3, "ADAPTER": 4}
         cols = ["#f5a623", "#4a90e2", "#d0021b"]
         ys = [P[:, state_ix["UMI"]], P[:, state_ix["RPF"]], P[:, state_ix["ADAPTER"]]]
         ax.fill_between(x, 0, ys[0], color=cols[0], alpha=0.10, linewidth=0)
-        ax.fill_between(x, ys[0], ys[0]+ys[1], color=cols[1], alpha=0.10, linewidth=0)
-        ax.fill_between(x, ys[0]+ys[1], ys[0]+ys[1]+ys[2], color=cols[2], alpha=0.10, linewidth=0)
+        ax.fill_between(x, ys[0], ys[0] + ys[1], color=cols[1], alpha=0.10, linewidth=0)
+        ax.fill_between(
+            x,
+            ys[0] + ys[1],
+            ys[0] + ys[1] + ys[2],
+            color=cols[2],
+            alpha=0.10,
+            linewidth=0,
+        )
 
     # Unified legend (entropy + bases; no segment legend by default)
     labs = [ln.get_label() for ln in lines]

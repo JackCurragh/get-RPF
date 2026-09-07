@@ -328,7 +328,10 @@ def test_extract_rpfs_trims_only_post_rpf_adapter_for_dual_ligation(tmp_path):
     )
 
     assert result.architecture_match == "observed_dual_ligation_adapter_pair"
-    assert result.extraction_method in {"strict_pattern_match", "adapter_evidence_match"}
+    assert result.extraction_method in {
+        "strict_pattern_match",
+        "adapter_evidence_match",
+    }
     assert result.extracted_rpfs == 20
     assert result.quality_metrics["unique_extracted_sequences"] == 1
     assert (tmp_path / "out.collapsed.fa").read_text().splitlines()[1] == rpf
@@ -461,7 +464,9 @@ def test_extraction_class_flags_low_yield_before_success_class():
 def test_extract_rpfs_preserves_trimmed_reads_outside_rpf_window(tmp_path):
     input_file = tmp_path / "long_trimmed.fastq"
     seq = "A" * 60
-    input_file.write_text("".join(f"@r{i}\n{seq}\n+\n{'I' * len(seq)}\n" for i in range(20)))
+    input_file.write_text(
+        "".join(f"@r{i}\n{seq}\n+\n{'I' * len(seq)}\n" for i in range(20))
+    )
 
     extractor = RPFExtractor()
     extractor.architecture_db.architectures = []
@@ -521,4 +526,6 @@ def test_adapter_evidence_selection_has_no_external_prior_conflict():
         "best_supported_hit_fraction",
         "message",
     }
-    assert report["adapter_conflict"]["best_supported_protocol"] == "mcglincy_ingolia_2017"
+    assert (
+        report["adapter_conflict"]["best_supported_protocol"] == "mcglincy_ingolia_2017"
+    )

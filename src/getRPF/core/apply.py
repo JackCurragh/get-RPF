@@ -22,9 +22,17 @@ DecisionsByLength = Dict[int, LengthClassDecision]
 # cohort TSVs) never have to guard for a field being present on one path
 # and missing on another.
 RULE_RECORD_KEYS = (
-    "end", "read_length_before", "trim_bases", "dominant_sequence",
-    "dominant_fraction", "supporting_reads", "reason", "estimators_agree",
-    "concordance", "confidence", "decision",
+    "end",
+    "read_length_before",
+    "trim_bases",
+    "dominant_sequence",
+    "dominant_fraction",
+    "supporting_reads",
+    "reason",
+    "estimators_agree",
+    "concordance",
+    "confidence",
+    "decision",
 )
 
 
@@ -105,19 +113,21 @@ def _build_rule_record(values: Dict) -> Dict:
 
 
 def _rule_record(decision: LengthClassDecision) -> Dict:
-    return _build_rule_record({
-        "end": decision.end,
-        "read_length_before": decision.length,
-        "trim_bases": decision.trim_bases,
-        "dominant_sequence": decision.dominant_base,
-        "dominant_fraction": decision.dominant_fraction,
-        "supporting_reads": decision.support,
-        "reason": f"{decision.end}_terminal_bias",
-        "estimators_agree": sorted(decision.estimates.keys()),
-        "concordance": decision.concordance,
-        "confidence": decision.confidence,
-        "decision": decision.decision,
-    })
+    return _build_rule_record(
+        {
+            "end": decision.end,
+            "read_length_before": decision.length,
+            "trim_bases": decision.trim_bases,
+            "dominant_sequence": decision.dominant_base,
+            "dominant_fraction": decision.dominant_fraction,
+            "supporting_reads": decision.support,
+            "reason": f"{decision.end}_terminal_bias",
+            "estimators_agree": sorted(decision.estimates.keys()),
+            "concordance": decision.concordance,
+            "confidence": decision.confidence,
+            "decision": decision.decision,
+        }
+    )
 
 
 def override_rule_record(length: int, trim_3p: int, end: str = "3p") -> Dict:
@@ -125,16 +135,18 @@ def override_rule_record(length: int, trim_3p: int, end: str = "3p") -> Dict:
     boundary estimation involved), with the same key set as
     `_rule_record` so trim_rules_applied has one consistent shape
     regardless of which code path produced it."""
-    return _build_rule_record({
-        "end": end,
-        "read_length_before": length,
-        "trim_bases": trim_3p,
-        "dominant_sequence": None,
-        "dominant_fraction": None,
-        "supporting_reads": None,
-        "reason": "override_rule",
-        "estimators_agree": [],
-        "concordance": None,
-        "confidence": None,
-        "decision": "override_applied",
-    })
+    return _build_rule_record(
+        {
+            "end": end,
+            "read_length_before": length,
+            "trim_bases": trim_3p,
+            "dominant_sequence": None,
+            "dominant_fraction": None,
+            "supporting_reads": None,
+            "reason": "override_rule",
+            "estimators_agree": [],
+            "concordance": None,
+            "confidence": None,
+            "decision": "override_applied",
+        }
+    )

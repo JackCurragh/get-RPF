@@ -88,5 +88,6 @@ def cleanup_temp_files(file_paths: List[Path]) -> None:
         except Exception as e:
             # Log but don't fail on cleanup errors
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to clean up {path}: {e}")

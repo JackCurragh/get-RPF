@@ -96,7 +96,11 @@ def screen_contamination(
     counts = {category: 0 for category in kmer_sets}
     unmatched = 0
     for read in reads:
-        read_kmers = {read[i : i + k] for i in range(len(read) - k + 1)} if len(read) >= k else set()
+        read_kmers = (
+            {read[i : i + k] for i in range(len(read) - k + 1)}
+            if len(read) >= k
+            else set()
+        )
         matched_any = False
         for category, ref_kmers in kmer_sets.items():
             if read_kmers & ref_kmers:
@@ -143,7 +147,9 @@ def identity_screen(
     `reads` should be UMI-inclusive (not yet UMI-trimmed) if a UMI-aware
     duplication estimate is wanted; see duplication_umi_aware.
     """
-    length_shape, insert_mode, peak_fraction = classify_length_shape(length_distribution)
+    length_shape, insert_mode, peak_fraction = classify_length_shape(
+        length_distribution
+    )
     dimer_fraction = adapter_dimer_fraction(length_distribution)
     duplication = duplication_umi_aware(reads)
 
@@ -179,14 +185,22 @@ def identity_screen(
             f"length distribution is broad (peak fraction {peak_fraction:.1%}), "
             "not consistent with a tight footprint population"
         )
-    elif contamination_screened and contamination_total is not None and contamination_total > CONTAMINATION_INCONSISTENT_THRESHOLD:
+    elif (
+        contamination_screened
+        and contamination_total is not None
+        and contamination_total > CONTAMINATION_INCONSISTENT_THRESHOLD
+    ):
         verdict = "inconsistent"
         reason_codes.append("high_contamination")
         reasons.append(
             f"{contamination_total:.1%} of reads match contamination reference k-mers"
         )
     elif length_shape == "peaked" and (
-        not contamination_screened or (contamination_total is not None and contamination_total < CONTAMINATION_CONSISTENT_THRESHOLD)
+        not contamination_screened
+        or (
+            contamination_total is not None
+            and contamination_total < CONTAMINATION_CONSISTENT_THRESHOLD
+        )
     ):
         verdict = "consistent_with_riboseq"
         reason_codes.append("peaked_clean")

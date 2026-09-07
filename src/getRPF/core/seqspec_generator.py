@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SeqSpecRegion:
     """Represents a seqspec Region object."""
+
     region_id: str
     region_type: str  # barcode, umi, adapter, cdna, etc.
     sequence_type: str  # fixed, random, onlist, joined
@@ -27,7 +28,7 @@ class SeqSpecRegion:
     min_len: int = 0
     max_len: int = 0
     strand: str = "pos"
-    regions: List['SeqSpecRegion'] = None
+    regions: List["SeqSpecRegion"] = None
 
     def __post_init__(self):
         if self.regions is None:
@@ -37,6 +38,7 @@ class SeqSpecRegion:
 @dataclass
 class SeqSpecRead:
     """Represents a seqspec Read object."""
+
     read_id: str
     name: str
     modality: str
@@ -50,6 +52,7 @@ class SeqSpecRead:
 @dataclass
 class SeqSpecAssay:
     """Represents a complete seqspec Assay object."""
+
     seqspec_version: str = "0.3.0"
     assay_id: str = "ribosome_profiling_detected"
     name: str = "Ribosome Profiling - Detected Structure"
@@ -89,7 +92,7 @@ class SeqSpecGenerator:
         sample_reads: List[str],
         detected_segments: List = None,
         output_file: Optional[Path] = None,
-        sample_headers: List[str] = None
+        sample_headers: List[str] = None,
     ) -> Dict[str, Any]:
         """Generate seqspec from detected architecture or segments.
 
@@ -118,10 +121,7 @@ class SeqSpecGenerator:
             )
 
     def _generate_from_known_architecture(
-        self,
-        architecture,
-        sample_reads: List[str],
-        output_file: Optional[Path] = None
+        self, architecture, sample_reads: List[str], output_file: Optional[Path] = None
     ) -> Dict[str, Any]:
         """Generate seqspec from known ReadArchitecture."""
 
@@ -131,7 +131,7 @@ class SeqSpecGenerator:
             name=f"Ribosome Profiling - {architecture.protocol_name}",
             description=f"Read structure detected as {architecture.protocol_name} protocol from {architecture.lab_source}",
             library_protocol=architecture.protocol_name,
-            library_kit=architecture.lab_source
+            library_kit=architecture.lab_source,
         )
 
         # Build ordered library structure regions (hierarchical)
@@ -140,51 +140,61 @@ class SeqSpecGenerator:
         # Add UMI regions
         for i, (start, end) in enumerate(architecture.umi_positions):
             umi_sequence = self._extract_consensus(sample_reads, start, end)
-            ordered_regions.append(SeqSpecRegion(
-                region_id=f"umi_{i+1}",
-                region_type="umi",
-                sequence_type="random",
-                name=f"UMI {i+1}",
-                sequence=umi_sequence if umi_sequence else "N" * (end - start),
-                min_len=end - start,
-                max_len=end - start
-            ))
+            ordered_regions.append(
+                SeqSpecRegion(
+                    region_id=f"umi_{i+1}",
+                    region_type="umi",
+                    sequence_type="random",
+                    name=f"UMI {i+1}",
+                    sequence=umi_sequence if umi_sequence else "N" * (end - start),
+                    min_len=end - start,
+                    max_len=end - start,
+                )
+            )
 
         # Add barcode regions
         for i, (start, end) in enumerate(architecture.barcode_positions):
             barcode_sequence = self._extract_consensus(sample_reads, start, end)
-            ordered_regions.append(SeqSpecRegion(
-                region_id=f"barcode_{i+1}",
-                region_type="barcode",
-                sequence_type="onlist" if barcode_sequence else "random",
-                name=f"Sample Barcode {i+1}",
-                sequence=barcode_sequence,
-                min_len=end - start,
-                max_len=end - start
-            ))
+            ordered_regions.append(
+                SeqSpecRegion(
+                    region_id=f"barcode_{i+1}",
+                    region_type="barcode",
+                    sequence_type="onlist" if barcode_sequence else "random",
+                    name=f"Sample Barcode {i+1}",
+                    sequence=barcode_sequence,
+                    min_len=end - start,
+                    max_len=end - start,
+                )
+            )
 
         # Add adapters as separate regions
         for i, adapter_seq in enumerate(architecture.adapter_sequences):
-            ordered_regions.append(SeqSpecRegion(
-                region_id=f"adapter_{i+1}",
-                region_type="illumina_p7" if "AGATCGG" in adapter_seq else "custom_primer",
-                sequence_type="fixed",
-                name=f"Adapter {i+1}",
-                sequence=adapter_seq,
-                min_len=len(adapter_seq),
-                max_len=len(adapter_seq)
-            ))
+            ordered_regions.append(
+                SeqSpecRegion(
+                    region_id=f"adapter_{i+1}",
+                    region_type=(
+                        "illumina_p7" if "AGATCGG" in adapter_seq else "custom_primer"
+                    ),
+                    sequence_type="fixed",
+                    name=f"Adapter {i+1}",
+                    sequence=adapter_seq,
+                    min_len=len(adapter_seq),
+                    max_len=len(adapter_seq),
+                )
+            )
 
         # Add RPF region
         rpf_min, rpf_max = architecture.expected_rpf_length
-        ordered_regions.append(SeqSpecRegion(
-            region_id="rpf_sequence",
-            region_type="cdna",
-            sequence_type="joined",
-            name="Ribosome Protected Fragment",
-            min_len=rpf_min,
-            max_len=rpf_max
-        ))
+        ordered_regions.append(
+            SeqSpecRegion(
+                region_id="rpf_sequence",
+                region_type="cdna",
+                sequence_type="joined",
+                name="Ribosome Protected Fragment",
+                min_len=rpf_min,
+                max_len=rpf_max,
+            )
+        )
 
         # Calculate total library length
         read_lengths = [len(read) for read in sample_reads[:100]]
@@ -200,7 +210,7 @@ class SeqSpecGenerator:
             min_len=min_read_len,
             max_len=max_read_len,
             strand="pos",
-            regions=ordered_regions
+            regions=ordered_regions,
         )
 
         # Create read specification
@@ -212,7 +222,7 @@ class SeqSpecGenerator:
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
-            files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}]
+            files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}],
         )
 
         # Store as library_spec (will be converted correctly in _create_seqspec_dict)
@@ -234,7 +244,7 @@ class SeqSpecGenerator:
         self,
         detected_segments: List,
         sample_reads: List[str],
-        output_file: Optional[Path] = None
+        output_file: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """Generate seqspec from de novo detected segments."""
 
@@ -243,7 +253,7 @@ class SeqSpecGenerator:
             name="Ribosome Profiling - De Novo Detected",
             description="Read structure detected using de novo multi-signal analysis",
             library_protocol="unknown_detected",
-            library_kit="auto-detected"
+            library_kit="auto-detected",
         )
 
         regions = []
@@ -254,7 +264,7 @@ class SeqSpecGenerator:
             segment_sequences = []
             for read in sample_reads[:50]:
                 if segment.end_pos <= len(read):
-                    seg_seq = read[segment.start_pos:segment.end_pos]
+                    seg_seq = read[segment.start_pos : segment.end_pos]
                     segment_sequences.append(seg_seq)
 
             consensus = self._get_consensus_sequence(segment_sequences)
@@ -265,7 +275,7 @@ class SeqSpecGenerator:
                 "barcode": "barcode",
                 "adapter": "illumina_p7",
                 "rpf": "cdna",
-                "unknown": "unknown"
+                "unknown": "unknown",
             }
 
             sequence_type_map = {
@@ -273,7 +283,7 @@ class SeqSpecGenerator:
                 "barcode": "onlist",
                 "adapter": "fixed",
                 "rpf": "joined",
-                "unknown": "random"
+                "unknown": "random",
             }
 
             region = SeqSpecRegion(
@@ -283,7 +293,7 @@ class SeqSpecGenerator:
                 name=f"{segment.segment_type.title()} region ({segment.start_pos}-{segment.end_pos})",
                 sequence=consensus,
                 min_len=segment.end_pos - segment.start_pos,
-                max_len=segment.end_pos - segment.start_pos
+                max_len=segment.end_pos - segment.start_pos,
             )
             regions.append(region)
 
@@ -292,14 +302,16 @@ class SeqSpecGenerator:
             read_lengths = [len(read) for read in sample_reads[:100]]
             avg_len = sum(read_lengths) // len(read_lengths) if read_lengths else 30
 
-            regions.append(SeqSpecRegion(
-                region_id="full_rpf_sequence",
-                region_type="cdna",
-                sequence_type="joined",
-                name="Complete Ribosome Protected Fragment",
-                min_len=avg_len - 5,
-                max_len=avg_len + 5
-            ))
+            regions.append(
+                SeqSpecRegion(
+                    region_id="full_rpf_sequence",
+                    region_type="cdna",
+                    sequence_type="joined",
+                    name="Complete Ribosome Protected Fragment",
+                    min_len=avg_len - 5,
+                    max_len=avg_len + 5,
+                )
+            )
 
         # Calculate total library length
         read_lengths = [len(read) for read in sample_reads[:100]]
@@ -315,7 +327,7 @@ class SeqSpecGenerator:
             min_len=min_read_len,
             max_len=max_read_len,
             strand="pos",
-            regions=regions
+            regions=regions,
         )
 
         # Create read specification
@@ -327,7 +339,7 @@ class SeqSpecGenerator:
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
-            files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}]
+            files=[{"file_id": "R1.fastq.gz", "filename": "input.fastq"}],
         )
 
         assay.sequence_spec = [library_construct]
@@ -340,7 +352,9 @@ class SeqSpecGenerator:
 
         return seqspec_dict
 
-    def _extract_consensus(self, sample_reads: List[str], start: int, end: int) -> Optional[str]:
+    def _extract_consensus(
+        self, sample_reads: List[str], start: int, end: int
+    ) -> Optional[str]:
         """Extract consensus sequence from a region across sample reads."""
         if start >= end or not sample_reads:
             return None
@@ -377,6 +391,7 @@ class SeqSpecGenerator:
             if nucleotides:
                 # Find most common nucleotide
                 from collections import Counter
+
                 counts = Counter(nucleotides)
                 most_common = counts.most_common(1)[0][0]
 
@@ -390,7 +405,9 @@ class SeqSpecGenerator:
 
         return "".join(consensus)
 
-    def _create_seqspec_dict(self, assay: SeqSpecAssay, reads: List[SeqSpecRead]) -> Dict[str, Any]:
+    def _create_seqspec_dict(
+        self, assay: SeqSpecAssay, reads: List[SeqSpecRead]
+    ) -> Dict[str, Any]:
         """Create complete seqspec dictionary structure."""
 
         # Convert regions to dict format
@@ -403,7 +420,7 @@ class SeqSpecGenerator:
                 "name": region.name,
                 "min_len": region.min_len,
                 "max_len": region.max_len,
-                "strand": region.strand
+                "strand": region.strand,
             }
 
             if region.sequence:
@@ -426,7 +443,7 @@ class SeqSpecGenerator:
                     "filetype": f.get("filetype", "fastq"),
                     "filesize": f.get("filesize", 0),
                     "url": f.get("url", "."),
-                    "urltype": f.get("urltype", "local")
+                    "urltype": f.get("urltype", "local"),
                 }
                 if "md5" in f:
                     file_dict["md5"] = f["md5"]
@@ -441,7 +458,7 @@ class SeqSpecGenerator:
                 "strand": read.strand,
                 "min_len": read.min_len,
                 "max_len": read.max_len,
-                "files": files
+                "files": files,
             }
 
         seqspec = {
@@ -478,13 +495,14 @@ class SeqSpecGenerator:
 
         class TaggedDict(dict):
             """Dictionary subclass that holds a YAML tag."""
+
             yaml_tag = None
 
         def dict_representer(dumper, data):
             """Represent tagged dictionaries with proper YAML tags."""
             if isinstance(data, TaggedDict) and data.yaml_tag:
                 return dumper.represent_mapping(data.yaml_tag, dict(data))
-            return dumper.represent_mapping('tag:yaml.org,2002:map', data)
+            return dumper.represent_mapping("tag:yaml.org,2002:map", data)
 
         # Add representer for TaggedDict
         yaml.add_representer(TaggedDict, dict_representer)
@@ -492,13 +510,22 @@ class SeqSpecGenerator:
         def convert_to_tagged(obj: Any) -> Any:
             """Recursively convert dicts with !Tag markers to TaggedDict."""
             if isinstance(obj, dict):
-                tag = obj.get('!Assay') or obj.get('!Region') or obj.get('!Read') or obj.get('!File')
-                clean_dict = {k: convert_to_tagged(v) for k, v in obj.items() if not k.startswith('!')}
+                tag = (
+                    obj.get("!Assay")
+                    or obj.get("!Region")
+                    or obj.get("!Read")
+                    or obj.get("!File")
+                )
+                clean_dict = {
+                    k: convert_to_tagged(v)
+                    for k, v in obj.items()
+                    if not k.startswith("!")
+                }
 
                 if tag is not None:
                     # Extract the tag name
                     for key in obj.keys():
-                        if key.startswith('!'):
+                        if key.startswith("!"):
                             tagged = TaggedDict(clean_dict)
                             tagged.yaml_tag = key
                             return tagged
@@ -512,14 +539,14 @@ class SeqSpecGenerator:
         # Convert the seqspec dict to use TaggedDict
         converted = convert_to_tagged(seqspec_dict)
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             yaml.dump(
                 converted,
                 f,
                 default_flow_style=False,
                 indent=2,
                 sort_keys=False,
-                allow_unicode=True
+                allow_unicode=True,
             )
 
         logger.info(f"seqspec YAML written to {output_file}")
@@ -531,18 +558,18 @@ class SeqSpecGenerator:
             architecture: ReadArchitecture object with adapter info
             seqspec_file: Path to seqspec file (used to derive FASTA filename)
         """
-        if not architecture or not hasattr(architecture, 'adapter_sequences'):
+        if not architecture or not hasattr(architecture, "adapter_sequences"):
             return
 
         # Create adapter FASTA filename based on seqspec filename
-        adapter_fasta = seqspec_file.with_suffix('.adapters.fa')
+        adapter_fasta = seqspec_file.with_suffix(".adapters.fa")
 
         adapter_count = 0
-        with open(adapter_fasta, 'w') as f:
+        with open(adapter_fasta, "w") as f:
             for i, adapter_seq in enumerate(architecture.adapter_sequences):
-                if adapter_seq and adapter_seq not in ['', 'N', 'X']:
+                if adapter_seq and adapter_seq not in ["", "N", "X"]:
                     # Skip sequences that are all N's
-                    if not all(c in 'Nn' for c in adapter_seq):
+                    if not all(c in "Nn" for c in adapter_seq):
                         adapter_name = f"adapter_{i+1}"
                         f.write(f">{adapter_name}\n{adapter_seq}\n")
                         adapter_count += 1
@@ -558,7 +585,7 @@ class SeqSpecGenerator:
         clean_reads: List[str],
         contaminated_reads: List[str],
         architecture,
-        output_file: Optional[Path] = None
+        output_file: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """Generate seqspec for mixed clean/contaminated data."""
 
@@ -566,7 +593,7 @@ class SeqSpecGenerator:
             assay_id="ribosome_profiling_mixed",
             name="Ribosome Profiling - Mixed Clean/Contaminated",
             description=f"Mixed dataset: {len(clean_reads)} clean RPFs + {len(contaminated_reads)} contaminated reads",
-            library_protocol="mixed_processing_states"
+            library_protocol="mixed_processing_states",
         )
 
         regions = []
@@ -579,7 +606,7 @@ class SeqSpecGenerator:
             sequence_type="joined",
             name="Clean RPF sequences (pre-processed)",
             min_len=min(len(r) for r in clean_reads) if clean_reads else 25,
-            max_len=max(len(r) for r in clean_reads) if clean_reads else 40
+            max_len=max(len(r) for r in clean_reads) if clean_reads else 40,
         )
 
         # Variant 2: Contaminated reads needing processing
@@ -588,32 +615,36 @@ class SeqSpecGenerator:
 
             # Add adapter region for contaminated variant
             for adapter in architecture.adapter_sequences:
-                contam_regions.append(SeqSpecRegion(
-                    region_id="contaminant_adapter",
-                    region_type="illumina_p7",
-                    sequence_type="fixed",
-                    name="Adapter contamination (needs removal)",
-                    sequence=adapter,
-                    min_len=len(adapter),
-                    max_len=len(adapter)
-                ))
+                contam_regions.append(
+                    SeqSpecRegion(
+                        region_id="contaminant_adapter",
+                        region_type="illumina_p7",
+                        sequence_type="fixed",
+                        name="Adapter contamination (needs removal)",
+                        sequence=adapter,
+                        min_len=len(adapter),
+                        max_len=len(adapter),
+                    )
+                )
 
             # Add RPF region for contaminated reads
-            contam_regions.append(SeqSpecRegion(
-                region_id="contaminated_rpf",
-                region_type="cdna",
-                sequence_type="joined",
-                name="RPF sequence (adapter-contaminated)",
-                min_len=25,
-                max_len=35
-            ))
+            contam_regions.append(
+                SeqSpecRegion(
+                    region_id="contaminated_rpf",
+                    region_type="cdna",
+                    sequence_type="joined",
+                    name="RPF sequence (adapter-contaminated)",
+                    min_len=25,
+                    max_len=35,
+                )
+            )
 
             contaminated_variant = SeqSpecRegion(
                 region_id="contaminated_variant",
                 region_type="joined",
                 sequence_type="joined",
                 name="Contaminated reads requiring processing",
-                regions=contam_regions
+                regions=contam_regions,
             )
 
             regions = [clean_variant, contaminated_variant]
@@ -635,7 +666,7 @@ class SeqSpecGenerator:
             min_len=min_read_len,
             max_len=max_read_len,
             strand="pos",
-            regions=regions
+            regions=regions,
         )
 
         assay.sequence_spec = [library_construct]
@@ -649,7 +680,7 @@ class SeqSpecGenerator:
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
-            files=[{"file_id": "R1.fastq.gz", "filename": "mixed_input.fastq"}]
+            files=[{"file_id": "R1.fastq.gz", "filename": "mixed_input.fastq"}],
         )
 
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
@@ -665,7 +696,14 @@ class SeqSpecGenerator:
             return False
 
         # Look for structure patterns in headers
-        structure_keywords = ['umi:', 'barcode:', 'adapter:', 'spacer:', 'rpf:', 'untemplated:']
+        structure_keywords = [
+            "umi:",
+            "barcode:",
+            "adapter:",
+            "spacer:",
+            "rpf:",
+            "untemplated:",
+        ]
 
         for header in headers[:10]:  # Check first 10 headers
             if any(keyword in header.lower() for keyword in structure_keywords):
@@ -677,7 +715,7 @@ class SeqSpecGenerator:
         self,
         sample_headers: List[str],
         sample_reads: List[str],
-        output_file: Optional[Path] = None
+        output_file: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """Generate seqspec from structure-annotated headers."""
 
@@ -688,21 +726,21 @@ class SeqSpecGenerator:
             assay_id="ribosome_profiling_annotated",
             name="Ribosome Profiling - Structure Annotated",
             description=f"Complex read structure parsed from annotations. {len(structure_info['regions'])} distinct regions detected.",
-            library_protocol="complex_annotated_structure"
+            library_protocol="complex_annotated_structure",
         )
 
         # Build regions from parsed structure
         regions = []
-        for region_info in structure_info['regions']:
+        for region_info in structure_info["regions"]:
             region = SeqSpecRegion(
-                region_id=region_info['id'],
-                region_type=self._map_annotation_to_seqspec_type(region_info['type']),
+                region_id=region_info["id"],
+                region_type=self._map_annotation_to_seqspec_type(region_info["type"]),
                 sequence_type=self._infer_sequence_type(region_info),
-                name=region_info['name'],
-                sequence=region_info.get('consensus_sequence'),
-                min_len=region_info['min_len'],
-                max_len=region_info['max_len'],
-                strand="pos"
+                name=region_info["name"],
+                sequence=region_info.get("consensus_sequence"),
+                min_len=region_info["min_len"],
+                max_len=region_info["max_len"],
+                strand="pos",
             )
             regions.append(region)
 
@@ -720,7 +758,7 @@ class SeqSpecGenerator:
             min_len=min_read_len,
             max_len=max_read_len,
             strand="pos",
-            regions=regions
+            regions=regions,
         )
 
         assay.sequence_spec = [library_construct]
@@ -734,7 +772,7 @@ class SeqSpecGenerator:
             strand="pos",
             min_len=min_read_len,
             max_len=max_read_len,
-            files=[{"file_id": "R1.fastq.gz", "filename": "annotated_input.fastq"}]
+            files=[{"file_id": "R1.fastq.gz", "filename": "annotated_input.fastq"}],
         )
 
         seqspec_dict = self._create_seqspec_dict(assay, [read_spec])
@@ -745,7 +783,9 @@ class SeqSpecGenerator:
 
         return seqspec_dict
 
-    def _parse_structure_annotations(self, headers: List[str], reads: List[str]) -> Dict[str, Any]:
+    def _parse_structure_annotations(
+        self, headers: List[str], reads: List[str]
+    ) -> Dict[str, Any]:
         """Parse structure annotations from FASTQ headers.
 
         Expected format: @read_id_element1:length_element2:length_...
@@ -769,42 +809,44 @@ class SeqSpecGenerator:
                 for region_type, length in structure:
                     if region_type not in region_data:
                         region_data[region_type] = {
-                            'positions': [],
-                            'lengths': [],
-                            'sequences': []
+                            "positions": [],
+                            "lengths": [],
+                            "sequences": [],
                         }
 
                     end_pos = current_pos + length
                     if end_pos <= len(read_seq):
                         region_seq = read_seq[current_pos:end_pos]
-                        region_data[region_type]['positions'].append((current_pos, end_pos))
-                        region_data[region_type]['lengths'].append(length)
-                        region_data[region_type]['sequences'].append(region_seq)
+                        region_data[region_type]["positions"].append(
+                            (current_pos, end_pos)
+                        )
+                        region_data[region_type]["lengths"].append(length)
+                        region_data[region_type]["sequences"].append(region_seq)
 
                     current_pos = end_pos
 
         # Build summary regions
         regions = []
         for region_type, data in region_data.items():
-            if data['lengths']:
-                consensus_seq = self._get_consensus_sequence(data['sequences'])
+            if data["lengths"]:
+                consensus_seq = self._get_consensus_sequence(data["sequences"])
 
                 region_info = {
-                    'id': f"region_{region_type}",
-                    'type': region_type,
-                    'name': f"{region_type.title()} Region",
-                    'min_len': min(data['lengths']),
-                    'max_len': max(data['lengths']),
-                    'consensus_sequence': consensus_seq,
-                    'occurrence_count': len(data['lengths']),
-                    'sequences': data['sequences'][:10]  # Sample sequences
+                    "id": f"region_{region_type}",
+                    "type": region_type,
+                    "name": f"{region_type.title()} Region",
+                    "min_len": min(data["lengths"]),
+                    "max_len": max(data["lengths"]),
+                    "consensus_sequence": consensus_seq,
+                    "occurrence_count": len(data["lengths"]),
+                    "sequences": data["sequences"][:10],  # Sample sequences
                 }
                 regions.append(region_info)
 
         return {
-            'regions': regions,
-            'total_reads_analyzed': len(total_structures),
-            'unique_structures': len(set(str(s) for s in total_structures))
+            "regions": regions,
+            "total_reads_analyzed": len(total_structures),
+            "unique_structures": len(set(str(s) for s in total_structures)),
         }
 
     def _extract_structure_from_header(self, header: str) -> List[Tuple[str, int]]:
@@ -819,7 +861,7 @@ class SeqSpecGenerator:
         import re
 
         # Find all element:length patterns
-        pattern = r'([a-zA-Z_][a-zA-Z0-9_]*):(\d+)'
+        pattern = r"([a-zA-Z_][a-zA-Z0-9_]*):(\d+)"
         matches = re.findall(pattern, header)
 
         structure = []
@@ -835,34 +877,34 @@ class SeqSpecGenerator:
     def _map_annotation_to_seqspec_type(self, annotation_type: str) -> str:
         """Map annotation type to seqspec region type."""
         mapping = {
-            'umi': 'umi',
-            'barcode': 'barcode',
-            'adapter': 'illumina_p7',
-            'adapter1': 'illumina_p5',
-            'adapter2': 'illumina_p7',
-            'adapter_5': 'illumina_p5',
-            'adapter_3': 'illumina_p7',
-            'spacer': 'linker',
-            'spacer1': 'linker',
-            'spacer2': 'linker',
-            'rpf': 'cdna',
-            'untemplated': 'poly_tail',
-            'poly_a': 'poly_tail',
-            'poly_t': 'poly_tail',
-            'random_tail': 'poly_tail',
-            'umi_partial': 'umi',
-            'adapter_partial': 'illumina_p7'
+            "umi": "umi",
+            "barcode": "barcode",
+            "adapter": "illumina_p7",
+            "adapter1": "illumina_p5",
+            "adapter2": "illumina_p7",
+            "adapter_5": "illumina_p5",
+            "adapter_3": "illumina_p7",
+            "spacer": "linker",
+            "spacer1": "linker",
+            "spacer2": "linker",
+            "rpf": "cdna",
+            "untemplated": "poly_tail",
+            "poly_a": "poly_tail",
+            "poly_t": "poly_tail",
+            "random_tail": "poly_tail",
+            "umi_partial": "umi",
+            "adapter_partial": "illumina_p7",
         }
 
-        return mapping.get(annotation_type.lower(), 'unknown')
+        return mapping.get(annotation_type.lower(), "unknown")
 
     def _infer_sequence_type(self, region_info: Dict) -> str:
         """Infer sequence type from region characteristics."""
-        region_type = region_info['type'].lower()
-        sequences = region_info.get('sequences', [])
+        region_type = region_info["type"].lower()
+        sequences = region_info.get("sequences", [])
 
         if not sequences:
-            return 'unknown'
+            return "unknown"
 
         # Calculate sequence diversity
         unique_sequences = len(set(sequences))
@@ -870,17 +912,24 @@ class SeqSpecGenerator:
         diversity = unique_sequences / total_sequences if total_sequences > 0 else 0
 
         # Type-specific inference
-        if region_type in ['umi', 'umi_partial']:
-            return 'random' if diversity > 0.7 else 'onlist'
-        elif region_type in ['barcode']:
-            return 'onlist' if diversity < 0.5 else 'random'
-        elif region_type in ['adapter', 'adapter1', 'adapter2', 'adapter_5', 'adapter_3', 'adapter_partial']:
-            return 'fixed' if diversity < 0.3 else 'joined'
-        elif region_type in ['spacer', 'spacer1', 'spacer2']:
-            return 'fixed' if diversity < 0.5 else 'random'
-        elif region_type in ['rpf']:
-            return 'joined'  # Biological sequence
-        elif region_type in ['untemplated', 'poly_a', 'poly_t', 'random_tail']:
-            return 'random'
+        if region_type in ["umi", "umi_partial"]:
+            return "random" if diversity > 0.7 else "onlist"
+        elif region_type in ["barcode"]:
+            return "onlist" if diversity < 0.5 else "random"
+        elif region_type in [
+            "adapter",
+            "adapter1",
+            "adapter2",
+            "adapter_5",
+            "adapter_3",
+            "adapter_partial",
+        ]:
+            return "fixed" if diversity < 0.3 else "joined"
+        elif region_type in ["spacer", "spacer1", "spacer2"]:
+            return "fixed" if diversity < 0.5 else "random"
+        elif region_type in ["rpf"]:
+            return "joined"  # Biological sequence
+        elif region_type in ["untemplated", "poly_a", "poly_t", "random_tail"]:
+            return "random"
         else:
-            return 'joined'
+            return "joined"

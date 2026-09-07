@@ -106,7 +106,9 @@ def test_audit_mode_proposed_rules_match_production_applied_rules(tmp_path):
     # length 30 in its output; production trimmed them to 29.
     audit_lengths = {
         len(line)
-        for line in (audit_out / "artifact_sample.collapsed.fa").read_text().splitlines()
+        for line in (audit_out / "artifact_sample.collapsed.fa")
+        .read_text()
+        .splitlines()
         if line and not line.startswith(">")
     }
     prod_lengths = {

@@ -50,7 +50,9 @@ def _known_adapters(extractor: RPFExtractor) -> List[str]:
     return adapters
 
 
-def _weighted_extracted_population(output_file: Path) -> Tuple[List[str], Dict[int, int]]:
+def _weighted_extracted_population(
+    output_file: Path,
+) -> Tuple[List[str], Dict[int, int]]:
     """Read the collapsed FASTA written by extract_rpfs and rebuild the
     count-weighted read population: a length_distribution weighted by true
     read counts (not unique-sequence counts), and a bounded weighted read
@@ -87,7 +89,9 @@ def _quality_evidence(sketch: Sketch) -> Dict:
 
     dominant_base, _ = max(composition_3p[0].items(), key=lambda kv: kv[1])
     quality_mean = sketch.quality_3p[0] if sketch.quality_3p else None
-    classification = classify_terminal_signal(entropy_3p[0], quality_mean, dominant_base)
+    classification = classify_terminal_signal(
+        entropy_3p[0], quality_mean, dominant_base
+    )
     return {"three_prime_q_collapse": classification == "basecaller_artifact"}
 
 
@@ -123,12 +127,20 @@ def run_sample(
     """
     sample_id = sample_id or input_file.stem
 
-    extractor = RPFExtractor(architecture_db_path=architecture_db, seqspec_dir=seqspec_dir)
+    extractor = RPFExtractor(
+        architecture_db_path=architecture_db, seqspec_dir=seqspec_dir
+    )
 
     (
-        inferred_trims, inferred_applied, inferred_proposed, decisions, sketch,
+        inferred_trims,
+        inferred_applied,
+        inferred_proposed,
+        decisions,
+        sketch,
     ) = plan_from_file(
-        input_file, format=format, infer_reads=infer_reads,
+        input_file,
+        format=format,
+        infer_reads=infer_reads,
         known_adapters=_known_adapters(extractor),
     )
 
@@ -153,9 +165,13 @@ def run_sample(
     trims_to_apply = plan_trims if apply_trims else None
 
     result = extractor.extract_rpfs(
-        input_file, output_file, format=format, max_reads=max_reads,
+        input_file,
+        output_file,
+        format=format,
+        max_reads=max_reads,
         generate_seqspec=generate_seqspec,
-        collapse_output=collapse_output, collapsed_only=collapsed_only,
+        collapse_output=collapse_output,
+        collapsed_only=collapsed_only,
         override_trims=trims_to_apply,
         sample_reads=analysis_reads,
     )
@@ -163,7 +179,9 @@ def run_sample(
     self_consistency = check_self_consistency(sketch, trims_to_apply or {})
     quality_evidence = _quality_evidence(sketch)
 
-    extracted_reads, extracted_length_distribution = _weighted_extracted_population(output_file)
+    extracted_reads, extracted_length_distribution = _weighted_extracted_population(
+        output_file
+    )
     biological_screen = identity_screen(extracted_reads, extracted_length_distribution)
 
     if not apply_trims:
@@ -175,7 +193,9 @@ def run_sample(
         applied_for_evidence = applied_rules
         proposed_for_evidence = proposed_rules
 
-    boundary_estimates_3p = {str(length): d.to_dict() for length, d in decisions.items()}
+    boundary_estimates_3p = {
+        str(length): d.to_dict() for length, d in decisions.items()
+    }
 
     evidence = build_evidence(
         sample_id=sample_id,
@@ -203,7 +223,8 @@ def run_sample(
                 "biological_confirmation": evidence["biological_confirmation"],
                 "warnings": evidence["warnings"],
             },
-            f, indent=2,
+            f,
+            indent=2,
         )
 
     applied_path = output_file.with_suffix(".trim_rules.applied.json")

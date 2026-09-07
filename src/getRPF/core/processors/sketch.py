@@ -119,9 +119,7 @@ class SketchBuilder:
         per_length_support: Dict[int, int] = {}
         for length, length_reads in by_length.items():
             per_length_support[length] = len(length_reads)
-            per_length[length] = process_reads(
-                length_reads, compute_dinucleotide=False
-            )
+            per_length[length] = process_reads(length_reads, compute_dinucleotide=False)
 
         quality_5p, quality_3p = self._quality_profiles(reads, qualities)
         terminal_kmers_3p = self._terminal_kmers(reads)
@@ -166,9 +164,7 @@ class SketchBuilder:
                     break
                 reads.append(str(record.seq).upper())
                 if qualities is not None:
-                    qualities.append(
-                        record.letter_annotations.get("phred_quality", [])
-                    )
+                    qualities.append(record.letter_annotations.get("phred_quality", []))
         return reads, qualities
 
     def _quality_profiles(

@@ -62,7 +62,9 @@ def parse_samplesheet(path: Path) -> List[SampleSheetRow]:
         reader = csv.DictReader(f)
         missing = REQUIRED_COLUMNS - set(reader.fieldnames or [])
         if missing:
-            raise ValueError(f"Samplesheet missing required column(s): {sorted(missing)}")
+            raise ValueError(
+                f"Samplesheet missing required column(s): {sorted(missing)}"
+            )
 
         for record in reader:
             rows.append(
@@ -74,7 +76,9 @@ def parse_samplesheet(path: Path) -> List[SampleSheetRow]:
                     organism=record.get("organism") or None,
                     study_id=record.get("study_id") or None,
                     protocol_hint=record.get("protocol_hint") or None,
-                    fastqc_dir=Path(record["fastqc_dir"]) if record.get("fastqc_dir") else None,
+                    fastqc_dir=(
+                        Path(record["fastqc_dir"]) if record.get("fastqc_dir") else None
+                    ),
                 )
             )
     return rows

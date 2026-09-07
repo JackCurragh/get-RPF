@@ -38,4 +38,3 @@ def test_decode_with_posteriors_returns_aligned_viterbi_path():
     assert segments
     for position in posteriors:
         assert abs(sum(position) - 1.0) < 1e-9
-

@@ -131,13 +131,17 @@ def _b_kmer(compositions: List[Dict[str, float]], min_freq: float) -> Optional[i
     return onset if onset > 0 else None
 
 
-def _b_entropy(entropies: List[float], frac: float, baseline_offset: int = 10) -> Optional[int]:
+def _b_entropy(
+    entropies: List[float], frac: float, baseline_offset: int = 10
+) -> Optional[int]:
     """Entropy-cliff onset: how many leading positions have entropy below
     `frac` of the median "insert region" entropy (positions beyond
     `baseline_offset`, used as a proxy for biological baseline entropy)."""
     if not entropies:
         return None
-    baseline_region = entropies[baseline_offset:] if len(entropies) > baseline_offset else entropies
+    baseline_region = (
+        entropies[baseline_offset:] if len(entropies) > baseline_offset else entropies
+    )
     if not baseline_region:
         return None
     median_baseline = statistics.median(baseline_region)
@@ -191,7 +195,9 @@ def _b_adapter(
     return modal_overlap
 
 
-def _b_lenmode(length: int, other_trim_amounts: Dict[int, int], min_agreeing: int = 2) -> Optional[int]:
+def _b_lenmode(
+    length: int, other_trim_amounts: Dict[int, int], min_agreeing: int = 2
+) -> Optional[int]:
     """Cross-length consistency: if several *other* length classes agree on
     a trim amount, that amount is a candidate for this class too (a
     footprint library's adapter onset is a fixed offset from read length,
@@ -232,7 +238,13 @@ def _decide(
             # 5' trimming is never performed on de novo terminal bias
             # alone -- it needs a named element from a seqspec or a
             # high-posterior HMM segment.
-            return "safe_to_infer_but_not_trim", spread, n_indep, concordance, confidence
+            return (
+                "safe_to_infer_but_not_trim",
+                spread,
+                n_indep,
+                concordance,
+                confidence,
+            )
         return "safe_to_trim", spread, n_indep, concordance, confidence
 
     return "safe_to_infer_but_not_trim", spread, n_indep, concordance, confidence
@@ -301,8 +313,14 @@ def estimate_boundaries(
         named_element = length in named_element_lengths
 
         decision, spread, n_indep, concordance, confidence = _decide(
-            estimates, support, end, named_element,
-            tau_high_3p, tau_high_5p, s_min, support_floor,
+            estimates,
+            support,
+            end,
+            named_element,
+            tau_high_3p,
+            tau_high_5p,
+            s_min,
+            support_floor,
         )
 
         trim_bases = None

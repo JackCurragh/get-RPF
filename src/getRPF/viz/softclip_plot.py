@@ -7,6 +7,7 @@ Two display modes:
 
 Use with CLI: getRPF plot-softclips --align-json <json> [--bam <bam>] -o <png>
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ import numpy as np
 
 try:
     import pysam  # optional for heatmap mode
+
     PYSAM_AVAILABLE = True
 except Exception:
     PYSAM_AVAILABLE = False
@@ -71,7 +73,9 @@ def _load_align_json(path: Path) -> Dict[str, Any]:
 
 def _compute_clip_distributions_from_bam(bam_path: Path):
     if not PYSAM_AVAILABLE:
-        raise RuntimeError("pysam is required for heatmap mode; install pysam or disable --heatmap.")
+        raise RuntimeError(
+            "pysam is required for heatmap mode; install pysam or disable --heatmap."
+        )
 
     with pysam.AlignmentFile(str(bam_path), "rb") as bam:
         # Determine bounds for read length and max clip
@@ -112,7 +116,7 @@ def _compute_clip_distributions_from_bam(bam_path: Path):
             counts[idx] += 1
 
         # Convert to fractions per row
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             heat5 = heat5 / counts[:, None]
             heat3 = heat3 / counts[:, None]
             heat5 = np.nan_to_num(heat5)
@@ -164,32 +168,43 @@ def plot_softclips(
         H = _compute_clip_distributions_from_bam(Path(bam_path))
         fig, ax = plt.subplots(1, 1, figsize=(8, 4), constrained_layout=True)
         if not H:
-            ax.axis('off')
-            ax.text(0.5, 0.5, "No aligned reads in BAM for heatmap", ha='center', va='center')
+            ax.axis("off")
+            ax.text(
+                0.5,
+                0.5,
+                "No aligned reads in BAM for heatmap",
+                ha="center",
+                va="center",
+            )
         else:
             min_len, max_len = H["min_len"], H["max_len"]
             heat5 = H["heat5"]
-            im = ax.imshow(heat5, aspect='auto', origin='lower',
-                           extent=[0, heat5.shape[1], min_len, max_len], cmap='viridis')
+            im = ax.imshow(
+                heat5,
+                aspect="auto",
+                origin="lower",
+                extent=[0, heat5.shape[1], min_len, max_len],
+                cmap="viridis",
+            )
             cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cb.set_label('Fraction of reads')
+            cb.set_label("Fraction of reads")
             ax.set_xlabel("5' soft clip (bases)")
             ax.set_ylabel("Read length")
             # Overlay global 5' trim line if within range
             g5 = trims.get("recommended_5prime_trim", 0)
-            if g5 <= max(1, heat5.shape[1]-1):
-                ax.axvline(g5, color='w', ls='--', lw=1.2, alpha=0.8)
+            if g5 <= max(1, heat5.shape[1] - 1):
+                ax.axvline(g5, color="w", ls="--", lw=1.2, alpha=0.8)
         if title:
             ax.set_title(title, pad=10)
         output_png = Path(output_png)
         output_png.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_png, dpi=200, bbox_inches='tight')
+        fig.savefig(output_png, dpi=200, bbox_inches="tight")
         plt.close(fig)
         return output_png
 
     # Layout when per-length arrays are present
     ncols = 3 if has_heatmap else 2
-    fig, axes = plt.subplots(1, ncols, figsize=(6*ncols, 4), constrained_layout=True)
+    fig, axes = plt.subplots(1, ncols, figsize=(6 * ncols, 4), constrained_layout=True)
     if ncols == 2:
         ax0, ax1 = axes
     else:
@@ -213,8 +228,15 @@ def plot_softclips(
         g3 = trims.get("recommended_3prime_trim", 0)
         ax1.axhline(g5, color="#1f77b4", ls="--", alpha=0.6)
         ax1.axhline(g3, color="#ff7f0e", ls="--", alpha=0.6)
-        ax1.text(0.02, 0.95, f"global 5'={g5}, 3'={g3}\nconsensus={trims.get('consensus_level',0):.2f}",
-                 transform=ax1.transAxes, va='top', ha='left', fontsize=9)
+        ax1.text(
+            0.02,
+            0.95,
+            f"global 5'={g5}, 3'={g3}\nconsensus={trims.get('consensus_level',0):.2f}",
+            transform=ax1.transAxes,
+            va="top",
+            ha="left",
+            fontsize=9,
+        )
         ax1.set_xlabel("Read length")
         ax1.set_ylabel("Recommended trim (bases)")
         ax1.legend(frameon=False)
@@ -225,35 +247,41 @@ def plot_softclips(
         try:
             H = _compute_clip_distributions_from_bam(Path(bam_path))
         except Exception as e:
-            ax2.axis('off')
-            ax2.text(0.5, 0.5, f"Heatmap disabled: {e}", ha='center', va='center')
+            ax2.axis("off")
+            ax2.text(0.5, 0.5, f"Heatmap disabled: {e}", ha="center", va="center")
         else:
             if not H:
-                ax2.axis('off')
-                ax2.text(0.5, 0.5, "No aligned reads for heatmap", ha='center', va='center')
+                ax2.axis("off")
+                ax2.text(
+                    0.5, 0.5, "No aligned reads for heatmap", ha="center", va="center"
+                )
             else:
                 min_len, max_len = H["min_len"], H["max_len"]
                 heat5 = H["heat5"]
                 # Build a 2-row heatmap (5' top, 3' bottom) stacked vertically in same axis
                 # Simpler: show 5' only; 3' only; or combine—as a quick MVP show 5'.
-                im = ax2.imshow(heat5, aspect='auto', origin='lower',
-                                extent=[0, heat5.shape[1], min_len, max_len],
-                                cmap='viridis')
+                im = ax2.imshow(
+                    heat5,
+                    aspect="auto",
+                    origin="lower",
+                    extent=[0, heat5.shape[1], min_len, max_len],
+                    cmap="viridis",
+                )
                 cb = fig.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
-                cb.set_label('Fraction of reads')
+                cb.set_label("Fraction of reads")
                 ax2.set_xlabel("5' soft clip (bases)")
                 ax2.set_ylabel("Read length")
                 ax2.set_title("5' clip distribution heatmap")
                 # Overlay global 5' trim line if within range
                 g5 = trims.get("recommended_5prime_trim", 0)
                 if g5 <= heat5.shape[1]:
-                    ax2.axvline(g5, color='w', ls='--', lw=1.2, alpha=0.8)
+                    ax2.axvline(g5, color="w", ls="--", lw=1.2, alpha=0.8)
 
     if title:
         fig.suptitle(title, y=1.02)
 
     output_png = Path(output_png)
     output_png.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_png, dpi=200, bbox_inches='tight')
+    fig.savefig(output_png, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_png

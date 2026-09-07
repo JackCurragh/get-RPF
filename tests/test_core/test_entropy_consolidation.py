@@ -70,16 +70,16 @@ def test_mixed_length_clean_rpfs_pass(tmp_path):
     """Mixed 28-32nt reads with real per-position diversity should pass all
     cleanliness checks, including at the tail positions unique to 32-mers."""
     lengths = [28, 29, 30, 31, 32]
-    sequences = [
-        _cycled_seq(i, lengths[i % len(lengths)]) for i in range(1000)
-    ]
+    sequences = [_cycled_seq(i, lengths[i % len(lengths)]) for i in range(1000)]
 
     path = _write_fastq(tmp_path, "mixed.fastq", sequences)
     checker = CleanlinessChecker(format="fastq", max_reads=None)
     results = checker.analyze_file(path)
 
     check_results = run_all_cleanliness_checks(results)
-    failing = {name: r.message for name, r in check_results.items() if r.status == Status.FAIL}
+    failing = {
+        name: r.message for name, r in check_results.items() if r.status == Status.FAIL
+    }
 
     assert failing == {}
     assert categorize_failures(check_results)["is_clean"] is True

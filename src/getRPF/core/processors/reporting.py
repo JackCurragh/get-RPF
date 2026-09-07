@@ -15,25 +15,29 @@ from .types import ReadArchitecture, SegmentInfo
 class Reporter:
     """Generates human-readable interaction reports."""
 
-    def generate_cli_report(self,
-                            architecture: ReadArchitecture,
-                            segments: List[SegmentInfo],
-                            stats: SignalStats) -> str:
+    def generate_cli_report(
+        self,
+        architecture: ReadArchitecture,
+        segments: List[SegmentInfo],
+        stats: SignalStats,
+    ) -> str:
         """Generate a Rich-text compatible string for CLI output."""
         report = []
-        report.append(f"✓ Architecture Detect: [bold green]{architecture.protocol_name}[/bold green]")
+        report.append(
+            f"✓ Architecture Detect: [bold green]{architecture.protocol_name}[/bold green]"
+        )
 
         # Structure Map
         structure_str = ""
         for seg in segments:
             name = seg.segment_type.upper()
             if seg.end_pos == -1:
-                 structure_str += f"[{name}:Variable/End]--"
+                structure_str += f"[{name}:Variable/End]--"
             else:
-                 length = seg.end_pos - seg.start_pos
-                 structure_str += f"[{name}:{length}]--"
+                length = seg.end_pos - seg.start_pos
+                structure_str += f"[{name}:{length}]--"
 
-        report.append(f"  Structure: {structure_str[:-2]}") # Remove last --
+        report.append(f"  Structure: {structure_str[:-2]}")  # Remove last --
 
         # ASCII Sparkline for Entropy
         sparkline = self._ascii_sparkline(stats.entropy_5p[:50])
@@ -41,12 +45,14 @@ class Reporter:
 
         return "\n".join(report)
 
-    def generate_html_report(self,
-                             output_path: Path,
-                             architecture: ReadArchitecture,
-                             segments: List[SegmentInfo],
-                             stats: SignalStats,
-                             trace_log: List[str]):
+    def generate_html_report(
+        self,
+        output_path: Path,
+        architecture: ReadArchitecture,
+        segments: List[SegmentInfo],
+        stats: SignalStats,
+        trace_log: List[str],
+    ):
         """Generate a single-file interactive HTML report."""
 
         # Prepare data for JS embedding
@@ -140,7 +146,9 @@ class Reporter:
                 else:
                     length_str = f"{length}nt"
 
-            html_segs.append(f'<div class="segment {type_class}">{seg.segment_type.upper()}<br>{length_str}</div>')
+            html_segs.append(
+                f'<div class="segment {type_class}">{seg.segment_type.upper()}<br>{length_str}</div>'
+            )
         return html_segs
 
     def _render_css_bars(self, data: List[float]) -> str:

@@ -301,8 +301,8 @@ class InformationContentCheck(BaseCheck):
                 "mean_entropy": mean_entropy,
                 "min_entropy": min_entropy,
                 "low_entropy_positions": low_entropy_positions,
-                "entropy_threshold": self.min_entropy
-            }
+                "entropy_threshold": self.min_entropy,
+            },
         )
 
 
@@ -358,7 +358,9 @@ class EndBiasCheck(BaseCheck):
             dominant_nt, max_freq = max(pos_freqs.items(), key=lambda x: x[1])
 
             if max_freq > self.max_bias:
-                problems.append(f"3' position {pos} (reversed): {dominant_nt}={max_freq:.1%}")
+                problems.append(
+                    f"3' position {pos} (reversed): {dominant_nt}={max_freq:.1%}"
+                )
                 if max_freq > max_bias_found:
                     max_bias_found = max_freq
                     worst_position = f"3'_reversed_{pos}"
@@ -379,7 +381,7 @@ class EndBiasCheck(BaseCheck):
                 "max_bias_found": max_bias_found,
                 "worst_position": worst_position,
                 "bias_threshold": self.max_bias,
-            }
+            },
         )
 
 
@@ -402,7 +404,7 @@ class SoftClippingCheck(BaseCheck):
             return CheckResult(
                 status=Status.WARN,
                 message="Soft-clipping statistics not available",
-                details={}
+                details={},
             )
 
         total_reads = alignment_stats["total_reads_analyzed"]
@@ -438,8 +440,8 @@ class SoftClippingCheck(BaseCheck):
                 "clip_rate": clip_rate,
                 "mean_total_clips": mean_total_clips,
                 "reads_with_clips": reads_with_clips,
-                "total_reads": total_reads
-            }
+                "total_reads": total_reads,
+            },
         )
 
 
@@ -478,7 +480,7 @@ def categorize_failures(results: Dict[str, CheckResult]) -> Dict[str, str]:
     return {
         "failure_categories": failure_categories,
         "primary_failure": failure_categories[0] if failure_categories else None,
-        "is_clean": len(failure_categories) == 0
+        "is_clean": len(failure_categories) == 0,
     }
 
 
@@ -495,10 +497,14 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
 
         # Add cleanliness status
         categories = categorize_failures(results)
-        f.write(f"Sample Status: {'CLEAN' if categories['is_clean'] else 'NEEDS_SEQSPEC'}\n")
-        if not categories['is_clean']:
+        f.write(
+            f"Sample Status: {'CLEAN' if categories['is_clean'] else 'NEEDS_SEQSPEC'}\n"
+        )
+        if not categories["is_clean"]:
             f.write(f"Primary Failure Type: {categories['primary_failure']}\n")
-            f.write(f"All Failure Types: {', '.join(categories['failure_categories'])}\n")
+            f.write(
+                f"All Failure Types: {', '.join(categories['failure_categories'])}\n"
+            )
         f.write("\n")
 
         f.write("Check Summary:\n")
@@ -525,7 +531,7 @@ def write_check_report(results: Dict[str, CheckResult], output: Path) -> None:
 
 def run_all_cleanliness_checks(
     sequence_results: CleanlinessResults,
-    alignment_stats: Optional[Dict[str, Any]] = None
+    alignment_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, CheckResult]:
     """Run all cleanliness checks and return results.
 
@@ -541,7 +547,7 @@ def run_all_cleanliness_checks(
         "information_content": InformationContentCheck(),
         "end_bias": EndBiasCheck(),
         "base_composition": BaseCompositionCheck(),
-        "gc_content": GCContentCheck()
+        "gc_content": GCContentCheck(),
     }
 
     results = {}

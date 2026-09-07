@@ -15,6 +15,7 @@ from .processors.types import ReadArchitecture
 
 logger = logging.getLogger(__name__)
 
+
 class SeqSpecArchitectureLoader:
     """Loads read architectures from seqspec files."""
 
@@ -27,7 +28,7 @@ class SeqSpecArchitectureLoader:
         architectures = []
         try:
             # Handle both Path objects and Traversable (from importlib.resources)
-            if hasattr(seqspec_dir, 'iterdir'):
+            if hasattr(seqspec_dir, "iterdir"):
                 files = list(seqspec_dir.iterdir())
             else:
                 s_dir = Path(seqspec_dir)
@@ -37,7 +38,7 @@ class SeqSpecArchitectureLoader:
 
             for file_path in files:
                 # Basic check for yaml extension if iterating blindly
-                if not file_path.name.endswith(('.yaml', '.yml')):
+                if not file_path.name.endswith((".yaml", ".yml")):
                     continue
 
                 try:
@@ -61,10 +62,10 @@ class SeqSpecArchitectureLoader:
 
         try:
             # Handle Traversable objects from importlib.resources
-            if hasattr(seqspec_file, 'read_text'):
-                content = seqspec_file.read_text(encoding='utf-8')
+            if hasattr(seqspec_file, "read_text"):
+                content = seqspec_file.read_text(encoding="utf-8")
             else:
-                with open(seqspec_file, 'r') as f:
+                with open(seqspec_file, "r") as f:
                     content = f.read()
 
             # Try to parse as YAML (ignoring custom tags for now)
@@ -77,12 +78,12 @@ class SeqSpecArchitectureLoader:
                 return None
 
             # Extract architecture information
-            protocol_name = data.get('assay_id', seqspec_file.stem)
-            lab_source = data.get('library_kit', 'Unknown')
-            description = data.get('description', '')
+            protocol_name = data.get("assay_id", seqspec_file.stem)
+            lab_source = data.get("library_kit", "Unknown")
+            description = data.get("description", "")
 
             # Parse sequence_spec for regions
-            sequence_spec = data.get('sequence_spec', [])
+            sequence_spec = data.get("sequence_spec", [])
 
             adapter_sequences = []
             trim_adapter_sequences = []
@@ -95,41 +96,52 @@ class SeqSpecArchitectureLoader:
 
             for region in sequence_spec:
                 if isinstance(region, dict):
-                    region_type = region.get('region_type', '').lower()
-                    region_id = region.get('region_id', '').lower()
-                    sequence = region.get('sequence', '')
-                    min_len = region.get('min_len', 0)
-                    max_len = region.get('max_len', min_len)
+                    region_type = region.get("region_type", "").lower()
+                    region_id = region.get("region_id", "").lower()
+                    sequence = region.get("sequence", "")
+                    min_len = region.get("min_len", 0)
+                    max_len = region.get("max_len", min_len)
                     sequences = []
-                    if region.get('sequence_type') == 'list' and 'sequences' in region:
-                        sequences = region['sequences']
+                    if region.get("sequence_type") == "list" and "sequences" in region:
+                        sequences = region["sequences"]
 
                     if sequences:
                         region_length = max(
                             [min_len, max_len] + [len(seq) for seq in sequences]
                         )
                     else:
-                        region_length = max(min_len, max_len, len(sequence)) if sequence else max_len
+                        region_length = (
+                            max(min_len, max_len, len(sequence))
+                            if sequence
+                            else max_len
+                        )
 
                     # Categorize regions
-                    if 'adapter' in region_type or 'adapter' in region_id:
+                    if "adapter" in region_type or "adapter" in region_id:
                         adapter_start = current_pos
                         if sequence:
                             adapter_sequences.append(sequence)
                             if rpf_regions and adapter_start >= rpf_regions[-1][1]:
                                 trim_adapter_sequences.append(sequence)
-                        elif region.get('sequence_type') == 'list' and 'sequences' in region:
-                            adapter_sequences.extend(region['sequences'])
+                        elif (
+                            region.get("sequence_type") == "list"
+                            and "sequences" in region
+                        ):
+                            adapter_sequences.extend(region["sequences"])
                             if rpf_regions and adapter_start >= rpf_regions[-1][1]:
-                                trim_adapter_sequences.extend(region['sequences'])
-                    elif 'umi' in region_type or 'umi' in region_id:
+                                trim_adapter_sequences.extend(region["sequences"])
+                    elif "umi" in region_type or "umi" in region_id:
                         if region_length > 0:
-                            umi_positions.append((current_pos, current_pos + region_length))
+                            umi_positions.append(
+                                (current_pos, current_pos + region_length)
+                            )
                             if rpf_regions and current_pos >= rpf_regions[-1][1]:
                                 post_rpf_trim_bases += region_length
-                    elif 'barcode' in region_type or 'barcode' in region_id:
+                    elif "barcode" in region_type or "barcode" in region_id:
                         if region_length > 0:
-                            barcode_positions.append((current_pos, current_pos + region_length))
+                            barcode_positions.append(
+                                (current_pos, current_pos + region_length)
+                            )
                             if rpf_regions and current_pos >= rpf_regions[-1][1]:
                                 post_rpf_trim_bases += region_length
                     elif (
@@ -138,8 +150,14 @@ class SeqSpecArchitectureLoader:
                         and region_type in {"linker", "primer", "technical"}
                     ):
                         post_rpf_trim_bases += region_length
-                    elif 'rpf' in region_type or 'rpf' in region_id or 'cdna' in region_type:
-                        rpf_regions.append((current_pos, current_pos + region_length, min_len, max_len))
+                    elif (
+                        "rpf" in region_type
+                        or "rpf" in region_id
+                        or "cdna" in region_type
+                    ):
+                        rpf_regions.append(
+                            (current_pos, current_pos + region_length, min_len, max_len)
+                        )
 
                     current_pos += region_length
 
@@ -171,7 +189,7 @@ class SeqSpecArchitectureLoader:
                 expected_rpf_length=expected_rpf_length,
                 quality_markers={
                     "adapter_match_threshold": 0.3,  # Conservative for user-defined
-                    "description": description
+                    "description": description,
                 },
                 post_rpf_trim_bases=post_rpf_trim_bases,
             )
@@ -192,19 +210,19 @@ class SeqSpecArchitectureLoader:
         """Clean seqspec YAML content to make it parseable by standard YAML."""
 
         # Remove custom Python object tags
-        lines = content.split('\n')
+        lines = content.split("\n")
         cleaned_lines = []
 
         for line in lines:
             # Skip lines with Python object tags
-            if '!!python/object/apply:' in line:
+            if "!!python/object/apply:" in line:
                 continue
             # Convert custom tags to simple strings
-            if line.strip().startswith('!!'):
+            if line.strip().startswith("!!"):
                 continue
             cleaned_lines.append(line)
 
-        return '\n'.join(cleaned_lines)
+        return "\n".join(cleaned_lines)
 
     def create_sample_seqspec(self, output_dir: Path):
         """Create sample seqspec files for testing."""
@@ -213,89 +231,92 @@ class SeqSpecArchitectureLoader:
 
         # Sample seqspec 1: Novel protocol
         sample1 = {
-            'seqspec_version': '0.3.0',
-            'assay_id': 'novel_protocol_2024',
-            'name': 'Novel Ribosome Profiling Protocol',
-            'description': 'Custom protocol with unique barcode structure',
-            'library_kit': 'Custom Lab Protocol',
-            'modalities': ['rna'],
-            'sequence_spec': [
+            "seqspec_version": "0.3.0",
+            "assay_id": "novel_protocol_2024",
+            "name": "Novel Ribosome Profiling Protocol",
+            "description": "Custom protocol with unique barcode structure",
+            "library_kit": "Custom Lab Protocol",
+            "modalities": ["rna"],
+            "sequence_spec": [
                 {
-                    'region_id': 'custom_prefix',
-                    'region_type': 'technical',
-                    'sequence': 'TAG',
-                    'min_len': 3,
-                    'max_len': 3
+                    "region_id": "custom_prefix",
+                    "region_type": "technical",
+                    "sequence": "TAG",
+                    "min_len": 3,
+                    "max_len": 3,
                 },
                 {
-                    'region_id': 'sample_barcode',
-                    'region_type': 'barcode',
-                    'sequence': 'NNNNNNNN',
-                    'min_len': 8,
-                    'max_len': 8
+                    "region_id": "sample_barcode",
+                    "region_type": "barcode",
+                    "sequence": "NNNNNNNN",
+                    "min_len": 8,
+                    "max_len": 8,
                 },
                 {
-                    'region_id': 'ribosome_protected_fragment',
-                    'region_type': 'cdna',
-                    'sequence_type': 'joined',
-                    'min_len': 20,
-                    'max_len': 35
+                    "region_id": "ribosome_protected_fragment",
+                    "region_type": "cdna",
+                    "sequence_type": "joined",
+                    "min_len": 20,
+                    "max_len": 35,
                 },
                 {
-                    'region_id': 'custom_adapter',
-                    'region_type': 'adapter',
-                    'sequence': 'GGCCTTAAGCCCGGAA',
-                    'min_len': 16,
-                    'max_len': 16
-                }
-            ]
+                    "region_id": "custom_adapter",
+                    "region_type": "adapter",
+                    "sequence": "GGCCTTAAGCCCGGAA",
+                    "min_len": 16,
+                    "max_len": 16,
+                },
+            ],
         }
 
-        with open(output_dir / 'novel_protocol.yaml', 'w') as f:
+        with open(output_dir / "novel_protocol.yaml", "w") as f:
             yaml.dump(sample1, f, indent=2)
 
         # Sample seqspec 2: Modified McGlincy protocol
         sample2 = {
-            'seqspec_version': '0.3.0',
-            'assay_id': 'modified_mcglincy_2024',
-            'name': 'Modified McGlincy Protocol',
-            'description': 'McGlincy protocol with extended UMI',
-            'library_kit': 'Modified McGlincy Lab',
-            'modalities': ['rna'],
-            'sequence_spec': [
+            "seqspec_version": "0.3.0",
+            "assay_id": "modified_mcglincy_2024",
+            "name": "Modified McGlincy Protocol",
+            "description": "McGlincy protocol with extended UMI",
+            "library_kit": "Modified McGlincy Lab",
+            "modalities": ["rna"],
+            "sequence_spec": [
                 {
-                    'region_id': 'extended_umi',
-                    'region_type': 'umi',
-                    'sequence': 'NNNNNNNN',
-                    'min_len': 8,
-                    'max_len': 8
+                    "region_id": "extended_umi",
+                    "region_type": "umi",
+                    "sequence": "NNNNNNNN",
+                    "min_len": 8,
+                    "max_len": 8,
                 },
                 {
-                    'region_id': 'sample_barcode',
-                    'region_type': 'barcode',
-                    'sequence': 'NNNNN',
-                    'min_len': 5,
-                    'max_len': 5
+                    "region_id": "sample_barcode",
+                    "region_type": "barcode",
+                    "sequence": "NNNNN",
+                    "min_len": 5,
+                    "max_len": 5,
                 },
                 {
-                    'region_id': 'rpf_sequence',
-                    'region_type': 'cdna',
-                    'min_len': 24,
-                    'max_len': 36
+                    "region_id": "rpf_sequence",
+                    "region_type": "cdna",
+                    "min_len": 24,
+                    "max_len": 36,
                 },
                 {
-                    'region_id': 'illumina_adapter',
-                    'region_type': 'adapter',
-                    'sequence': 'AGATCGGAAGAGCAC',
-                    'min_len': 15,
-                    'max_len': 15
-                }
-            ]
+                    "region_id": "illumina_adapter",
+                    "region_type": "adapter",
+                    "sequence": "AGATCGGAAGAGCAC",
+                    "min_len": 15,
+                    "max_len": 15,
+                },
+            ],
         }
 
-        with open(output_dir / 'modified_mcglincy.yaml', 'w') as f:
+        with open(output_dir / "modified_mcglincy.yaml", "w") as f:
             yaml.dump(sample2, f, indent=2)
 
         logger.info(f"Created sample seqspec files in {output_dir}")
 
-        return [output_dir / 'novel_protocol.yaml', output_dir / 'modified_mcglincy.yaml']
+        return [
+            output_dir / "novel_protocol.yaml",
+            output_dir / "modified_mcglincy.yaml",
+        ]

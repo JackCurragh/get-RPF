@@ -59,7 +59,11 @@ def test_applied_rules_reproducible_from_provenance(tmp_path):
 
     out1 = tmp_path / "out1.fastq"
     _empty_architecture_extractor().extract_rpfs(
-        input_file, out1, format="fastq", collapsed_only=True, override_trims=override_trims
+        input_file,
+        out1,
+        format="fastq",
+        collapsed_only=True,
+        override_trims=override_trims,
     )
 
     # Reconstruct override_trims purely from the provenance records, as a
@@ -70,10 +74,16 @@ def test_applied_rules_reproducible_from_provenance(tmp_path):
     }
     out2 = tmp_path / "out2.fastq"
     _empty_architecture_extractor().extract_rpfs(
-        input_file, out2, format="fastq", collapsed_only=True, override_trims=reconstructed
+        input_file,
+        out2,
+        format="fastq",
+        collapsed_only=True,
+        override_trims=reconstructed,
     )
 
-    assert (tmp_path / "out1.collapsed.fa").read_text() == (tmp_path / "out2.collapsed.fa").read_text()
+    assert (tmp_path / "out1.collapsed.fa").read_text() == (
+        tmp_path / "out2.collapsed.fa"
+    ).read_text()
 
 
 def test_before_after_artifact_removed_body_untouched(tmp_path):
@@ -85,7 +95,11 @@ def test_before_after_artifact_removed_body_untouched(tmp_path):
 
     output_file = tmp_path / "out.fastq"
     _empty_architecture_extractor().extract_rpfs(
-        input_file, output_file, format="fastq", collapsed_only=True, override_trims=override_trims
+        input_file,
+        output_file,
+        format="fastq",
+        collapsed_only=True,
+        override_trims=override_trims,
     )
 
     collapsed_seqs = set()

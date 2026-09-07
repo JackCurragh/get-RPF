@@ -7,7 +7,7 @@ Allows loading architectures from seqspec files in a directory
 
 import logging
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import yaml
 
@@ -89,7 +89,7 @@ class SeqSpecArchitectureLoader:
             trim_adapter_sequences = []
             umi_positions = []
             barcode_positions = []
-            rpf_regions = []
+            rpf_regions: List[Tuple[int, int, Optional[int], Optional[int]]] = []
             post_rpf_trim_bases = 0
 
             current_pos = 0
@@ -163,8 +163,12 @@ class SeqSpecArchitectureLoader:
 
             # Determine RPF length range
             if rpf_regions:
-                rpf_min = min(region[2] for region in rpf_regions)
-                rpf_max = max(region[3] for region in rpf_regions)
+                rpf_min = min(
+                    (r[2] for r in rpf_regions if r[2] is not None), default=20
+                )
+                rpf_max = max(
+                    (r[3] for r in rpf_regions if r[3] is not None), default=40
+                )
                 expected_rpf_length = (rpf_min, rpf_max)
                 rpf_start = rpf_regions[0][0]
                 rpf_end = rpf_regions[0][1]

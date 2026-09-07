@@ -74,7 +74,7 @@ class ArchitectureMatcher:
         Note: This approach works with SignalStats (no raw reads needed) but requires
         untrimmed data for adapter detection. Pre-trimmed data will not match adapters.
         """
-        reasons = []
+        reasons: List[str] = []
         score = 0.0
 
         # Check UMI profile (entropy-based)

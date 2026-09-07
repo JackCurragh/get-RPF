@@ -6,7 +6,7 @@ import logging
 from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Optional, TextIO, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, TextIO, Tuple, Union
 
 from getRPF.utils.file_utils import check_file_readability
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def fasta_opener(file_path: Path) -> TextIO:
+def fasta_opener(file_path: Path) -> Iterator[TextIO]:
     """Context manager for reading FASTA files (compressed or uncompressed).
 
     Args:
@@ -130,7 +130,7 @@ def parse_collapsed_fasta(
 
     with fasta_opener(file_path) as f:
         current_header = None
-        current_seq = []
+        current_seq: List[str] = []
         partial_line = ""
 
         for line in f:
@@ -245,7 +245,7 @@ class TwoStageCollapser:
     def _iter_fasta_or_collapsed(self, fh, is_collapsed: bool):
         """Internal iterator for FASTA/Collapsed FASTA."""
         parser = CollapsedHeaderParser() if is_collapsed else None
-        current_seq = []
+        current_seq: List[str] = []
         current_count = 1
 
         for line in fh:
@@ -257,7 +257,7 @@ class TwoStageCollapser:
                 if current_seq:
                     yield ("".join(current_seq).upper(), current_count)
 
-                if is_collapsed:
+                if parser is not None:
                     cnt = parser.extract_count(line[1:])
                     current_count = cnt if cnt is not None else 1
                 current_seq = []
@@ -270,7 +270,7 @@ class TwoStageCollapser:
     def apply_trimming(
         self,
         raw_counts: Counter,
-        trim_func: callable,
+        trim_func: Callable[[str], Optional[str]],
         min_length: int = 20,
         max_length: Optional[int] = None,
     ) -> Counter:
@@ -292,7 +292,7 @@ class TwoStageCollapser:
 
     def write_collapsed_fasta(
         self, counts: Counter, output_file: Path, prefix: str = "seq"
-    ) -> Dict[str, Union[int, str]]:
+    ) -> Dict[str, Any]:
         """Stage 4: Write final collapsed results to FASTA."""
         total_reads = sum(counts.values())
         unique = len(counts)
@@ -337,7 +337,7 @@ def collapse_fastq_to_fasta(
     return collapser.write_collapsed_fasta(raw_counts, output_file)
 
 
-def _iter_fastq(handle) -> str:
+def _iter_fastq(handle) -> Iterator[str]:
     """Yield uppercase sequences from a FASTQ file handle."""
     line_num = 0
     for line in handle:

@@ -97,6 +97,7 @@ def resolve_architecture_choice(
             )
         )
         if specific_wins:
+            assert best_specific is not None
             return (
                 best_specific["architecture"],
                 "adapter_evidence_match",
@@ -141,6 +142,7 @@ class ArchitectureDatabase:
             self._initialize_builtin_architectures()
 
     def _load_from_file(self) -> None:
+        assert self.db_path is not None  # guarded by the caller
         try:
             with open(self.db_path, "r") as f:
                 data = json.load(f)
@@ -666,7 +668,7 @@ class RPFExtractor:
             for adapter in adapter_sequences
         }
 
-        scored = []
+        scored: List[Dict[str, Any]] = []
         seen = set()
         for arch in self.architecture_db.architectures:
             for adapter in arch.adapter_sequences:
@@ -698,7 +700,7 @@ class RPFExtractor:
                 item["hit_count"],
                 item["hit_fraction"],
                 item["protocol_name"] != "comprehensive_adapter_check",
-                len(item["adapter"]),
+                len(str(item["adapter"])),
                 item["protocol_name"],
             ),
             reverse=True,
@@ -740,7 +742,7 @@ class RPFExtractor:
         self, sequence_counts: Counter
     ) -> Dict[str, Any]:
         """Summarize sequence length distribution from collapsed sequence counts."""
-        counts = Counter()
+        counts: Counter = Counter()
         for sequence, count in sequence_counts.items():
             counts[len(sequence)] += count
         return self._length_profile_from_length_counts(counts)
@@ -950,7 +952,7 @@ class RPFExtractor:
                             headers.append(header)
                             count += 1
                 elif format in ["fasta", "collapsed"]:
-                    current_seq = []
+                    current_seq: List[str] = []
                     current_header = None
                     for line in f:
                         line = line.strip()

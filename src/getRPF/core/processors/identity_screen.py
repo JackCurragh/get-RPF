@@ -155,7 +155,7 @@ def identity_screen(
 
     contamination: Dict[str, float] = {}
     contamination_screened = bool(contamination_kmer_sets)
-    if contamination_screened:
+    if contamination_kmer_sets:
         contamination = screen_contamination(reads, contamination_kmer_sets, k=kmer_len)
 
     contamination_total = None

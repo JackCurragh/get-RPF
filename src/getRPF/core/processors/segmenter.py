@@ -283,7 +283,7 @@ class ProbabilisticSegmenter:
 
     def _path_to_segments(self, path: List[int]) -> List[SegmentInfo]:
         """Convert state path to SegmentInfo objects."""
-        segments = []
+        segments: List[SegmentInfo] = []
         if not path:
             return segments
 

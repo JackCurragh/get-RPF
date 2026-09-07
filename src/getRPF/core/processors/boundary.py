@@ -14,7 +14,7 @@ separate position<->trim_bases conversion.
 import statistics
 from collections import Counter
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .signals import SignalStats
 
@@ -110,7 +110,7 @@ def _consensus_trim(estimates: Dict[str, int]) -> int:
     return min(candidates)
 
 
-def _leading_run_length(values: List[float], continues: "callable") -> int:
+def _leading_run_length(values: List[float], continues: Callable[[float], bool]) -> int:
     """Count leading values for which `continues(value)` holds, stopping at
     the first value that breaks it."""
     onset = 0

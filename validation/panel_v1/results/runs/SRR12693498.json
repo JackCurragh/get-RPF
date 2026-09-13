@@ -1,0 +1,213 @@
+{
+  "run": "SRR12693498",
+  "approved_production": false,
+  "transform": {
+    "emit": true,
+    "bound": "interval",
+    "reasons": [],
+    "conventions": [
+      "poly(A) tail: the insert ends at the first base of the run (spec \u00a76)",
+      "Q3: 1 junction base(s) at the anchor kept in the insert (non-templated-like in about 16% of reads; v1 does not remove them)"
+    ]
+  },
+  "architecture": {
+    "describe": "[random 13 UMI][fixed GGG][insert][nta 0-1 kept][poly(A)][adapter AGATCGGAAGAG...]",
+    "blocks": [
+      {
+        "type": "random",
+        "frame": "read_start",
+        "length": [
+          13,
+          13
+        ],
+        "sequence": null,
+        "keep_as_umi": true,
+        "remove": true,
+        "status": "resolved",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "fixed",
+        "frame": "read_start",
+        "length": [
+          3,
+          3
+        ],
+        "sequence": "GGG",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "resolved",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      },
+      {
+        "type": "nta",
+        "frame": "anchor",
+        "length": [
+          0,
+          1
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 16% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "tail",
+        "frame": "anchor",
+        "length": [
+          0,
+          62
+        ],
+        "sequence": "A",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "interval",
+        "note": "insert end placed at the first base of the run",
+        "evidence": []
+      },
+      {
+        "type": "adapter",
+        "frame": "anchor",
+        "length": [
+          34,
+          34
+        ],
+        "sequence": "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "interval",
+        "note": "truseq_3p (catalogue)",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "audit": {
+    "transform_schema": "getrpf.structure.transform/3",
+    "transform_hash": "a3f57567a4043135",
+    "architecture": "[random 13 UMI][fixed GGG][insert][nta 0-1 kept][poly(A)][adapter AGATCGGAAGAG...]",
+    "fragment_policy": "monosome_20_40",
+    "input_reads": 300000,
+    "accepted": 256443,
+    "accepted_fraction": 0.8548,
+    "rejected": {
+      "adapter_dimer": 3,
+      "anchor_not_found": 29038,
+      "fixed_mismatch": 1934,
+      "longer_than_policy": 3047,
+      "no_insert": 296,
+      "shorter_than_policy": 9239
+    },
+    "insert_lengths": {
+      "20": 2249,
+      "21": 3253,
+      "22": 4866,
+      "23": 5469,
+      "24": 5623,
+      "25": 6707,
+      "26": 8090,
+      "27": 9834,
+      "28": 11164,
+      "29": 14912,
+      "30": 22866,
+      "31": 27438,
+      "32": 32084,
+      "33": 36174,
+      "34": 29033,
+      "35": 20797,
+      "36": 7775,
+      "37": 3635,
+      "38": 1781,
+      "39": 1605,
+      "40": 1088
+    },
+    "candidate_insert_lengths": {
+      "1": 108,
+      "2": 70,
+      "3": 109,
+      "4": 124,
+      "5": 192,
+      "6": 292,
+      "7": 381,
+      "8": 435,
+      "9": 421,
+      "10": 390,
+      "11": 523,
+      "12": 522,
+      "13": 430,
+      "14": 483,
+      "15": 594,
+      "16": 713,
+      "17": 726,
+      "18": 1076,
+      "19": 1650,
+      "20": 2249,
+      "21": 3253,
+      "22": 4866,
+      "23": 5469,
+      "24": 5623,
+      "25": 6707,
+      "26": 8090,
+      "27": 9834,
+      "28": 11164,
+      "29": 14912,
+      "30": 22866,
+      "31": 27438,
+      "32": 32084,
+      "33": 36174,
+      "34": 29033,
+      "35": 20797,
+      "36": 7775,
+      "37": 3635,
+      "38": 1781,
+      "39": 1605,
+      "40": 1088,
+      "41": 1012,
+      "42": 608,
+      "43": 363,
+      "44": 291,
+      "45": 263,
+      "46": 188,
+      "47": 107,
+      "48": 64,
+      "49": 27,
+      "50": 23,
+      "51": 23,
+      "52": 20,
+      "53": 16,
+      "54": 7,
+      "55": 10,
+      "56": 4,
+      "57": 1,
+      "58": 3,
+      "61": 1,
+      "78": 2,
+      "79": 14
+    },
+    "boundaries": {
+      "adapter": 29,
+      "tail_A": 268996
+    }
+  },
+  "status": "audit_complete"
+}

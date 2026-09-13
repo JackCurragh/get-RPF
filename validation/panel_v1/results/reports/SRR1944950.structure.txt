@@ -1,0 +1,28 @@
+get-RPF structure inference: SRR1944950
+Input: trimmed, modal length 31 nt (27% of 300000 reads); read-name UMI: none
+Architecture: [nta 0-1 kept][insert]
+Transform: emitted (bounded by interval)
+  convention: trimmed input: the read end is the anchor
+  convention: Q2: 1 junction base(s) at the read start kept in the insert (non-templated-like in about 46% of reads; v1 does not remove them)
+Templates: 21 of 28 catalogue templates consistent or partly consistent
+  comprehensive_adapter_check: supported (matches: 5' technical 0 nt, 3' technical 0 nt)
+  ena_riboseq_standard: supported (matches: 5' technical 0 nt, 3' technical 0 nt)
+  ingolia_2009: supported (matches: 5' technical 0 nt, 3' technical 0 nt)
+  observed_atgtacac_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt)
+  observed_ctgtaggc_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt)
+
+Q1 [not_observable] No 3' anchor: the reads are already trimmed, so no adapter remains (best candidate nextera_3p in 0.0% of reads).
+    truseq_3p: contradicted - located in only 0.0% of reads (need 30%)
+    truseq_small_rna_3p: contradicted - located in only 0.0% of reads (need 30%)
+    ingolia_linker_3p: contradicted - located in only 0.0% of reads (need 30%)
+    illumina_p7: contradicted - illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 0.0% of reads)
+
+Q2 [interval] No technical bases from the read start; then 1 junction base(s) with intermediate agreement (0.64; biology 0.97), consistent with a non-templated base in about 46% of reads (disagreeing bases 60% T); reported, not removed (v1); agreement 0.93 at position 2 (577 groups).
+    1: weakly_compatible - positions 1-1 have intermediate agreement (0.64); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    2: contradicted - position 2 would be removed, but its agreement 0.93 is at biology level (>= 0.90)
+
+Q3 [resolved] No technical bases before the anchor; agreement 0.94 at position 1 (577 groups).
+    1: contradicted - position 1 would be removed, but its agreement 0.94 is at biology level (>= 0.90)
+
+Q4 [not_observable] No UMI can be seen, but the reads were trimmed before deposit, which may have removed one.
+    absent: untested - reads were trimmed before deposit

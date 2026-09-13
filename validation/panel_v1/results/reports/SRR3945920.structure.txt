@@ -1,0 +1,26 @@
+get-RPF structure inference: SRR3945920
+Input: raw_fixed_length, modal length 50 nt (100% of 300000 reads); read-name UMI: none
+Architecture: [insert][nta 0-1 kept][adapter AGATCGGAAGAG...]
+Transform: emitted (bounded by interval)
+  convention: Q3: 1 junction base(s) at the anchor kept in the insert (non-templated-like in about 16% of reads; v1 does not remove them)
+Templates: 24 of 28 catalogue templates consistent or partly consistent
+  observed_small_rna_composite_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt, adapter family)
+  observed_small_rna_truseq_composite_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt, adapter family)
+  observed_truseq_18nt_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt, adapter family)
+  observed_truseq_21nt_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt, adapter family)
+  observed_truseq_26nt_3p_adapter: supported (matches: 5' technical 0 nt, 3' technical 0 nt, adapter family)
+
+Q1 [resolved] truseq_3p (catalogue) located in 99% of reads, starting at position 31 (5-95%: 26-32); 0% of those contain the whole adapter; 0.1% of reads are adapter dimers.
+    truseq_small_rna_3p: contradicted - located in only 0.0% of reads (need 30%)
+    ingolia_linker_3p: contradicted - located in only 0.0% of reads (need 30%)
+    nextera_3p: contradicted - located in only 0.0% of reads (need 30%)
+    illumina_p7: contradicted - illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 0.0% of reads)
+
+Q2 [resolved] No technical bases from the read start; agreement 0.93 at position 1 (517 groups).
+    1: contradicted - position 1 would be removed, but its agreement 0.93 is at biology level (>= 0.90)
+
+Q3 [interval] No technical bases before the anchor; then 1 junction base(s) with intermediate agreement (0.87; biology 0.98), consistent with a non-templated base in about 16% of reads (disagreeing bases 50% C); reported, not removed (v1); agreement 0.97 at position 2 (517 groups).
+    1: weakly_compatible - positions 1-1 have intermediate agreement (0.87); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    2: contradicted - position 2 would be removed, but its agreement 0.97 is at biology level (>= 0.90)
+
+Q4 [resolved] No inline UMI in R1 and none in the read names. Index reads were not supplied, so a UMI in an index read cannot be excluded.

@@ -1,0 +1,79 @@
+seqspec_version: 0.3.0
+assay_id: getrpf_inferred
+name: get-RPF inferred read structure
+modalities:
+- rna
+sequence_spec:
+- region_id: random_0
+  region_type: umi
+  sequence_type: random
+  min_len: 3
+  max_len: 3
+  getrpf:
+    type: random
+    frame: read_start
+    keep_as_umi: true
+    remove: true
+    status: interval
+    note: ''
+- region_id: nta_1
+  region_type: linker
+  sequence_type: random
+  min_len: 0
+  max_len: 1
+  getrpf:
+    type: nta
+    frame: read_start
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: non-templated-like in about 21% of reads; kept (v1)
+- region_id: insert_2
+  region_type: cdna
+  sequence_type: joined
+  min_len: 20
+  max_len: 40
+  getrpf:
+    type: insert
+    frame: read_start
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: accepted under monosome_20_40
+- region_id: random_3
+  region_type: umi
+  sequence_type: random
+  min_len: 4
+  max_len: 4
+  getrpf:
+    type: random
+    frame: anchor
+    keep_as_umi: true
+    remove: true
+    status: resolved
+    note: ''
+- region_id: adapter_4
+  region_type: adapter
+  sequence_type: fixed
+  min_len: 17
+  max_len: 17
+  sequence: CTGTAGGCACCATCAAT
+  getrpf:
+    type: adapter
+    frame: anchor
+    keep_as_umi: false
+    remove: true
+    status: resolved
+    note: ingolia_linker_3p (catalogue)
+getrpf:
+  source: inferred
+  status: interval
+  fragment_policy: monosome_20_40
+  describe: '[random 3 UMI][nta 0-1 kept][insert][random 4 UMI][adapter CTGTAGGCACCA...]'
+  transform:
+    emit: true
+    bound: interval
+    reasons: []
+    conventions:
+    - 'Q2: 1 junction base(s) at the read start kept in the insert (non-templated-like
+      in about 21% of reads; v1 does not remove them)'

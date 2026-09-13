@@ -1,0 +1,25 @@
+get-RPF structure inference: SRR3945930
+Input: raw_fixed_length, modal length 45 nt (100% of 300000 reads); read-name UMI: none
+Architecture: [random 3 UMI][nta 0-1 kept][insert][random 4 UMI][adapter CTGTAGGCACCA...]
+Transform: emitted (bounded by interval)
+  convention: Q2: 1 junction base(s) at the read start kept in the insert (non-templated-like in about 21% of reads; v1 does not remove them)
+Templates: 0 of 28 catalogue templates consistent or partly consistent
+
+Q1 [resolved] ingolia_linker_3p (catalogue) located in 38% of reads, starting at position 35 (5-95%: 29-36); 7% of those contain the whole adapter; 0.3% of reads are adapter dimers.
+    truseq_3p: contradicted - located in only 0.3% of reads (need 30%)
+    truseq_small_rna_3p: contradicted - located in only 0.0% of reads (need 30%)
+    nextera_3p: contradicted - located in only 0.0% of reads (need 30%)
+    illumina_p7: contradicted - illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 0.0% of reads)
+
+Q2 [interval] 3 technical bases from the read start (3 nt random); within-fragment agreement 0.31-0.36; then 1 junction base(s) with intermediate agreement (0.84; biology 1.00), consistent with a non-templated base in about 21% of reads (disagreeing bases 39% A); reported, not removed (v1); agreement 0.98 at position 5 (256 groups).
+    0: contradicted - position 1 would be kept as insert, but it is random (agreement 0.31, library entropy 1.91 bits)
+    2: contradicted - position 3 would be kept as insert, but it is random (agreement 0.36, library entropy 1.80 bits)
+    4: weakly_compatible - positions 4-4 have intermediate agreement (0.84); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    5: contradicted - position 5 would be removed, but its agreement 0.98 is at biology level (>= 0.90)
+
+Q3 [resolved] 4 technical bases before the anchor (4 nt random); within-fragment agreement 0.28-0.56; agreement 0.99 at position 5 (256 groups).
+    0: contradicted - position 1 would be kept as insert, but it is random (agreement 0.30, library entropy 1.93 bits)
+    3: contradicted - position 4 would be kept as insert, but it is random (agreement 0.28, library entropy 1.93 bits)
+    5: contradicted - position 5 would be removed, but its agreement 0.99 is at biology level (>= 0.90)
+
+Q4 [resolved] Keep as UMI: 3 nt random at the read start; 4 nt random before the anchor.

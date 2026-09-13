@@ -1,0 +1,137 @@
+{
+  "run": "SRR3945920",
+  "approved_production": false,
+  "transform": {
+    "emit": true,
+    "bound": "interval",
+    "reasons": [],
+    "conventions": [
+      "Q3: 1 junction base(s) at the anchor kept in the insert (non-templated-like in about 16% of reads; v1 does not remove them)"
+    ]
+  },
+  "architecture": {
+    "describe": "[insert][nta 0-1 kept][adapter AGATCGGAAGAG...]",
+    "blocks": [
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      },
+      {
+        "type": "nta",
+        "frame": "anchor",
+        "length": [
+          0,
+          1
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 16% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "adapter",
+        "frame": "anchor",
+        "length": [
+          34,
+          34
+        ],
+        "sequence": "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "resolved",
+        "note": "truseq_3p (catalogue)",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "audit": {
+    "transform_schema": "getrpf.structure.transform/3",
+    "transform_hash": "fe8ffb9af1c50d2c",
+    "architecture": "[insert][nta 0-1 kept][adapter AGATCGGAAGAG...]",
+    "fragment_policy": "monosome_20_40",
+    "input_reads": 300000,
+    "accepted": 293296,
+    "accepted_fraction": 0.9777,
+    "rejected": {
+      "adapter_dimer": 367,
+      "anchor_not_found": 3185,
+      "longer_than_policy": 17,
+      "shorter_than_policy": 3135
+    },
+    "insert_lengths": {
+      "20": 802,
+      "21": 1741,
+      "22": 2414,
+      "23": 2210,
+      "24": 3103,
+      "25": 3531,
+      "26": 4600,
+      "27": 14037,
+      "28": 34027,
+      "29": 66026,
+      "30": 90877,
+      "31": 61174,
+      "32": 7145,
+      "33": 511,
+      "34": 399,
+      "35": 336,
+      "36": 175,
+      "37": 108,
+      "38": 37,
+      "39": 25,
+      "40": 18
+    },
+    "candidate_insert_lengths": {
+      "15": 190,
+      "16": 981,
+      "17": 278,
+      "18": 842,
+      "19": 844,
+      "20": 802,
+      "21": 1741,
+      "22": 2414,
+      "23": 2210,
+      "24": 3103,
+      "25": 3531,
+      "26": 4600,
+      "27": 14037,
+      "28": 34027,
+      "29": 66026,
+      "30": 90877,
+      "31": 61174,
+      "32": 7145,
+      "33": 511,
+      "34": 399,
+      "35": 336,
+      "36": 175,
+      "37": 108,
+      "38": 37,
+      "39": 25,
+      "40": 18,
+      "41": 4,
+      "42": 3,
+      "43": 3,
+      "44": 4,
+      "45": 3
+    },
+    "boundaries": {
+      "adapter": 296448
+    }
+  },
+  "status": "audit_complete"
+}

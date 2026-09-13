@@ -1,0 +1,29 @@
+get-RPF structure inference: SRR23242345
+Input: raw_fixed_length, modal length 101 nt (100% of 300000 reads); read-name UMI: none
+Architecture: [random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]
+Transform: withheld (bounded by interval)
+  withheld because Q2: 2 junction base(s) at the read start look non-templated in about 78% of reads; too common to leave in the insert, and not established as technical
+Templates: 9 of 28 catalogue templates consistent or partly consistent
+  err605046_stau1_riboseq: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 1 nt)
+  observed_small_rna_composite_3p_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt)
+  observed_small_rna_truseq_composite_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt)
+  observed_truseq_18nt_3p_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt)
+  observed_truseq_21nt_3p_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt)
+
+Q1 [resolved] truseq_3p (catalogue) located in 98% of reads, starting at position 37 (5-95%: 33-43); 100% of those contain the whole adapter; P7 follows it in 89% of reads long enough to show it; 0.1% of reads are adapter dimers.
+    truseq_small_rna_3p: contradicted - located in only 0.0% of reads (need 30%)
+    ingolia_linker_3p: contradicted - located in only 0.0% of reads (need 30%)
+    nextera_3p: contradicted - located in only 0.0% of reads (need 30%)
+    illumina_p7: contradicted - illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 94.4% of reads)
+
+Q2 [interval] 5 technical bases from the read start (5 nt random); within-fragment agreement 0.24-0.29; then 2 junction base(s) with intermediate agreement (0.42, 0.69; biology 0.99), consistent with a non-templated base in about 78% of reads (disagreeing bases 79% T); reported, not removed (v1); agreement 0.93 at position 8 (321 groups).
+    0: contradicted - position 1 would be kept as insert, but it is random (agreement 0.24, library entropy 1.98 bits)
+    4: contradicted - position 5 would be kept as insert, but it is random (agreement 0.29, library entropy 1.99 bits)
+    6: weakly_compatible - positions 6-6 have intermediate agreement (0.42); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    7: weakly_compatible - positions 6-7 have intermediate agreement (0.42, 0.69); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    8: contradicted - position 8 would be removed, but its agreement 0.93 is at biology level (>= 0.90)
+
+Q3 [resolved] No technical bases before the anchor; agreement 0.96 at position 1 (321 groups).
+    1: contradicted - position 1 would be removed, but its agreement 0.96 is at biology level (>= 0.90)
+
+Q4 [resolved] Keep as UMI: 5 nt random at the read start.

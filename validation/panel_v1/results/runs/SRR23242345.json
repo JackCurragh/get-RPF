@@ -1,0 +1,78 @@
+{
+  "run": "SRR23242345",
+  "approved_production": false,
+  "transform": {
+    "emit": false,
+    "bound": "interval",
+    "reasons": [
+      "Q2: 2 junction base(s) at the read start look non-templated in about 78% of reads; too common to leave in the insert, and not established as technical"
+    ],
+    "conventions": []
+  },
+  "architecture": {
+    "describe": "[random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]",
+    "blocks": [
+      {
+        "type": "random",
+        "frame": "read_start",
+        "length": [
+          5,
+          5
+        ],
+        "sequence": null,
+        "keep_as_umi": true,
+        "remove": true,
+        "status": "interval",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "nta",
+        "frame": "read_start",
+        "length": [
+          0,
+          2
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 78% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      },
+      {
+        "type": "adapter",
+        "frame": "anchor",
+        "length": [
+          34,
+          34
+        ],
+        "sequence": "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "resolved",
+        "note": "truseq_3p (catalogue)",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "status": "hold",
+  "hold_reason": "transform withheld"
+}

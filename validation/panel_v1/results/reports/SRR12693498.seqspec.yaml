@@ -1,0 +1,94 @@
+seqspec_version: 0.3.0
+assay_id: getrpf_inferred
+name: get-RPF inferred read structure
+modalities:
+- rna
+sequence_spec:
+- region_id: random_0
+  region_type: umi
+  sequence_type: random
+  min_len: 13
+  max_len: 13
+  getrpf:
+    type: random
+    frame: read_start
+    keep_as_umi: true
+    remove: true
+    status: resolved
+    note: ''
+- region_id: fixed_1
+  region_type: linker
+  sequence_type: fixed
+  min_len: 3
+  max_len: 3
+  sequence: GGG
+  getrpf:
+    type: fixed
+    frame: read_start
+    keep_as_umi: false
+    remove: true
+    status: resolved
+    note: ''
+- region_id: insert_2
+  region_type: cdna
+  sequence_type: joined
+  min_len: 20
+  max_len: 40
+  getrpf:
+    type: insert
+    frame: read_start
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: accepted under monosome_20_40
+- region_id: nta_3
+  region_type: linker
+  sequence_type: random
+  min_len: 0
+  max_len: 1
+  getrpf:
+    type: nta
+    frame: anchor
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: non-templated-like in about 16% of reads; kept (v1)
+- region_id: tail_4
+  region_type: poly_A
+  sequence_type: fixed
+  min_len: 0
+  max_len: 62
+  sequence: A
+  getrpf:
+    type: tail
+    frame: anchor
+    keep_as_umi: false
+    remove: true
+    status: interval
+    note: insert end placed at the first base of the run
+- region_id: adapter_5
+  region_type: adapter
+  sequence_type: fixed
+  min_len: 34
+  max_len: 34
+  sequence: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+  getrpf:
+    type: adapter
+    frame: anchor
+    keep_as_umi: false
+    remove: true
+    status: interval
+    note: truseq_3p (catalogue)
+getrpf:
+  source: inferred
+  status: interval
+  fragment_policy: monosome_20_40
+  describe: '[random 13 UMI][fixed GGG][insert][nta 0-1 kept][poly(A)][adapter AGATCGGAAGAG...]'
+  transform:
+    emit: true
+    bound: interval
+    reasons: []
+    conventions:
+    - "poly(A) tail: the insert ends at the first base of the run (spec \xA76)"
+    - 'Q3: 1 junction base(s) at the anchor kept in the insert (non-templated-like
+      in about 16% of reads; v1 does not remove them)'

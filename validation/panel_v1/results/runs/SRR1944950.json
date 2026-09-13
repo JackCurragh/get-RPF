@@ -1,0 +1,106 @@
+{
+  "run": "SRR1944950",
+  "approved_production": false,
+  "transform": {
+    "emit": true,
+    "bound": "interval",
+    "reasons": [],
+    "conventions": [
+      "trimmed input: the read end is the anchor",
+      "Q2: 1 junction base(s) at the read start kept in the insert (non-templated-like in about 46% of reads; v1 does not remove them)"
+    ]
+  },
+  "architecture": {
+    "describe": "[nta 0-1 kept][insert]",
+    "blocks": [
+      {
+        "type": "nta",
+        "frame": "read_start",
+        "length": [
+          0,
+          1
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 46% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "audit": {
+    "transform_schema": "getrpf.structure.transform/3",
+    "transform_hash": "e9c32da3d60d6059",
+    "architecture": "[nta 0-1 kept][insert]",
+    "fragment_policy": "monosome_20_40",
+    "input_reads": 300000,
+    "accepted": 299987,
+    "accepted_fraction": 1.0,
+    "rejected": {
+      "longer_than_policy": 13
+    },
+    "insert_lengths": {
+      "25": 290,
+      "26": 671,
+      "27": 5037,
+      "28": 22446,
+      "29": 46042,
+      "30": 61990,
+      "31": 80035,
+      "32": 60432,
+      "33": 20938,
+      "34": 1640,
+      "35": 259,
+      "36": 91,
+      "37": 56,
+      "38": 31,
+      "39": 21,
+      "40": 8
+    },
+    "candidate_insert_lengths": {
+      "25": 290,
+      "26": 671,
+      "27": 5037,
+      "28": 22446,
+      "29": 46042,
+      "30": 61990,
+      "31": 80035,
+      "32": 60432,
+      "33": 20938,
+      "34": 1640,
+      "35": 259,
+      "36": 91,
+      "37": 56,
+      "38": 31,
+      "39": 21,
+      "40": 8,
+      "41": 6,
+      "42": 2,
+      "43": 2,
+      "45": 1,
+      "46": 2
+    },
+    "boundaries": {
+      "read_end": 300000
+    }
+  },
+  "status": "audit_complete"
+}

@@ -1,0 +1,29 @@
+get-RPF structure inference: SRR12693498
+Input: raw_fixed_length, modal length 100 nt (100% of 300000 reads); read-name UMI: none
+Architecture: [random 13 UMI][fixed GGG][insert][nta 0-1 kept][poly(A)][adapter AGATCGGAAGAG...]
+Transform: emitted (bounded by interval)
+  convention: poly(A) tail: the insert ends at the first base of the run (spec §6)
+  convention: Q3: 1 junction base(s) at the anchor kept in the insert (non-templated-like in about 16% of reads; v1 does not remove them)
+Templates: 11 of 28 catalogue templates consistent or partly consistent
+  riboflow_template_switch: supported (matches: 5' technical 16 nt, 3' technical 0 nt, poly(A) tail)
+  err605046_stau1_riboseq: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 16 nt vs 1 nt, tail A vs none)
+  observed_polya_a10_tail: partially_supported (matches: 3' technical 0 nt, poly(A) tail; differs: 5' technical 16 nt vs 0 nt)
+  observed_small_rna_composite_3p_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 16 nt vs 0 nt, tail A vs none)
+  observed_small_rna_truseq_composite_adapter: partially_supported (matches: 3' technical 0 nt, adapter family; differs: 5' technical 16 nt vs 0 nt, tail A vs none)
+
+Q1 [interval] truseq_3p (catalogue) located in 90% of reads, starting at position 70 (5-95%: 59-73); 38% of those contain the whole adapter; P7 follows it in 72% of reads long enough to show it; 0.0% of reads are adapter dimers; a poly(A) tail precedes the adapter in 100% of anchored reads; the insert end is placed at the first base of the run (interval by convention).
+    truseq_small_rna_3p: contradicted - located in only 0.0% of reads (need 30%)
+    ingolia_linker_3p: contradicted - located in only 0.0% of reads (need 30%)
+    nextera_3p: contradicted - located in only 0.0% of reads (need 30%)
+    illumina_p7: contradicted - illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 0.6% of reads)
+
+Q2 [resolved] 16 technical bases from the read start (13 nt random + 3 nt fixed); within-fragment agreement 0.21-0.68; agreement 0.96 at position 17 (534 groups).
+    0: contradicted - position 1 would be kept as insert, but it is intermediate (agreement 0.45, library entropy 1.95 bits)
+    15: contradicted - position 16 would be kept as insert, but it is fixed (agreement 0.52, library entropy 0.31 bits)
+    17: contradicted - position 17 would be removed, but its agreement 0.96 is at biology level (>= 0.90)
+
+Q3 [interval] No technical bases before the anchor; then 1 junction base(s) with intermediate agreement (0.87; biology 0.99), consistent with a non-templated base in about 16% of reads (disagreeing bases 47% C); reported, not removed (v1); agreement 0.97 at position 2 (534 groups).
+    1: weakly_compatible - positions 1-1 have intermediate agreement (0.87); consistent with non-templated bases in some reads, which v1 reports but does not remove
+    2: contradicted - position 2 would be removed, but its agreement 0.97 is at biology level (>= 0.90)
+
+Q4 [resolved] Keep as UMI: 13 nt random at the read start.

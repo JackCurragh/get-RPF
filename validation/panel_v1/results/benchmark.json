@@ -1,0 +1,53 @@
+{
+  "schema": "getrpf.observable-structure-benchmark/1",
+  "runs": 5,
+  "metrics": {
+    "layout": {
+      "correct": 5,
+      "evaluated": 5,
+      "accuracy": 1.0
+    },
+    "adapter": {
+      "correct": 5,
+      "evaluated": 5,
+      "accuracy": 1.0
+    },
+    "tail": {
+      "correct": 5,
+      "evaluated": 5,
+      "accuracy": 1.0
+    },
+    "transform": {
+      "correct": 5,
+      "evaluated": 5,
+      "accuracy": 1.0
+    },
+    "rpf": {
+      "correct": 4,
+      "evaluated": 4,
+      "accuracy": 1.0,
+      "missing_summaries": []
+    },
+    "umi": {
+      "correct": 3,
+      "evaluated": 3,
+      "accuracy": 1.0,
+      "not_observable_runs": [
+        "SRR1944950",
+        "SRR3945920"
+      ]
+    },
+    "report_coverage": {
+      "expected": 5,
+      "reported": 5,
+      "missing_runs": []
+    }
+  },
+  "false_safe_transform_runs": [],
+  "failures": [],
+  "passed": true,
+  "inference_reads": 300000,
+  "production_requested": false,
+  "validation_status": "audit_passed",
+  "validation_note": "An audit pass is not a production promotion; production remains an explicit separate action."
+}

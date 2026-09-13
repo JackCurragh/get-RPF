@@ -1,0 +1,150 @@
+{
+  "run": "SRR3945930",
+  "approved_production": false,
+  "transform": {
+    "emit": true,
+    "bound": "interval",
+    "reasons": [],
+    "conventions": [
+      "Q2: 1 junction base(s) at the read start kept in the insert (non-templated-like in about 21% of reads; v1 does not remove them)"
+    ]
+  },
+  "architecture": {
+    "describe": "[random 3 UMI][nta 0-1 kept][insert][random 4 UMI][adapter CTGTAGGCACCA...]",
+    "blocks": [
+      {
+        "type": "random",
+        "frame": "read_start",
+        "length": [
+          3,
+          3
+        ],
+        "sequence": null,
+        "keep_as_umi": true,
+        "remove": true,
+        "status": "interval",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "nta",
+        "frame": "read_start",
+        "length": [
+          0,
+          1
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 21% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      },
+      {
+        "type": "random",
+        "frame": "anchor",
+        "length": [
+          4,
+          4
+        ],
+        "sequence": null,
+        "keep_as_umi": true,
+        "remove": true,
+        "status": "resolved",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "adapter",
+        "frame": "anchor",
+        "length": [
+          17,
+          17
+        ],
+        "sequence": "CTGTAGGCACCATCAAT",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "resolved",
+        "note": "ingolia_linker_3p (catalogue)",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "audit": {
+    "transform_schema": "getrpf.structure.transform/3",
+    "transform_hash": "77668ef150b517ed",
+    "architecture": "[random 3 UMI][nta 0-1 kept][insert][random 4 UMI][adapter CTGTAGGCACCA...]",
+    "fragment_policy": "monosome_20_40",
+    "input_reads": 300000,
+    "accepted": 290420,
+    "accepted_fraction": 0.9681,
+    "rejected": {
+      "adapter_dimer": 980,
+      "anchor_not_found": 6065,
+      "shorter_than_policy": 2535
+    },
+    "insert_lengths": {
+      "20": 2136,
+      "21": 2789,
+      "22": 3287,
+      "23": 3233,
+      "24": 3867,
+      "25": 5051,
+      "26": 8288,
+      "27": 45400,
+      "28": 38020,
+      "29": 65350,
+      "30": 54721,
+      "31": 37790,
+      "32": 16288,
+      "33": 4200
+    },
+    "candidate_insert_lengths": {
+      "8": 1,
+      "9": 2,
+      "11": 3,
+      "13": 6,
+      "14": 19,
+      "15": 40,
+      "16": 212,
+      "17": 424,
+      "18": 777,
+      "19": 1051,
+      "20": 2136,
+      "21": 2789,
+      "22": 3287,
+      "23": 3233,
+      "24": 3867,
+      "25": 5051,
+      "26": 8288,
+      "27": 45400,
+      "28": 38020,
+      "29": 65350,
+      "30": 54721,
+      "31": 37790,
+      "32": 16288,
+      "33": 4200
+    },
+    "boundaries": {
+      "adapter": 292955
+    }
+  },
+  "status": "audit_complete"
+}

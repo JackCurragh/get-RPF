@@ -1,0 +1,67 @@
+seqspec_version: 0.3.0
+assay_id: getrpf_inferred
+name: get-RPF inferred read structure
+modalities:
+- rna
+sequence_spec:
+- region_id: random_0
+  region_type: umi
+  sequence_type: random
+  min_len: 5
+  max_len: 5
+  getrpf:
+    type: random
+    frame: read_start
+    keep_as_umi: true
+    remove: true
+    status: interval
+    note: ''
+- region_id: nta_1
+  region_type: linker
+  sequence_type: random
+  min_len: 0
+  max_len: 2
+  getrpf:
+    type: nta
+    frame: read_start
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: non-templated-like in about 78% of reads; kept (v1)
+- region_id: insert_2
+  region_type: cdna
+  sequence_type: joined
+  min_len: 20
+  max_len: 40
+  getrpf:
+    type: insert
+    frame: read_start
+    keep_as_umi: false
+    remove: false
+    status: interval
+    note: accepted under monosome_20_40
+- region_id: adapter_3
+  region_type: adapter
+  sequence_type: fixed
+  min_len: 34
+  max_len: 34
+  sequence: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+  getrpf:
+    type: adapter
+    frame: anchor
+    keep_as_umi: false
+    remove: true
+    status: resolved
+    note: truseq_3p (catalogue)
+getrpf:
+  source: inferred
+  status: interval
+  fragment_policy: monosome_20_40
+  describe: '[random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]'
+  transform:
+    emit: false
+    bound: interval
+    reasons:
+    - 'Q2: 2 junction base(s) at the read start look non-templated in about 78% of
+      reads; too common to leave in the insert, and not established as technical'
+    conventions: []

@@ -1,0 +1,1060 @@
+{
+  "schema": "getrpf.structure/1",
+  "sample": "SRR23242345",
+  "observation": {
+    "reads": 300000,
+    "modal_length": 101,
+    "modal_fraction": 1.0,
+    "length_range": [
+      101,
+      101
+    ],
+    "input_state": "raw_fixed_length",
+    "header_umi": null,
+    "terminal_poly_g": 0.005,
+    "evidence": [
+      {
+        "source": "profile",
+        "metric": "modal_length_fraction",
+        "value": 1.0,
+        "n": 300000,
+        "note": "modal length 101 nt; 1-99% range 101-101 nt"
+      },
+      {
+        "source": "profile",
+        "metric": "input_state",
+        "value": "raw_fixed_length",
+        "n": 300000,
+        "note": ""
+      },
+      {
+        "source": "profile",
+        "metric": "header_umi",
+        "value": null,
+        "n": 1000,
+        "note": "read-name convention carrying a UMI, if any"
+      },
+      {
+        "source": "profile",
+        "metric": "terminal_poly_g",
+        "value": 0.005,
+        "n": 300000,
+        "note": ""
+      }
+    ]
+  },
+  "window": 16,
+  "answers": {
+    "Q1": {
+      "question": "Q1",
+      "value": {
+        "adapter": {
+          "name": "truseq_3p",
+          "sequence": "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+          "role": "insert_3p"
+        },
+        "source": "catalogue",
+        "support": 0.9822,
+        "dimer_fraction": 0.0009,
+        "full_fraction": 1.0,
+        "start_mode": 36,
+        "start_range": [
+          32,
+          42
+        ],
+        "tail_base": null,
+        "tail_fraction": 0.0,
+        "downstream_consistency": 0.8905
+      },
+      "status": "resolved",
+      "evidence": [
+        {
+          "source": "profile",
+          "metric": "input_state",
+          "value": "raw_fixed_length",
+          "n": 300000,
+          "note": "modal length 101 nt (100% of reads)"
+        },
+        {
+          "source": "anchor",
+          "metric": "support",
+          "value": 0.9822,
+          "n": 300000,
+          "note": "truseq_3p (catalogue): AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
+        },
+        {
+          "source": "anchor",
+          "metric": "start_distribution",
+          "value": [
+            36,
+            [
+              32,
+              42
+            ]
+          ],
+          "n": 294662,
+          "note": "mode and 5-95% range of the adapter start"
+        },
+        {
+          "source": "anchor",
+          "metric": "full_adapter_fraction",
+          "value": 1.0,
+          "n": 294662,
+          "note": ""
+        },
+        {
+          "source": "anchor",
+          "metric": "dimer_fraction",
+          "value": 0.0009,
+          "n": 300000,
+          "note": ""
+        },
+        {
+          "source": "anchor",
+          "metric": "mismatch_rate",
+          "value": 0.0058,
+          "n": 294662,
+          "note": "mismatches per adapter base over the matched overlap"
+        },
+        {
+          "source": "anchor",
+          "metric": "downstream_p7_consistency",
+          "value": 0.8905,
+          "n": 294662,
+          "note": "reads where P7 follows the adapter within an index length"
+        }
+      ],
+      "alternatives": [
+        {
+          "value": "truseq_small_rna_3p",
+          "verdict": "contradicted",
+          "reason": "located in only 0.0% of reads (need 30%)"
+        },
+        {
+          "value": "ingolia_linker_3p",
+          "verdict": "contradicted",
+          "reason": "located in only 0.0% of reads (need 30%)"
+        },
+        {
+          "value": "nextera_3p",
+          "verdict": "contradicted",
+          "reason": "located in only 0.0% of reads (need 30%)"
+        },
+        {
+          "value": "illumina_p7",
+          "verdict": "contradicted",
+          "reason": "illumina_p7 (ATCTCGTATGCC...) is platform sequence after the adapter and index; never an anchor (located in 94.4% of reads)"
+        }
+      ],
+      "explanation": "truseq_3p (catalogue) located in 98% of reads, starting at position 37 (5-95%: 33-43); 100% of those contain the whole adapter; P7 follows it in 89% of reads long enough to show it; 0.1% of reads are adapter dimers."
+    },
+    "Q2": {
+      "question": "Q2",
+      "value": {
+        "frame": "read_start",
+        "technical_length": 5,
+        "blocks": [
+          [
+            "random",
+            5
+          ]
+        ],
+        "nta_length": 2,
+        "nta_rates": [
+          0.777,
+          0.405
+        ],
+        "nta_bases": {
+          "A": 0.003,
+          "C": 0.203,
+          "G": 0.002,
+          "T": 0.792
+        }
+      },
+      "status": "interval",
+      "evidence": [
+        {
+          "source": "pileup",
+          "metric": "informative_groups",
+          "value": 321,
+          "n": 231379,
+          "note": "231379 of 294662 reads grouped"
+        },
+        {
+          "source": "pileup",
+          "metric": "consensus_excludes",
+          "value": [
+            5,
+            0
+          ],
+          "n": 321,
+          "note": "second pass: consensus built without the 5' and 3' technical bases found in the first pass"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_1",
+          "value": 0.243,
+          "n": 133209,
+          "note": "random; library entropy 1.98 bits; dominant base 0.30"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_2",
+          "value": 0.257,
+          "n": 136137,
+          "note": "random; library entropy 2.00 bits; dominant base 0.28"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_3",
+          "value": 0.265,
+          "n": 138471,
+          "note": "random; library entropy 1.99 bits; dominant base 0.29"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_4",
+          "value": 0.259,
+          "n": 141367,
+          "note": "random; library entropy 1.99 bits; dominant base 0.30"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_5",
+          "value": 0.288,
+          "n": 144922,
+          "note": "random; library entropy 1.99 bits; dominant base 0.29"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_6",
+          "value": 0.415,
+          "n": 146213,
+          "note": "intermediate; library entropy 1.08 bits; dominant base 0.60"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_7",
+          "value": 0.691,
+          "n": 146458,
+          "note": "intermediate; library entropy 1.04 bits; dominant base 0.78"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_8",
+          "value": 0.926,
+          "n": 146537,
+          "note": "biology; library entropy 1.82 bits; dominant base 0.42"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_9",
+          "value": 0.984,
+          "n": 146590,
+          "note": "biology; library entropy 1.85 bits; dominant base 0.39"
+        },
+        {
+          "source": "blocks",
+          "metric": "technical_blocks",
+          "value": [
+            [
+              "random",
+              5
+            ]
+          ],
+          "n": 5000,
+          "note": ""
+        },
+        {
+          "source": "pileup",
+          "metric": "nta_rate_estimate",
+          "value": [
+            0.777,
+            0.405
+          ],
+          "n": 146213,
+          "note": "(biology - agreement) / (biology - 0.25) per junction position"
+        }
+      ],
+      "alternatives": [
+        {
+          "value": 0,
+          "verdict": "contradicted",
+          "reason": "position 1 would be kept as insert, but it is random (agreement 0.24, library entropy 1.98 bits)"
+        },
+        {
+          "value": 4,
+          "verdict": "contradicted",
+          "reason": "position 5 would be kept as insert, but it is random (agreement 0.29, library entropy 1.99 bits)"
+        },
+        {
+          "value": 6,
+          "verdict": "weakly_compatible",
+          "reason": "positions 6-6 have intermediate agreement (0.42); consistent with non-templated bases in some reads, which v1 reports but does not remove"
+        },
+        {
+          "value": 7,
+          "verdict": "weakly_compatible",
+          "reason": "positions 6-7 have intermediate agreement (0.42, 0.69); consistent with non-templated bases in some reads, which v1 reports but does not remove"
+        },
+        {
+          "value": 8,
+          "verdict": "contradicted",
+          "reason": "position 8 would be removed, but its agreement 0.93 is at biology level (>= 0.90)"
+        }
+      ],
+      "explanation": "5 technical bases from the read start (5 nt random); within-fragment agreement 0.24-0.29; then 2 junction base(s) with intermediate agreement (0.42, 0.69; biology 0.99), consistent with a non-templated base in about 78% of reads (disagreeing bases 79% T); reported, not removed (v1); agreement 0.93 at position 8 (321 groups)."
+    },
+    "Q3": {
+      "question": "Q3",
+      "value": {
+        "frame": "anchor",
+        "technical_length": 0,
+        "blocks": [],
+        "nta_length": 0,
+        "nta_rates": [],
+        "nta_bases": {}
+      },
+      "status": "resolved",
+      "evidence": [
+        {
+          "source": "pileup",
+          "metric": "informative_groups",
+          "value": 321,
+          "n": 231379,
+          "note": "231379 of 294662 reads grouped"
+        },
+        {
+          "source": "pileup",
+          "metric": "consensus_excludes",
+          "value": [
+            5,
+            0
+          ],
+          "n": 321,
+          "note": "second pass: consensus built without the 5' and 3' technical bases found in the first pass"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_1",
+          "value": 0.959,
+          "n": 146264,
+          "note": "biology; library entropy 1.81 bits; dominant base 0.44"
+        },
+        {
+          "source": "pileup",
+          "metric": "agreement_at_2",
+          "value": 0.985,
+          "n": 146442,
+          "note": "biology; library entropy 1.97 bits; dominant base 0.30"
+        }
+      ],
+      "alternatives": [
+        {
+          "value": 1,
+          "verdict": "contradicted",
+          "reason": "position 1 would be removed, but its agreement 0.96 is at biology level (>= 0.90)"
+        }
+      ],
+      "explanation": "No technical bases before the anchor; agreement 0.96 at position 1 (321 groups)."
+    },
+    "Q4": {
+      "question": "Q4",
+      "value": {
+        "inline": [
+          [
+            "Q2",
+            5
+          ]
+        ],
+        "header": null
+      },
+      "status": "resolved",
+      "evidence": [
+        {
+          "source": "blocks",
+          "metric": "inline_random_blocks",
+          "value": [
+            [
+              "Q2",
+              5
+            ]
+          ],
+          "n": 300000,
+          "note": ""
+        },
+        {
+          "source": "profile",
+          "metric": "header_umi",
+          "value": null,
+          "n": 300000,
+          "note": ""
+        }
+      ],
+      "alternatives": [],
+      "explanation": "Keep as UMI: 5 nt random at the read start."
+    }
+  },
+  "architecture": {
+    "describe": "[random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]",
+    "blocks": [
+      {
+        "type": "random",
+        "frame": "read_start",
+        "length": [
+          5,
+          5
+        ],
+        "sequence": null,
+        "keep_as_umi": true,
+        "remove": true,
+        "status": "interval",
+        "note": "",
+        "evidence": []
+      },
+      {
+        "type": "nta",
+        "frame": "read_start",
+        "length": [
+          0,
+          2
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "non-templated-like in about 78% of reads; kept (v1)",
+        "evidence": []
+      },
+      {
+        "type": "insert",
+        "frame": "read_start",
+        "length": [
+          20,
+          40
+        ],
+        "sequence": null,
+        "keep_as_umi": false,
+        "remove": false,
+        "status": "interval",
+        "note": "accepted under monosome_20_40",
+        "evidence": []
+      },
+      {
+        "type": "adapter",
+        "frame": "anchor",
+        "length": [
+          34,
+          34
+        ],
+        "sequence": "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+        "keep_as_umi": false,
+        "remove": true,
+        "status": "resolved",
+        "note": "truseq_3p (catalogue)",
+        "evidence": []
+      }
+    ],
+    "source": "inferred",
+    "status": "interval",
+    "fragment_policy": "monosome_20_40"
+  },
+  "transform": {
+    "emit": false,
+    "bound": "interval",
+    "reasons": [
+      "Q2: 2 junction base(s) at the read start look non-templated in about 78% of reads; too common to leave in the insert, and not established as technical"
+    ],
+    "conventions": []
+  },
+  "templates": {
+    "considered": [
+      {
+        "template": "err605046_stau1_riboseq",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 1 nt"
+      },
+      {
+        "template": "observed_small_rna_composite_3p_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_small_rna_truseq_composite_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_truseq_18nt_3p_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_truseq_21nt_3p_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_truseq_26nt_3p_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_truseq_full_34nt_3p_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "observed_truseq_prefixed_aagat_adapter",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      },
+      {
+        "template": "preprocessed_with_adapter_contamination",
+        "verdict": "partially_supported",
+        "reason": "matches: 3' technical 0 nt, adapter family; differs: 5' technical 5 nt vs 0 nt"
+      }
+    ],
+    "rejected": 19
+  },
+  "profiles": {
+    "first_pass": {
+      "groups": 321,
+      "reads_grouped": 231379,
+      "reads_used": 294662,
+      "consensus_trim": [
+        0,
+        0
+      ],
+      "read_start": [
+        {
+          "position": 1,
+          "agreement": 0.2884,
+          "scored": 146213,
+          "dominant_base": "T",
+          "dominant_fraction": 0.3024,
+          "entropy_bits": 1.9766
+        },
+        {
+          "position": 2,
+          "agreement": 0.2703,
+          "scored": 146458,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2791,
+          "entropy_bits": 1.9968
+        },
+        {
+          "position": 3,
+          "agreement": 0.2848,
+          "scored": 146537,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2918,
+          "entropy_bits": 1.9929
+        },
+        {
+          "position": 4,
+          "agreement": 0.288,
+          "scored": 146590,
+          "dominant_base": "T",
+          "dominant_fraction": 0.298,
+          "entropy_bits": 1.9914
+        },
+        {
+          "position": 5,
+          "agreement": 0.2945,
+          "scored": 146629,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2932,
+          "entropy_bits": 1.9888
+        },
+        {
+          "position": 6,
+          "agreement": 0.4266,
+          "scored": 146666,
+          "dominant_base": "T",
+          "dominant_fraction": 0.605,
+          "entropy_bits": 1.0835
+        },
+        {
+          "position": 7,
+          "agreement": 0.6745,
+          "scored": 146690,
+          "dominant_base": "C",
+          "dominant_fraction": 0.7794,
+          "entropy_bits": 1.0425
+        },
+        {
+          "position": 8,
+          "agreement": 0.9257,
+          "scored": 146712,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4162,
+          "entropy_bits": 1.8187
+        },
+        {
+          "position": 9,
+          "agreement": 0.9829,
+          "scored": 146734,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3908,
+          "entropy_bits": 1.8545
+        },
+        {
+          "position": 10,
+          "agreement": 0.9881,
+          "scored": 146752,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3673,
+          "entropy_bits": 1.8486
+        },
+        {
+          "position": 11,
+          "agreement": 0.9901,
+          "scored": 146765,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4494,
+          "entropy_bits": 1.7955
+        },
+        {
+          "position": 12,
+          "agreement": 0.9897,
+          "scored": 146785,
+          "dominant_base": "G",
+          "dominant_fraction": 0.367,
+          "entropy_bits": 1.8661
+        },
+        {
+          "position": 13,
+          "agreement": 0.9908,
+          "scored": 146800,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3605,
+          "entropy_bits": 1.9203
+        },
+        {
+          "position": 14,
+          "agreement": 0.9904,
+          "scored": 146804,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3779,
+          "entropy_bits": 1.9052
+        },
+        {
+          "position": 15,
+          "agreement": 0.992,
+          "scored": 146808,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4329,
+          "entropy_bits": 1.8821
+        },
+        {
+          "position": 16,
+          "agreement": 0.992,
+          "scored": 146812,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4038,
+          "entropy_bits": 1.9155
+        }
+      ],
+      "anchor": [
+        {
+          "position": 1,
+          "agreement": 0.959,
+          "scored": 146264,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4404,
+          "entropy_bits": 1.8106
+        },
+        {
+          "position": 2,
+          "agreement": 0.9854,
+          "scored": 146442,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3009,
+          "entropy_bits": 1.9749
+        },
+        {
+          "position": 3,
+          "agreement": 0.9844,
+          "scored": 146520,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3276,
+          "entropy_bits": 1.9295
+        },
+        {
+          "position": 4,
+          "agreement": 0.9897,
+          "scored": 146572,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4762,
+          "entropy_bits": 1.8234
+        },
+        {
+          "position": 5,
+          "agreement": 0.9872,
+          "scored": 146621,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3465,
+          "entropy_bits": 1.9526
+        },
+        {
+          "position": 6,
+          "agreement": 0.99,
+          "scored": 146652,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2863,
+          "entropy_bits": 1.9766
+        },
+        {
+          "position": 7,
+          "agreement": 0.9917,
+          "scored": 146680,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3283,
+          "entropy_bits": 1.9282
+        },
+        {
+          "position": 8,
+          "agreement": 0.9926,
+          "scored": 146704,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3389,
+          "entropy_bits": 1.9633
+        },
+        {
+          "position": 9,
+          "agreement": 0.993,
+          "scored": 146728,
+          "dominant_base": "T",
+          "dominant_fraction": 0.3326,
+          "entropy_bits": 1.9752
+        },
+        {
+          "position": 10,
+          "agreement": 0.9936,
+          "scored": 146741,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3518,
+          "entropy_bits": 1.916
+        },
+        {
+          "position": 11,
+          "agreement": 0.9945,
+          "scored": 146757,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3331,
+          "entropy_bits": 1.9552
+        },
+        {
+          "position": 12,
+          "agreement": 0.9953,
+          "scored": 146772,
+          "dominant_base": "G",
+          "dominant_fraction": 0.378,
+          "entropy_bits": 1.9238
+        },
+        {
+          "position": 13,
+          "agreement": 0.9959,
+          "scored": 146788,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3133,
+          "entropy_bits": 1.9853
+        },
+        {
+          "position": 14,
+          "agreement": 0.9967,
+          "scored": 146794,
+          "dominant_base": "C",
+          "dominant_fraction": 0.2904,
+          "entropy_bits": 1.9791
+        },
+        {
+          "position": 15,
+          "agreement": 0.9965,
+          "scored": 146799,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3688,
+          "entropy_bits": 1.9048
+        },
+        {
+          "position": 16,
+          "agreement": 0.9969,
+          "scored": 146804,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4928,
+          "entropy_bits": 1.801
+        }
+      ]
+    },
+    "final": {
+      "groups": 321,
+      "reads_grouped": 231379,
+      "reads_used": 294662,
+      "consensus_trim": [
+        5,
+        0
+      ],
+      "read_start": [
+        {
+          "position": 1,
+          "agreement": 0.2431,
+          "scored": 133209,
+          "dominant_base": "T",
+          "dominant_fraction": 0.3024,
+          "entropy_bits": 1.9766
+        },
+        {
+          "position": 2,
+          "agreement": 0.2574,
+          "scored": 136137,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2791,
+          "entropy_bits": 1.9968
+        },
+        {
+          "position": 3,
+          "agreement": 0.2646,
+          "scored": 138471,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2918,
+          "entropy_bits": 1.9929
+        },
+        {
+          "position": 4,
+          "agreement": 0.2589,
+          "scored": 141367,
+          "dominant_base": "T",
+          "dominant_fraction": 0.298,
+          "entropy_bits": 1.9914
+        },
+        {
+          "position": 5,
+          "agreement": 0.288,
+          "scored": 144922,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2932,
+          "entropy_bits": 1.9888
+        },
+        {
+          "position": 6,
+          "agreement": 0.4151,
+          "scored": 146213,
+          "dominant_base": "T",
+          "dominant_fraction": 0.605,
+          "entropy_bits": 1.0835
+        },
+        {
+          "position": 7,
+          "agreement": 0.6915,
+          "scored": 146458,
+          "dominant_base": "C",
+          "dominant_fraction": 0.7794,
+          "entropy_bits": 1.0425
+        },
+        {
+          "position": 8,
+          "agreement": 0.9258,
+          "scored": 146537,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4162,
+          "entropy_bits": 1.8187
+        },
+        {
+          "position": 9,
+          "agreement": 0.9844,
+          "scored": 146590,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3908,
+          "entropy_bits": 1.8545
+        },
+        {
+          "position": 10,
+          "agreement": 0.9896,
+          "scored": 146629,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3673,
+          "entropy_bits": 1.8486
+        },
+        {
+          "position": 11,
+          "agreement": 0.9911,
+          "scored": 146666,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4494,
+          "entropy_bits": 1.7955
+        },
+        {
+          "position": 12,
+          "agreement": 0.9915,
+          "scored": 146690,
+          "dominant_base": "G",
+          "dominant_fraction": 0.367,
+          "entropy_bits": 1.8661
+        },
+        {
+          "position": 13,
+          "agreement": 0.9919,
+          "scored": 146712,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3605,
+          "entropy_bits": 1.9203
+        },
+        {
+          "position": 14,
+          "agreement": 0.9915,
+          "scored": 146734,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3779,
+          "entropy_bits": 1.9052
+        },
+        {
+          "position": 15,
+          "agreement": 0.9932,
+          "scored": 146752,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4329,
+          "entropy_bits": 1.8821
+        },
+        {
+          "position": 16,
+          "agreement": 0.9924,
+          "scored": 146764,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4038,
+          "entropy_bits": 1.9155
+        }
+      ],
+      "anchor": [
+        {
+          "position": 1,
+          "agreement": 0.959,
+          "scored": 146264,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4404,
+          "entropy_bits": 1.8106
+        },
+        {
+          "position": 2,
+          "agreement": 0.9854,
+          "scored": 146442,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3009,
+          "entropy_bits": 1.9749
+        },
+        {
+          "position": 3,
+          "agreement": 0.9844,
+          "scored": 146520,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3276,
+          "entropy_bits": 1.9295
+        },
+        {
+          "position": 4,
+          "agreement": 0.9897,
+          "scored": 146572,
+          "dominant_base": "G",
+          "dominant_fraction": 0.4762,
+          "entropy_bits": 1.8234
+        },
+        {
+          "position": 5,
+          "agreement": 0.9872,
+          "scored": 146621,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3465,
+          "entropy_bits": 1.9526
+        },
+        {
+          "position": 6,
+          "agreement": 0.99,
+          "scored": 146652,
+          "dominant_base": "T",
+          "dominant_fraction": 0.2863,
+          "entropy_bits": 1.9766
+        },
+        {
+          "position": 7,
+          "agreement": 0.9917,
+          "scored": 146680,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3283,
+          "entropy_bits": 1.9282
+        },
+        {
+          "position": 8,
+          "agreement": 0.9926,
+          "scored": 146704,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3389,
+          "entropy_bits": 1.9633
+        },
+        {
+          "position": 9,
+          "agreement": 0.993,
+          "scored": 146728,
+          "dominant_base": "T",
+          "dominant_fraction": 0.3326,
+          "entropy_bits": 1.9752
+        },
+        {
+          "position": 10,
+          "agreement": 0.9936,
+          "scored": 146741,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3518,
+          "entropy_bits": 1.916
+        },
+        {
+          "position": 11,
+          "agreement": 0.9945,
+          "scored": 146757,
+          "dominant_base": "A",
+          "dominant_fraction": 0.3331,
+          "entropy_bits": 1.9552
+        },
+        {
+          "position": 12,
+          "agreement": 0.9953,
+          "scored": 146772,
+          "dominant_base": "G",
+          "dominant_fraction": 0.378,
+          "entropy_bits": 1.9238
+        },
+        {
+          "position": 13,
+          "agreement": 0.9959,
+          "scored": 146788,
+          "dominant_base": "G",
+          "dominant_fraction": 0.3133,
+          "entropy_bits": 1.9853
+        },
+        {
+          "position": 14,
+          "agreement": 0.9967,
+          "scored": 146794,
+          "dominant_base": "C",
+          "dominant_fraction": 0.2904,
+          "entropy_bits": 1.9791
+        },
+        {
+          "position": 15,
+          "agreement": 0.9965,
+          "scored": 146798,
+          "dominant_base": "C",
+          "dominant_fraction": 0.3688,
+          "entropy_bits": 1.9048
+        },
+        {
+          "position": 16,
+          "agreement": 0.9969,
+          "scored": 146800,
+          "dominant_base": "C",
+          "dominant_fraction": 0.4928,
+          "entropy_bits": 1.801
+        }
+      ]
+    }
+  }
+}

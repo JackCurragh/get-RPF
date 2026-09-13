@@ -65,6 +65,7 @@ def simulate(
     footprint: Tuple[int, int] = (28, 32),
     error_rate: float = 0.001,
     seed: int = 0,
+    adapter: str = ADAPTER,
 ) -> Library:
     """Build a library; ``read_length=None`` gives already-trimmed reads."""
     rng = random.Random(seed)
@@ -86,7 +87,7 @@ def simulate(
         if read_length is None:
             read, anchor = body, len(body)
         else:
-            read = (body + ADAPTER + DOWNSTREAM)[:read_length]
+            read = (body + adapter + DOWNSTREAM)[:read_length]
             anchor = len(body) if len(body) < read_length else None
         if rng.random() < 1 - (1 - error_rate) ** len(read):
             i = rng.randrange(len(read))

@@ -31,6 +31,8 @@ search_cache/
 search_results/
 validation_rewire_*/
 hpc_audit_v*/
+# Local read subsets of the real panel (downloaded from ENA; see truth.yaml).
+validation/panel_v1/data/
 
 # IDE
 .idea/

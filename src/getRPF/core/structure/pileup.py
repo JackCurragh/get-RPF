@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 import statistics
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
 from .config import InferenceConfig
@@ -95,15 +95,19 @@ def infer_junctions(
     reads: Sequence[str],
     anchors: Optional[Sequence[Optional[int]]] = None,
     config: Optional[InferenceConfig] = None,
+    window: Optional[int] = None,
 ) -> JunctionInference:
     """Answer Q2 and Q3 from the reads alone.
 
-    ``anchors`` gives each read's adapter start (``None`` where no adapter was
+    ``anchors`` gives each read's insert-side anchor (``None`` where none was
     located; those reads are not used). Pass ``anchors=None`` for reads that
     contain no adapter at all, such as already-trimmed input; the read end is
-    then the anchor.
+    then the anchor. ``window`` overrides ``config.window``; step 2 sizes it
+    from the anchor arithmetic (spec §2 rule 3).
     """
     config = config or InferenceConfig()
+    if window is not None:
+        config = replace(config, window=window)
     regions = _regions(reads, anchors, config)
     groups, grouped = _group(regions, config)
     sample = regions[: config.few_values_sample]

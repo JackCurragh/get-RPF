@@ -76,3 +76,67 @@ class InferenceConfig:
     """A barcode segment is extended one base at a time while the number of
     values needed grows by no more than this factor (a random base multiplies
     it by about four)."""
+
+    # --- Steps 0-1: observation and profile (spec §5.0-5.1) ---
+
+    raw_modal_fraction: float = 0.9
+    """At least this fraction of reads at one length: raw fixed-length cycles."""
+
+    trimmed_modal_fraction: float = 0.5
+    """At most this fraction at the modal length: already trimmed."""
+
+    # --- Step 2: anchor (spec §5.2) ---
+
+    anchor_seed: int = 10
+    """Exact seed length used to find adapter candidates. Two seeds are tried
+    (adapter positions 1-10 and 11-20), so one error in either is tolerated."""
+
+    min_partial_overlap: int = 10
+    """Shortest adapter overlap accepted where the adapter runs off the read end."""
+
+    max_mismatch_per_10nt: float = 1.0
+    """Mismatches allowed per 10 nt of adapter overlap."""
+
+    min_insert: int = 15
+    """An adapter starting before this position marks a dimer, not an anchor."""
+
+    min_anchor_support: float = 0.3
+    """Fraction of reads an adapter must be located in to become the anchor."""
+
+    max_index_length: int = 12
+    """Longest index expected between the adapter and P7 (chain check)."""
+
+    tail_min_run: int = 6
+    """Homopolymer run directly before the adapter that counts as a tail."""
+
+    tail_min_fraction: float = 0.5
+    """Fraction of anchored reads that must carry such a run for a tail
+    architecture to be declared."""
+
+    typical_footprint: int = 30
+    """Typical monosome footprint, used only to size search windows (spec §2
+    rule 3). It never places a boundary."""
+
+    max_window: int = 40
+    """Upper bound on the search window derived from the anchor arithmetic."""
+
+    denovo_sample: int = 50_000
+    """Reads used for de novo adapter discovery."""
+
+    denovo_k: int = 12
+    """k-mer length for de novo adapter discovery."""
+
+    denovo_min_support: float = 0.1
+    """Fraction of reads a de novo candidate k-mer must occur in."""
+
+    denovo_min_position_sd: float = 0.75
+    """A de novo candidate's position must vary this much (nt, SD) across
+    reads. An adapter's position varies with insert length (SD ~1.4 nt for
+    28-32 nt footprints); a fixed 5' element's barely varies at all."""
+
+    denovo_extend_dominance: float = 0.8
+    """A de novo element is extended while the next base agrees in this
+    fraction of occurrences."""
+
+    denovo_max_length: int = 34
+    """Longest de novo adapter reported."""

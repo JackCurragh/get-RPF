@@ -140,3 +140,20 @@ class InferenceConfig:
 
     denovo_max_length: int = 34
     """Longest de novo adapter reported."""
+
+    # --- Assembly and transform decision (spec §5.5, §7.2) ---
+
+    nta_withhold_rate: float = 0.5
+    """Junction bases with intermediate agreement are kept in the insert (v1)
+    while their estimated non-templated rate is below this. At or above it
+    they are too common to leave in, and not established as technical, so the
+    transform is withheld for review."""
+
+    fragment_policy: str = "monosome_20_40"
+    """Name of the fragment policy the emitted inserts must satisfy."""
+
+    fragment_min: int = 20
+    """Shortest insert accepted under the fragment policy."""
+
+    fragment_max: int = 40
+    """Longest insert accepted under the fragment policy."""

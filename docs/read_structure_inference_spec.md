@@ -257,7 +257,7 @@ A transform is emitted only when Q1, Q2 and Q3 are each `resolved`, or `interval
 
 Otherwise the architecture is reported and the transform is withheld. This uses an exit status distinct from an error.
 
-NTAs are reported but not trimmed in v1, because whether a given read carries one can't be decided without a reference. The report states the estimated rate.
+NTAs are reported but not trimmed in v1, because whether a given read carries one can't be decided without a reference. The report states the estimated rate. This holds only while the estimated rate is below `nta_withhold_rate` (default 0.5). At or above it, the junction bases are too common to leave in the insert, yet not established as technical, so the transform is withheld for review. SRR23242345 is the motivating case: 78% C at read position 7.
 
 ### 7.3 Outputs
 
@@ -344,21 +344,21 @@ src/getRPF/core/structure/
   model.py        Status, Evidence, Alternative, Answer, Block, Architecture, StructureReport
   config.py       InferenceConfig
   observe.py      §5.0–5.1
-  anchors.py      §5.2
-  blocks.py       §5.3 a, b, d
-  pileup.py       §5.3 c
+  anchors.py      §5.2, including tails and the search-window arithmetic
+  pileup.py       §5.3: agreement and composition profiles, position classes,
+                  technical blocks and the Q2/Q3 junction calls
   align.py        §5.4 (wraps processors/alignment.STARAligner)
-  assemble.py     §5.5, including template testing
+  assemble.py     §5.5: runs steps 0-3, Q4, the transform decision, the architecture
   transform.py    §7.1 apply()
   seqspec_io.py   Architecture <-> seqspec YAML
-  report.py       structure.json and explanations
+  report.py       structure.json, structure.txt and explanations
 tests/test_structure/
   sim.py          synthetic read generator with known truth
   test_*.py
 ```
 
 **CLI:**
-- `getRPF infer-structure <fastq> -o <dir>` writes the report and seqspec, but no FASTQ.
+- `getRPF infer-structure <fastq> -o <dir>` writes the report (and, from P5, the seqspec), but no FASTQ. Exit code 0 when a transform can be emitted, 3 when it is withheld.
 - `getRPF extract --architecture <seqspec>` applies a resolved architecture.
 - Existing `extract` behaviour is unchanged until P6.
 

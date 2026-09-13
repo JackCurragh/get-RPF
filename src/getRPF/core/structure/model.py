@@ -69,3 +69,73 @@ class JunctionCall:
     nta_length: int
     nta_rates: Tuple[Optional[float], ...]
     nta_bases: Dict[str, float]
+
+
+@dataclass(frozen=True)
+class Block:
+    """One element of the read, in read order (spec §8).
+
+    ``remove`` says whether the transform cuts the block out of the emitted
+    insert; ``keep_as_umi`` whether the removed bases are carried as a UMI.
+    """
+
+    type: Literal[
+        "umi", "random", "fixed", "barcode", "nta", "tail", "insert", "adapter"
+    ]
+    frame: Frame
+    length: Tuple[int, int]
+    sequence: Optional[str]
+    keep_as_umi: bool
+    remove: bool
+    status: Status
+    note: str = ""
+    evidence: Tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class Architecture:
+    """The ordered blocks of a read: the contract with extraction (spec §7.1)."""
+
+    blocks: Tuple[Block, ...]
+    source: Literal["inferred", "template", "template_completed"]
+    status: Status
+    fragment_policy: str
+
+    def describe(self) -> str:
+        """One line, e.g. ``[random 5 UMI][insert][adapter AGATCGGAAGAG...]``."""
+        parts = []
+        for block in self.blocks:
+            low, high = block.length
+            sequence = block.sequence or ""
+            if block.type == "insert":
+                parts.append("[insert]")
+            elif block.type == "adapter":
+                shown = sequence[:12] + ("..." if len(sequence) > 12 else "")
+                parts.append(f"[adapter {shown}]")
+            elif block.type == "tail":
+                parts.append(f"[poly({sequence})]")
+            elif block.type == "fixed":
+                parts.append(f"[fixed {sequence}]")
+            elif block.type == "nta":
+                parts.append(
+                    f"[nta {low}-{high} {'removed' if block.remove else 'kept'}]"
+                )
+            else:
+                size = f"{low}" if low == high else f"{low}-{high}"
+                parts.append(
+                    f"[{block.type} {size}{' UMI' if block.keep_as_umi else ''}]"
+                )
+        return "".join(parts)
+
+
+@dataclass(frozen=True)
+class TransformDecision:
+    """Whether a per-read transform may be emitted (spec §7.2)."""
+
+    emit: bool
+    bound: Status
+    """The least-resolved status among the questions that change emitted bases."""
+    reasons: Tuple[str, ...]
+    """Why the transform is withheld; empty when it is emitted."""
+    conventions: Tuple[str, ...]
+    """Named conventions the emitted transform relies on."""

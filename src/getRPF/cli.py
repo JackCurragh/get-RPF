@@ -959,5 +959,51 @@ def plot_softclips(
         raise click.Abort()
 
 
+@cli.command(name="infer-structure")
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Directory for <sample>.structure.json and <sample>.structure.txt",
+)
+@click.option(
+    "--reads",
+    "-n",
+    type=int,
+    default=300_000,
+    show_default=True,
+    help="Reads in the bounded inference sample",
+)
+@click.option(
+    "--sample-id", type=str, default=None, help="Report name (default: file name)"
+)
+def infer_structure_command(
+    input_file: Path, output_dir: Path, reads: int, sample_id: Optional[str]
+) -> None:
+    """Infer the read structure of a FASTQ.
+
+    Implements docs/read_structure_inference_spec.md steps 0-3: observation,
+    3' anchor, library-as-reference pileup, UMI and transform decision. Writes
+    a JSON and a text report. Exit code 0 when a per-read transform can be
+    emitted; 3 when the architecture is reported but the transform is withheld.
+    """
+    from .core.structure.assemble import infer_structure
+    from .core.structure.config import InferenceConfig
+    from .core.structure.observe import read_fastq
+    from .core.structure.report import format_text, write_report
+
+    headers, sequences, _ = read_fastq(input_file, reads)
+    if not sequences:
+        raise click.ClickException(f"no reads in {input_file}")
+    sample = sample_id or input_file.name.split(".")[0]
+    result = infer_structure(sequences, headers, InferenceConfig(sample_reads=reads))
+    write_report(result, output_dir, sample)
+    click.echo(format_text(result, sample), nl=False)
+    if not result.transform.emit:
+        click.get_current_context().exit(3)
+
+
 if __name__ == "__main__":
     cli()

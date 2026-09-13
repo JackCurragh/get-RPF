@@ -87,6 +87,42 @@ def test_srr23242345_claimed_seven_nt_umi_and_last_base():
     assert q3.technical_length + q3.nta_length == 1
 
 
+@pytest.mark.parametrize(
+    "accession, emit, architecture",
+    [
+        ("SRR1944950", True, "[nta 0-1 kept][insert]"),
+        (
+            "SRR3945920",
+            True,
+            "[insert][nta 0-1 kept][adapter AGATCGGAAGAG...]",
+        ),
+        (
+            "SRR3945930",
+            True,
+            "[random 3 UMI][nta 0-1 kept][insert][random 4 UMI][adapter CTGTAGGCACCA...]",
+        ),
+        (
+            "SRR12693498",
+            True,
+            "[random 13 UMI][fixed GGG][insert][nta 0-1 kept][poly(A)]"
+            "[adapter AGATCGGAAGAG...]",
+        ),
+        (
+            "SRR23242345",
+            False,
+            "[random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]",
+        ),
+    ],
+)
+def test_measured_architecture_and_transform_decision(accession, emit, architecture):
+    """Regression guard on the measured architectures (2026-09-13), not a
+    validation claim. SRR23242345 is withheld because read positions 6-7 look
+    non-templated in most reads (spec §7.2)."""
+    result = run(accession)
+    assert result.architecture.describe() == architecture
+    assert result.transform.emit is emit
+
+
 def test_srr23242345_measured_structure():
     """Regression guard on the measured structure, not a validation claim."""
     result = run("SRR23242345")

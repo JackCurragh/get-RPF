@@ -8,6 +8,10 @@
 #   never mixed with published claims.
 # - `expected_structure` entries marked "derived" follow from the construction chemistry
 #   and are hypotheses until observed.
+#
+# Read subsets: scripts/fetch_panel_subsets.sh (first 1M reads per run from ENA).
+# "steps 0-3" below = getRPF.core.structure.assemble.infer_structure on the first
+# 300k of those reads (tests/test_structure/test_real_panel.py).
 
 runs:
   - run: SRR1944950
@@ -30,9 +34,9 @@ runs:
     observed:
       - finding: reads are already footprint-length; no adapter to anchor on
         method: get-RPF audit, 500k reads, 2026-09-13
-      - finding: >=0.93 within-fragment agreement at every position except read position 1 (0.64); 60% of the disagreeing first bases are T
+      - finding: ">=0.93 within-fragment agreement at every position except read position 1 (0.64); 60% of the disagreeing first bases are T"
         interpretation: candidate 5' non-templated base in a large fraction of reads; unconfirmed
-        method: library-as-reference pileup (pileup_probe), first 300k reads, 2026-09-13
+        method: library-as-reference pileup, first 300k reads, 2026-09-13 (reproduced by steps 0-3)
     expected_structure: "[insert] (+ candidate 1 nt 5' NTA in some reads)"
     expected_rpf_output: reads kept unchanged within the fragment policy; the candidate NTA is reported, not removed (v1)
     corrections: the WIP gold claimed "5 nt linker UMI + 2 random RT-primer bases" by quoting McGlincy & Ingolia 2017, which is a different study. Withdrawn.
@@ -54,22 +58,26 @@ runs:
     observed:
       - finding: TruSeq adapter AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC starts at read positions 28-31 in most reads; 95.6% of 50k sampled reads end in an adapter prefix
         method: get-RPF retry audit (validation_rewire_v1 bounded_retry1), 2026-09-13
-    expected_structure: "[insert][adapter]; technical bases next to the adapter: unknown (pileup to measure)"
-    expected_rpf_output: the bases before the adapter, unless the pileup finds technical bases next to it
+      - finding: "truseq_3p located in 99% of reads, start mode position 31 (5-95%: 26-32); read start: no technical bases (agreement 0.93 at position 1); before the adapter: no technical bases, position 1 at intermediate agreement 0.87 (a non-templated-like base in about 16% of reads, 50% C among disagreeing bases)"
+        method: steps 0-3, 2026-09-13
+    expected_structure: "measured: [insert][adapter]; candidate 3' NTA in ~16% of reads"
+    expected_rpf_output: the bases before the adapter; the candidate 3' NTA is reported, not removed (v1)
     corrections: the WIP gold labelled this run distributed_umi (4+3N) from a study-level claim. That design belongs to SRR3945930. Withdrawn.
 
   - run: SRR3945930
     study: PRJNA330982 (GEO GSE84746; Lecanda et al. 2016, doi:10.1016/j.ymeth.2016.07.011)
     sample: SRX1971815 4+3N_RibosomeProfiling_rep1
     layout: single
-    read_length: 45 nt (ENA base count / read count)
-    input_state: unknown (not yet profiled)
+    read_length: 45 nt
+    input_state: raw_fixed_length
     protocol_claims:
       - claim: DNA linker carrying four randomised positions at its 5' end; RT primer carrying three randomised positions
         scope: sample (the "4+3N" title names this design) and study (abstract)
         source: Lecanda et al. 2016 abstract (PubMed 27450428); GEO sample title
-    observed: []
-    expected_structure: "derived: [3 random][insert][4 random][linker constant]. Circularisation puts the RT primer's randomised bases at the read start; the linker's sit between insert and adapter"
+    observed:
+      - finding: "linker CTGTAGGCACCATCAAT (catalogue ingolia_linker_3p) located in 38% of reads: 45 nt reads show >=10 nt of it only for the shorter inserts. Read start: 3 random positions (agreement 0.31-0.36), position 4 intermediate (0.84, ~21% non-templated-like), biology from position 5 (0.98). Before the linker: 4 random positions (0.28-0.56), biology from position 5 (0.99)"
+        method: steps 0-3, 2026-09-13
+    expected_structure: "derived and now observed: [3 random][insert][4 random][linker CTGTAGGCACCATCAAT]. Circularisation puts the RT primer's randomised bases at the read start; the linker's sit between insert and adapter"
     expected_rpf_output: the insert without the 3 + 4 randomised bases, both kept as UMI
     corrections: new row; the distributed-randomisation case for the panel
 
@@ -89,7 +97,9 @@ runs:
     observed:
       - finding: all reads are 100 nt; 57.4% of 50k sampled reads end in a TruSeq adapter prefix (the read-end-only matcher undercounts reads where the adapter is mid-read)
         method: hpc_audit_v3 audit, 2026-09
-    expected_structure: "vendor claim and get-RPF template riboflow_template_switch: [12 nt UMI][4 nt fixed][insert][A-run][adapter]; unconfirmed"
+      - finding: "truseq_3p located in 90% of reads (start mode position 70), preceded by a poly(A) run in 100% of anchored reads; P7 follows the adapter in 72% of reads long enough to show it. Read start: 13 random positions (agreement 0.21-0.45), then GGG at positions 14-16 (97-99% G, fixed), biology from position 17 (0.96). Before the tail: no technical bases; position 1 intermediate (0.87, ~16% non-templated-like, 47% C)"
+        method: steps 0-3, 2026-09-13
+    expected_structure: "observed, consistent with the vendor claim and the riboflow_template_switch template: [12 nt UMI + N][GGG][insert][A-run][TruSeq adapter]"
     expected_rpf_output: the insert between the 16 nt 5' block and the A-run, UMI kept; tail junction reported as an interval (spec §6)
     corrections: none to the claim; the WIP runs produced zero RPFs because adapter matching was read-end-only
 
@@ -106,9 +116,12 @@ runs:
     observed:
       - finding: all reads are 101 nt; 81.8% of 50k sampled reads end in the Illumina P7 sequence ATCTCGTATGCC..., so the adapter lies mid-read
         method: hpc_audit_v3 audit, 2026-09
-    expected_structure: "[7 nt UMI][insert][TruSeq adapter][index][P7]; unconfirmed"
-    expected_rpf_output: the insert between the 7 nt UMI and the adapter, UMI kept
-    corrections: the WIP rewire guide excluded this run as paired-end; ENA lists it as single-end
+      - finding: "truseq_3p located in 98% of reads (start mode position 37), whole adapter in 100% of them, P7 following in 89%. Read start: 5 random positions (agreement 0.24-0.29, even base mix), then positions 6-7 skewed with intermediate agreement (60% T at 0.42; 78% C at 0.69), biology from position 8 (0.93). Before the adapter: no technical base (0.96 at position 1, 0.99 further in)"
+        interpretation: "the published 7 nt trim ends where biology starts, but positions 6-7 are not random, so the read start is 5 random bases + 2 biased bases rather than a 7 nt UMI. The quoted 'last base removed' is not visible as a 3' block in R1. Both need the OTTR methods text re-read before either is treated as settled"
+        method: steps 0-3, 2026-09-13
+    expected_structure: "claimed [7 nt UMI][insert][TruSeq adapter]; measured [5 random][2 biased][insert][TruSeq adapter]"
+    expected_rpf_output: "the insert from position 8 to the adapter; the 5 random bases kept as UMI. Whether positions 6-7 are removed is a transform-policy decision (spec §7.2)"
+    corrections: the WIP rewire guide excluded this run as paired-end; ENA lists it as single-end. The 7 nt UMI claim is contradicted by the base composition at positions 6-7 (see observed)
 
 to_source:
   - need: a McGlincy & Ingolia 2017-style run (5 nt random + 5 nt inline barcode between insert and adapter)

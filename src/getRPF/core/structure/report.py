@@ -1,26 +1,32 @@
-"""Structure reports: machine-readable JSON and a readable text summary.
+"""Structure reports: machine-readable JSON, a readable text summary and the
+seqspec that extraction applies.
 
-The JSON keeps every answer's evidence and rejected alternatives (spec §4.1)
-and the per-position agreement profiles behind them. Per-read arrays are left
-out; they belong to extraction, not to the report.
+The JSON keeps every answer's evidence and rejected alternatives (spec §4.1),
+the per-position agreement profiles behind them and the catalogue template
+comparison. Per-read arrays are left out; they belong to extraction.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import fields, is_dataclass
+from dataclasses import asdict, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 from .assemble import StructureInference
 from .pileup import FrameProfile, Pileup
+from .seqspec_io import TemplateComparison, compare_catalogue, write_seqspec
 
 SCHEMA = "getrpf.structure/1"
 _PER_READ = {"adapter_starts", "insert_ends"}
 
 
-def to_dict(result: StructureInference, sample: str) -> Dict[str, Any]:
+def to_dict(
+    result: StructureInference,
+    sample: str,
+    templates: Sequence[TemplateComparison] = (),
+) -> Dict[str, Any]:
     architecture = result.architecture
     return {
         "schema": SCHEMA,
@@ -37,6 +43,10 @@ def to_dict(result: StructureInference, sample: str) -> Dict[str, Any]:
             else {"describe": architecture.describe(), **_plain(architecture)}
         ),
         "transform": _plain(result.transform),
+        "templates": {
+            "considered": [asdict(t) for t in templates if t.verdict != "rejected"],
+            "rejected": sum(1 for t in templates if t.verdict == "rejected"),
+        },
         "profiles": {
             "first_pass": _profiles(result.junctions.first_pass),
             "final": _profiles(result.junctions.pileup),
@@ -44,7 +54,11 @@ def to_dict(result: StructureInference, sample: str) -> Dict[str, Any]:
     }
 
 
-def format_text(result: StructureInference, sample: str) -> str:
+def format_text(
+    result: StructureInference,
+    sample: str,
+    templates: Sequence[TemplateComparison] = (),
+) -> str:
     observation = result.observation
     transform = result.transform
     lines = [
@@ -59,6 +73,13 @@ def format_text(result: StructureInference, sample: str) -> str:
     ]
     lines += [f"  withheld because {reason}" for reason in transform.reasons]
     lines += [f"  convention: {convention}" for convention in transform.conventions]
+    considered = [t for t in templates if t.verdict != "rejected"]
+    if templates:
+        lines.append(
+            f"Templates: {len(considered)} of {len(templates)} catalogue templates "
+            "consistent or partly consistent"
+        )
+        lines += [f"  {t.template}: {t.verdict} ({t.reason})" for t in considered[:5]]
     for answer in (result.q1, result.q2, result.q3, result.q4):
         lines.append("")
         lines.append(f"{answer.question} [{answer.status.value}] {answer.explanation}")
@@ -72,11 +93,24 @@ def format_text(result: StructureInference, sample: str) -> str:
 def write_report(
     result: StructureInference, output_dir: Path, sample: str
 ) -> Tuple[Path, Path]:
+    """Write <sample>.structure.json, .structure.txt and, when an architecture
+    was built, .seqspec.yaml. The return value deliberately remains the
+    historical ``(json_path, text_path)`` pair: callers can derive the stable
+    seqspec path from ``sample`` without breaking report consumers."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    templates: List[TemplateComparison] = (
+        compare_catalogue(result.architecture) if result.architecture else []
+    )
     json_path = output_dir / f"{sample}.structure.json"
     text_path = output_dir / f"{sample}.structure.txt"
-    json_path.write_text(json.dumps(to_dict(result, sample), indent=2) + "\n")
-    text_path.write_text(format_text(result, sample))
+    json_path.write_text(
+        json.dumps(to_dict(result, sample, templates), indent=2) + "\n"
+    )
+    text_path.write_text(format_text(result, sample, templates))
+    if result.architecture is not None:
+        write_seqspec(
+            output_dir / f"{sample}.seqspec.yaml", result.architecture, result.transform
+        )
     return json_path, text_path
 
 

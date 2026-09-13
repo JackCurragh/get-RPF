@@ -157,3 +157,28 @@ class InferenceConfig:
 
     fragment_max: int = 40
     """Longest insert accepted under the fragment policy."""
+
+    # --- Transform and validation (spec §7, §5.7) ---
+
+    transform_min_overlap: int = 5
+    """Shortest exact adapter prefix at the read end that anchors a read during
+    extraction (a chance match is 1 in 4**5). Reads showing fewer adapter
+    bases are rejected as anchor_not_found: their insert end is unknown."""
+
+    fixed_max_mismatches: int = 1
+    """Mismatches tolerated in a fixed block before a read is rejected."""
+
+    core_min: int = 26
+    """Lower bound of the core footprint range used by Q5."""
+
+    core_max: int = 34
+    """Upper bound of the core footprint range used by Q5."""
+
+    min_accepted_fraction: float = 0.05
+    """Below this accepted fraction Q5 reports rna_like or technical_failure."""
+
+    core_fraction_likely: float = 0.5
+    """Fraction of accepted inserts in the core range needed for riboseq_likely."""
+
+    min_validation_reads: int = 1000
+    """Transformed reads needed before Q5 is answered."""

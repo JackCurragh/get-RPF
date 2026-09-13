@@ -182,6 +182,14 @@ def cli():
     show_default=True,
     help="Process exit-code threshold",
 )
+@click.option(
+    "--architecture",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Apply a resolved architecture (<sample>.seqspec.yaml from "
+    "infer-structure) instead of the legacy inference; with --audit-only, count "
+    "without writing reads",
+)
 def extract(
     input_file: Path,
     output_file: Path,
@@ -202,8 +210,46 @@ def extract(
     audit_only: bool = False,
     rules: Optional[Path] = None,
     fail_on: str = "none",
+    architecture: Optional[Path] = None,
 ):
-    """Extract trimmed reads without applying the final RPF length gate."""
+    """Extract trimmed reads without applying the final RPF length gate.
+
+    With --architecture, apply a resolved architecture instead
+    (docs/read_structure_inference_spec.md §7): one per-read transform, read
+    names and qualities kept, UMIs appended to read names. Exit code 3 when
+    infer-structure withheld the transform.
+    """
+    if architecture is not None:
+        import json as _json
+
+        from .core.structure.seqspec_io import read_seqspec
+        from .core.structure.transform import extract_reads
+
+        if format != "fastq":
+            raise click.ClickException("--architecture needs FASTQ input")
+        resolved, decision = read_seqspec(architecture)
+        if decision is not None and not decision.get("emit", True):
+            click.echo(
+                "Transform withheld by infer-structure: "
+                + "; ".join(decision.get("reasons", [])),
+                err=True,
+            )
+            click.get_current_context().exit(3)
+        summary = extract_reads(
+            input_file,
+            None if audit_only else output_file,
+            resolved,
+            limit=max_reads,
+        )
+        summary_path = Path(f"{output_file}.summary.json")
+        summary_path.write_text(_json.dumps(summary.to_dict(), indent=2) + "\n")
+        click.echo(
+            f"{summary.accepted} of {summary.input_reads} reads accepted "
+            f"({'audit, no reads written' if audit_only else output_file}); "
+            f"transform {summary.transform_hash}; summary {summary_path}"
+        )
+        return
+
     from shutil import move
 
     from .core.handlers import handle_extract_rpf
@@ -992,15 +1038,15 @@ def infer_structure_command(
     from .core.structure.assemble import infer_structure
     from .core.structure.config import InferenceConfig
     from .core.structure.observe import read_fastq
-    from .core.structure.report import format_text, write_report
+    from .core.structure.report import write_report
 
     headers, sequences, _ = read_fastq(input_file, reads)
     if not sequences:
         raise click.ClickException(f"no reads in {input_file}")
     sample = sample_id or input_file.name.split(".")[0]
     result = infer_structure(sequences, headers, InferenceConfig(sample_reads=reads))
-    write_report(result, output_dir, sample)
-    click.echo(format_text(result, sample), nl=False)
+    _, text_path = write_report(result, output_dir, sample)
+    click.echo(text_path.read_text(), nl=False)
     if not result.transform.emit:
         click.get_current_context().exit(3)
 

@@ -1,0 +1,115 @@
+# Gold set v1 for the real-library panel (docs/read_structure_inference_spec.md §10.2).
+#
+# Rules
+# - Every protocol claim names its scope (run, sample, series, study, vendor) and its source.
+# - "unknown" means unknown. Nothing is false because a field is empty.
+# - Protocol claims, observed read structure and expected RPF output are separate fields.
+# - Values get-RPF measured itself are listed under `observed` with the method and date,
+#   never mixed with published claims.
+# - `expected_structure` entries marked "derived" follow from the construction chemistry
+#   and are hypotheses until observed.
+
+runs:
+  - run: SRR1944950
+    study: PRJNA279785 (GEO GSE67387; Nedialkova & Leidel 2015, doi:10.1016/j.cell.2015.05.022)
+    sample: GSM1646053 WT_ribo_rapamycin_rep3
+    layout: single
+    read_length: variable, 25-45 nt (mode 31)
+    input_state: trimmed
+    protocol_claims:
+      - claim: 3' linker ligation, reverse transcription, circularisation; 28-32 nt footprints gel-selected
+        scope: series
+        source: GEO GSE67387 extract protocol
+      - claim: 3' adapter sequences removed with FASTX-toolkit before deposit
+        scope: series
+        source: GEO GSE67387 data processing
+      - claim: UMI or randomised bases
+        value: unknown
+        scope: none found
+        source: none
+    observed:
+      - finding: reads are already footprint-length; no adapter to anchor on
+        method: get-RPF audit, 500k reads, 2026-09-13
+      - finding: >=0.93 within-fragment agreement at every position except read position 1 (0.64); 60% of the disagreeing first bases are T
+        interpretation: candidate 5' non-templated base in a large fraction of reads; unconfirmed
+        method: library-as-reference pileup (pileup_probe), first 300k reads, 2026-09-13
+    expected_structure: "[insert] (+ candidate 1 nt 5' NTA in some reads)"
+    expected_rpf_output: reads kept unchanged within the fragment policy; the candidate NTA is reported, not removed (v1)
+    corrections: the WIP gold claimed "5 nt linker UMI + 2 random RT-primer bases" by quoting McGlincy & Ingolia 2017, which is a different study. Withdrawn.
+
+  - run: SRR3945920
+    study: PRJNA330982 (GEO GSE84746; Lecanda et al. 2016, doi:10.1016/j.ymeth.2016.07.011)
+    sample: GSM2249616 DualLigation_RibosomeProfiling_rep1
+    layout: single
+    read_length: 50 nt
+    input_state: raw_fixed_length
+    protocol_claims:
+      - claim: dual-ligation library, one of the library strategies the paper compares
+        scope: sample (title) and study (abstract)
+        source: GEO GSM2249616 title; Lecanda et al. 2016 abstract
+      - claim: randomised bases in this sample's adapters
+        value: unknown
+        scope: not stated at sample level
+        source: none
+    observed:
+      - finding: TruSeq adapter AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC starts at read positions 28-31 in most reads; 95.6% of 50k sampled reads end in an adapter prefix
+        method: get-RPF retry audit (validation_rewire_v1 bounded_retry1), 2026-09-13
+    expected_structure: "[insert][adapter]; technical bases next to the adapter: unknown (pileup to measure)"
+    expected_rpf_output: the bases before the adapter, unless the pileup finds technical bases next to it
+    corrections: the WIP gold labelled this run distributed_umi (4+3N) from a study-level claim. That design belongs to SRR3945930. Withdrawn.
+
+  - run: SRR3945930
+    study: PRJNA330982 (GEO GSE84746; Lecanda et al. 2016, doi:10.1016/j.ymeth.2016.07.011)
+    sample: SRX1971815 4+3N_RibosomeProfiling_rep1
+    layout: single
+    read_length: 45 nt (ENA base count / read count)
+    input_state: unknown (not yet profiled)
+    protocol_claims:
+      - claim: DNA linker carrying four randomised positions at its 5' end; RT primer carrying three randomised positions
+        scope: sample (the "4+3N" title names this design) and study (abstract)
+        source: Lecanda et al. 2016 abstract (PubMed 27450428); GEO sample title
+    observed: []
+    expected_structure: "derived: [3 random][insert][4 random][linker constant]. Circularisation puts the RT primer's randomised bases at the read start; the linker's sit between insert and adapter"
+    expected_rpf_output: the insert without the 3 + 4 randomised bases, both kept as UMI
+    corrections: new row; the distributed-randomisation case for the panel
+
+  - run: SRR12693498
+    study: PRJNA665035 (GEO GSE158374)
+    sample: GSM4798525 WT-HEK-1_ribo
+    layout: single
+    read_length: 100 nt
+    input_state: raw_fixed_length
+    protocol_claims:
+      - claim: D-Plex Small RNA-Seq kit (Diagenode) - 3' dephosphorylation, 5' UMI, template-switching reverse transcriptase
+        scope: sample
+        source: GEO GSM4798525 extract protocol
+      - claim: 12 nt UMI at the read 5' end, followed by a template-switch motif; A-tail at the 3' side
+        scope: vendor
+        source: Diagenode D-Plex recommendations as quoted in the WIP panel; not re-verified
+    observed:
+      - finding: all reads are 100 nt; 57.4% of 50k sampled reads end in a TruSeq adapter prefix (the read-end-only matcher undercounts reads where the adapter is mid-read)
+        method: hpc_audit_v3 audit, 2026-09
+    expected_structure: "vendor claim and get-RPF template riboflow_template_switch: [12 nt UMI][4 nt fixed][insert][A-run][adapter]; unconfirmed"
+    expected_rpf_output: the insert between the 16 nt 5' block and the A-run, UMI kept; tail junction reported as an interval (spec §6)
+    corrections: none to the claim; the WIP runs produced zero RPFs because adapter matching was read-end-only
+
+  - run: SRR23242345
+    study: PRJNA928376
+    sample: SRX19188681 "RNase I ribosome profiling by OTTR of HEK293T cell lysate"
+    layout: single (ENA)
+    read_length: 101 nt
+    input_state: raw_fixed_length
+    protocol_claims:
+      - claim: 7 nt UMI at the 5' end, TruSeq adapter, last base removed during processing (which end is not stated in the quote)
+        scope: study
+        source: PMC10659435 as quoted in the WIP panel; not re-verified
+    observed:
+      - finding: all reads are 101 nt; 81.8% of 50k sampled reads end in the Illumina P7 sequence ATCTCGTATGCC..., so the adapter lies mid-read
+        method: hpc_audit_v3 audit, 2026-09
+    expected_structure: "[7 nt UMI][insert][TruSeq adapter][index][P7]; unconfirmed"
+    expected_rpf_output: the insert between the 7 nt UMI and the adapter, UMI kept
+    corrections: the WIP rewire guide excluded this run as paired-end; ENA lists it as single-end
+
+to_source:
+  - need: a McGlincy & Ingolia 2017-style run (5 nt random + 5 nt inline barcode between insert and adapter)
+    why: the only panel case with a 3' UMI and an inline barcode

@@ -9,6 +9,12 @@
 # - `expected_structure` entries marked "derived" follow from the construction chemistry
 #   and are hypotheses until observed.
 #
+# - `benchmark` blocks are regression expectations for scripts/run_structure_panel.py.
+#   They were written from the 2026-09-13 measurements, so a pass shows the method
+#   still reproduces them; it is not independent evidence. The independent checks are
+#   the expectations written before analysis in tests/test_structure/test_real_panel.py
+#   and test_real_extraction.py (held-out reads).
+#
 # Read subsets: scripts/fetch_panel_subsets.sh (first 1M reads per run from ENA).
 # "steps 0-3" below = getRPF.core.structure.assemble.infer_structure on the first
 # 300k of those reads (tests/test_structure/test_real_panel.py).
@@ -39,6 +45,15 @@ runs:
         method: library-as-reference pileup, first 300k reads, 2026-09-13 (reproduced by steps 0-3)
     expected_structure: "[insert] (+ candidate 1 nt 5' NTA in some reads)"
     expected_rpf_output: reads kept unchanged within the fragment policy; the candidate NTA is reported, not removed (v1)
+    benchmark:
+      # The historical protocol UMI claim is unknown and is not observable in
+      # this already-trimmed FASTQ. It must not enter UMI false-negative rates.
+      layout: insert
+      adapter: false
+      tail: null
+      transform: emit
+      umi: {state: not_observable}
+      min_accepted_fraction: 0.50
     corrections: the WIP gold claimed "5 nt linker UMI + 2 random RT-primer bases" by quoting McGlincy & Ingolia 2017, which is a different study. Withdrawn.
 
   - run: SRR3945920
@@ -62,6 +77,15 @@ runs:
         method: steps 0-3, 2026-09-13
     expected_structure: "measured: [insert][adapter]; candidate 3' NTA in ~16% of reads"
     expected_rpf_output: the bases before the adapter; the candidate 3' NTA is reported, not removed (v1)
+    benchmark:
+      # This sample has no run-scoped randomized-base claim. Score its direct
+      # adapter observation, not the withdrawn study-level 4+3N annotation.
+      layout: insert|adapter
+      adapter: true
+      tail: null
+      transform: emit
+      umi: {state: not_observable}
+      min_accepted_fraction: 0.50
     corrections: the WIP gold labelled this run distributed_umi (4+3N) from a study-level claim. That design belongs to SRR3945930. Withdrawn.
 
   - run: SRR3945930
@@ -79,6 +103,13 @@ runs:
         method: steps 0-3, 2026-09-13
     expected_structure: "derived and now observed: [3 random][insert][4 random][linker CTGTAGGCACCATCAAT]. Circularisation puts the RT primer's randomised bases at the read start; the linker's sit between insert and adapter"
     expected_rpf_output: the insert without the 3 + 4 randomised bases, both kept as UMI
+    benchmark:
+      layout: random:3|insert|random:4|adapter
+      adapter: true
+      tail: null
+      transform: emit
+      umi: {state: observed, five_prime: [3], three_prime: [4]}
+      min_accepted_fraction: 0.05
     corrections: new row; the distributed-randomisation case for the panel
 
   - run: SRR12693498
@@ -101,6 +132,16 @@ runs:
         method: steps 0-3, 2026-09-13
     expected_structure: "observed, consistent with the vendor claim and the riboflow_template_switch template: [12 nt UMI + N][GGG][insert][A-run][TruSeq adapter]"
     expected_rpf_output: the insert between the 16 nt 5' block and the A-run, UMI kept; tail junction reported as an interval (spec §6)
+    benchmark:
+      # The FASTQ evidence resolves 13 random bases (the named 12 nt UMI plus
+      # one adjacent random base); score that observable boundary, not the
+      # vendor's protocol shorthand.
+      layout: random:13|fixed:GGG|insert|tail:A|adapter
+      adapter: true
+      tail: A
+      transform: emit
+      umi: {state: observed, five_prime: [13], three_prime: []}
+      min_accepted_fraction: 0.50
     corrections: none to the claim; the WIP runs produced zero RPFs because adapter matching was read-end-only
 
   - run: SRR23242345
@@ -121,6 +162,12 @@ runs:
         method: steps 0-3, 2026-09-13
     expected_structure: "claimed [7 nt UMI][insert][TruSeq adapter]; measured [5 random][2 biased][insert][TruSeq adapter]"
     expected_rpf_output: "the insert from position 8 to the adapter; the 5 random bases kept as UMI. Whether positions 6-7 are removed is a transform-policy decision (spec §7.2)"
+    benchmark:
+      layout: random:5|insert|adapter
+      adapter: true
+      tail: null
+      transform: withhold
+      umi: {state: observed, five_prime: [5], three_prime: []}
     corrections: the WIP rewire guide excluded this run as paired-end; ENA lists it as single-end. The 7 nt UMI claim is contradicted by the base composition at positions 6-7 (see observed)
 
 to_source:

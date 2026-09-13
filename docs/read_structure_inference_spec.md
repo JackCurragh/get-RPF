@@ -267,6 +267,7 @@ NTAs are reported but not trimmed in v1, because whether a given read carries on
 | read-name UMI | Appended as `_<UMI>` (the umi_tools convention); 5′ then 3′ UMI, concatenated in read order |
 | `<sample>.structure.json` | Observation, per-question answers with evidence and rejected alternatives, architecture(s), and rejection counts by reason |
 | `<sample>.seqspec.yaml` | The architecture as seqspec: region types `umi`, `barcode`, `linker`, `cdna`, `poly_A`, `adapter`, with variable min/max lengths |
+| `<output>.summary.json` | Extraction summary: transform schema and hash, input and accepted counts, rejections by reason, accepted and candidate insert lengths, boundary counts (adapter or tail) |
 | `<sample>.collapsed.fa` | Optional, as today |
 
 ### 7.4 Explanations
@@ -431,6 +432,31 @@ A test fails when the result is **more certain than the truth allows** (for exam
 | McGlincy-style run (to be sourced) | 3′ UMI plus inline barcode |
 
 Confirm the SRR1944950 NTA by alignment (§5.4) before any trimming behaviour depends on it.
+
+**Panel execution and scoring.** Run the panel through
+`scripts/run_structure_panel.py`, which calls `infer_structure`, audits the
+emitted architecture with the same streaming transform, and writes production
+FASTQs only with `--approve-production`. It never routes validation through
+the legacy `extract-rpf` path. The panel's calibrated inference depth is
+300,000 reads; a lower depth is explicitly diagnostic because an apparent
+boundary can be unstable (the 5′ 3N block in SRR3945930 is the regression
+case).
+
+`validation/panel_v1/truth.yaml` has a separate `benchmark` contract for
+read-observable facts. UMI metrics include only rows marked `observed`; a
+protocol UMI that is absent from, or cannot be assessed in, the supplied FASTQ
+is reported as `not_observable`, not a false negative. Layout, adapter, tail,
+transform-withhold, and RPF-recovery metrics retain their own explicit
+denominators. A passing audit is evidence only, not a production promotion.
+
+The `benchmark` expectations were written from the 2026-09-13 measurements, so
+they are a regression guard rather than independent evidence. Independent
+evidence comes from expectations fixed before analysis
+(`tests/test_structure/test_real_panel.py`) and from held-out reads
+(`test_real_extraction.py`):
+- each architecture must be reproduced from reads 300k-600k;
+- Q5 is judged on reads 600k-1M;
+- audit and production must agree on real reads.
 
 ## 11. Delivery plan
 

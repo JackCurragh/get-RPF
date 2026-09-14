@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 # name and the CI filename assertion have to land together with the backend
 # swap. The import package and the console script stay `getRPF`.
 name = "getrpf"
-version = "0.3.1"
+version = "0.4.0"
 description = "A tool for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -3,5 +3,5 @@
 A toolkit for analyzing Ribosome Protected Fragments (RPFs) from Ribo-seq experiments.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __author__ = "Jack Tierney"

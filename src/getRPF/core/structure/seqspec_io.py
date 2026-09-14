@@ -99,6 +99,7 @@ def to_seqspec(
             "bound": transform.bound.value,
             "reasons": list(transform.reasons),
             "conventions": list(transform.conventions),
+            "flags": list(transform.flags),
         }
     return {
         "seqspec_version": "0.3.0",

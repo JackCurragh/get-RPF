@@ -193,7 +193,8 @@ In the real reads, the disagreeing first bases are 60% T. That makes a 5′ NTA 
 - A discrete soft-clip mode at k supports a k-nt technical block.
 - A spike of 1-nt clips or mismatches with a skewed base mix supports an NTA.
 - Do not compare mapping rates across many candidate trims.
-- If alignment and pileup disagree, set `conflicting` and keep both answers. Alignment never silently overrides the pileup.
+- If alignment and pileup disagree about a technical block (clips of ≥2 nt), set `conflicting` and keep both answers; the transform is withheld. If they disagree only about a junction base, keep the pileup's answer and flag the transform (§7.2), since the base stays in the insert either way. Alignment never silently overrides the pileup.
+- `extract --infer-structure --star-index` runs this step as a check on the emitted inserts whenever a reference is supplied. A check that cannot run (for example a STAR build that reads no input) is recorded as a flag, not an error.
 
 ### 5.5 Assemble
 
@@ -257,7 +258,9 @@ A transform is emitted only when Q1, Q2 and Q3 are each `resolved`, or `interval
 
 Otherwise the architecture is reported and the transform is withheld. This uses an exit status distinct from an error.
 
-NTAs are reported but not trimmed in v1, because whether a given read carries one can't be decided without a reference. The report states the estimated rate. This holds only while the estimated rate is below `nta_withhold_rate` (default 0.5). At or above it, the junction bases are too common to leave in the insert, yet not established as technical, so the transform is withheld for review. SRR23242345 is the motivating case: 78% C at read position 7.
+NTAs are reported and kept in the insert. They are never trimmed and never a reason to withhold: at most a base or two per read is at stake, and whether a given read carries one can't be decided without a reference. The report states the estimated rate. At or above `nta_flag_rate` (default 0.5) the transform carries a **flag**, because the kept bases are then more often non-templated than templated. A flag is reported in `structure.txt`, `structure.json`, the seqspec and the extraction report; it never changes the emitted bases.
+
+Revised 2026-09-14. This rate used to withhold the transform (`nta_withhold_rate`). SRR1944950 then flipped between emitted (46% at 300k reads) and withheld (50% at 1M) with sampling depth alone, because the rate is not calibrated. SRR23242345 (78% C at read position 7) and SRR1944950 are now emitted with a flag.
 
 ### 7.3 Outputs
 
@@ -269,6 +272,8 @@ NTAs are reported but not trimmed in v1, because whether a given read carries on
 | `<sample>.seqspec.yaml` | The architecture as seqspec: region types `umi`, `barcode`, `linker`, `cdna`, `poly_A`, `adapter`, with variable min/max lengths |
 | `<output>.summary.json` | Extraction summary: transform schema and hash, input and accepted counts, rejections by reason, accepted and candidate insert lengths, boundary counts (adapter or tail) |
 | `<sample>.collapsed.fa` | Optional, as today |
+
+`getRPF extract --infer-structure` is the one-call pipeline entry point. It infers from the first `--infer-reads` reads (default 1M), then applies the transform to the whole file. Every output takes the prefix of the requested output file, as the legacy `extract` names them: `<prefix>.structure.{json,txt}`, `<prefix>.seqspec.yaml`, `<prefix>.extraction_report.json` (status `emitted` or `withheld`, flags, transform summary, Q5), and the reads (the FASTQ, or `<prefix>.collapsed.fa` with `--collapsed-only`). A withheld transform writes the reports and no reads, and exits 0 unless `--fail-on hold` or `--fail-on review` is given.
 
 ### 7.4 Explanations
 

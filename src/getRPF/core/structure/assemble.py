@@ -174,29 +174,32 @@ def decide_transform(
     for question, status in zip(("Q1", "Q2", "Q3"), statuses):
         if status not in _ACCEPTABLE:
             reasons.append(f"{question} is {status.value}")
+    # Junction bases never withhold the transform: they stay in the insert, so
+    # at most a base or two per read is at stake. Common ones are flagged.
+    flags: List[str] = []
     for answer in (q2, q3):
         call = answer.value
         if not isinstance(call, JunctionCall) or not call.nta_length:
             continue
         rate = max((r for r in call.nta_rates if r is not None), default=0.0)
         where = "read start" if call.frame == "read_start" else "anchor"
-        if rate >= config.nta_withhold_rate:
-            reasons.append(
-                f"{answer.question}: {call.nta_length} junction base(s) at the "
-                f"{where} look non-templated in about {rate:.0%} of reads; too "
-                "common to leave in the insert, and not established as technical"
-            )
-        else:
-            conventions.append(
-                f"{answer.question}: {call.nta_length} junction base(s) at the "
-                f"{where} kept in the insert (non-templated-like in about "
-                f"{rate:.0%} of reads; v1 does not remove them)"
+        conventions.append(
+            f"{answer.question}: {call.nta_length} junction base(s) at the "
+            f"{where} kept in the insert (non-templated-like in about "
+            f"{rate:.0%} of reads; v1 does not remove them)"
+        )
+        if rate >= config.nta_flag_rate:
+            flags.append(
+                f"{answer.question}: the {call.nta_length} kept junction base(s) "
+                f"at the {where} look non-templated in about {rate:.0%} of reads, "
+                f"so most inserts carry up to {call.nta_length} extra base(s) there"
             )
     return TransformDecision(
         emit=not reasons,
         bound=_least_resolved(statuses),
         reasons=tuple(reasons),
         conventions=tuple(conventions),
+        flags=tuple(flags),
     )
 
 

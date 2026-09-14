@@ -11,9 +11,12 @@ from dataclasses import dataclass
 class InferenceConfig:
     """Operational thresholds. None of them is a scientific constant."""
 
-    sample_reads: int = 300_000
+    sample_reads: int = 1_000_000
     """Reads in the bounded inference sample. Inference never needs more,
-    because the architecture is shared by every read."""
+    because the architecture is shared by every read. Below ~300k reads the
+    agreement at random positions is biased upward (SRR3945930 read position
+    3: 0.43 at 50k reads, 0.39 at 300k and at 1M), so the default stays well
+    clear of that regime."""
 
     seed_k: int = 14
     """Length of the k-mer used to group reads that share a biological fragment."""
@@ -143,11 +146,11 @@ class InferenceConfig:
 
     # --- Assembly and transform decision (spec §5.5, §7.2) ---
 
-    nta_withhold_rate: float = 0.5
-    """Junction bases with intermediate agreement are kept in the insert (v1)
-    while their estimated non-templated rate is below this. At or above it
-    they are too common to leave in, and not established as technical, so the
-    transform is withheld for review."""
+    nta_flag_rate: float = 0.5
+    """Junction bases with intermediate agreement are always kept in the insert
+    (v1): at most a base or two per read is at stake, and the rate estimate is
+    uncalibrated (SRR1944950 reads 46% at 300k reads, 50% at 1M). At or above
+    this rate the transform is still emitted, but flagged."""
 
     fragment_policy: str = "monosome_20_40"
     """Name of the fragment policy the emitted inserts must satisfy."""
@@ -182,3 +185,33 @@ class InferenceConfig:
 
     min_validation_reads: int = 1000
     """Transformed reads needed before Q5 is answered."""
+
+    # --- Step 4: alignment check (spec §5.4) ---
+
+    align_reads: int = 10_000
+    """Emitted inserts aligned for the check."""
+
+    align_threads: int = 4
+    """STAR threads."""
+
+    align_min_matched: int = 15
+    """Fewest aligned bases for an alignment to count."""
+
+    align_min_aligned: int = 1000
+    """Unique alignments needed before the check gives any verdict; fewer is
+    reported as underpowered, never as a contradiction."""
+
+    align_confirm_rate: float = 0.10
+    """1 nt clips at a junction in at least this fraction of aligned inserts
+    (and well above the error rate) confirm a non-templated junction base."""
+
+    align_refute_rate: float = 0.02
+    """Below this 1 nt clip fraction the alignment contradicts a junction base."""
+
+    align_error_multiple: float = 5.0
+    """A confirming 1 nt clip fraction must exceed this multiple of the
+    mismatch rate inside alignments."""
+
+    align_missed_block_rate: float = 0.10
+    """Clips of >=2 nt in this fraction of aligned inserts mean a technical
+    block the pileup did not call."""

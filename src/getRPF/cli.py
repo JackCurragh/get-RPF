@@ -156,9 +156,9 @@ def cli():
 @click.option(
     "--infer-reads",
     type=int,
-    default=500_000,
-    show_default=True,
-    help="Subsample depth for boundary-estimation inference (Stage 0/1)",
+    default=None,
+    help="Reads sampled for inference (default: 500000 for the legacy boundary "
+    "estimation, 1000000 with --infer-structure)",
 )
 @click.option(
     "--apply-boundary-trims/--no-apply-boundary-trims",
@@ -190,6 +190,18 @@ def cli():
     "infer-structure) instead of the legacy inference; with --audit-only, count "
     "without writing reads",
 )
+@click.option(
+    "--infer-structure",
+    "infer_structure_flag",
+    is_flag=True,
+    help="Infer the read structure from the first --infer-reads reads, then "
+    "apply it to every read (docs/read_structure_inference_spec.md). Writes "
+    "<prefix>.structure.{json,txt}, <prefix>.seqspec.yaml and "
+    "<prefix>.extraction_report.json next to the reads; with --collapsed-only "
+    "the reads are <prefix>.collapsed.fa. A withheld transform writes the "
+    "reports and no reads and exits 0, unless --fail-on hold (withheld) or "
+    "review (withheld or flagged) asks for exit code 3",
+)
 def extract(
     input_file: Path,
     output_file: Path,
@@ -205,20 +217,60 @@ def extract(
     output_report: Optional[Path] = None,
     collapse: bool = True,
     collapsed_only: bool = False,
-    infer_reads: int = 500_000,
+    infer_reads: Optional[int] = None,
     apply_boundary_trims: bool = True,
     audit_only: bool = False,
     rules: Optional[Path] = None,
     fail_on: str = "none",
     architecture: Optional[Path] = None,
+    infer_structure_flag: bool = False,
 ):
     """Extract trimmed reads without applying the final RPF length gate.
 
-    With --architecture, apply a resolved architecture instead
-    (docs/read_structure_inference_spec.md §7): one per-read transform, read
-    names and qualities kept, UMIs appended to read names. Exit code 3 when
-    infer-structure withheld the transform.
+    With --infer-structure, infer the read structure and apply it to every
+    read in one call (docs/read_structure_inference_spec.md); this is the
+    pipeline entry point. With --architecture, apply a resolved architecture
+    instead (§7): one per-read transform, read names and qualities kept, UMIs
+    appended to read names. Exit code 3 when infer-structure withheld the
+    transform.
     """
+    if infer_structure_flag:
+        if architecture is not None:
+            raise click.ClickException(
+                "--infer-structure and --architecture are alternatives"
+            )
+        if format != "fastq":
+            raise click.ClickException("--infer-structure needs FASTQ input")
+        from .core.structure.config import InferenceConfig
+        from .core.structure.workflow import infer_and_extract
+
+        config = InferenceConfig(
+            sample_reads=infer_reads if infer_reads is not None else 1_000_000,
+            align_threads=star_threads if star_threads is not None else threads,
+        )
+        try:
+            outcome = infer_and_extract(
+                input_file,
+                output_file,
+                config,
+                star_index=star_index,
+                collapsed=collapsed_only,
+                audit=audit_only,
+                max_reads=max_reads,
+            )
+        except EOFError as error:
+            # Click would report this as a bare "Aborted!".
+            raise click.ClickException(
+                f"{input_file} ends mid-stream ({error}); the file looks truncated"
+            ) from error
+        click.echo(outcome.describe())
+        flagged = bool(outcome.result.transform.flags)
+        if (not outcome.emitted and fail_on in ("review", "hold")) or (
+            flagged and fail_on == "review"
+        ):
+            click.get_current_context().exit(3)
+        return
+
     if architecture is not None:
         import json as _json
 
@@ -268,7 +320,7 @@ def extract(
         star_threads=star_threads if star_threads is not None else threads,
         collapse_output=collapse,
         collapsed_only=collapsed_only,
-        infer_reads=infer_reads,
+        infer_reads=infer_reads if infer_reads is not None else 500_000,
         apply_boundary_trims=apply_boundary_trims and not audit_only,
         rules=rules,
     )
@@ -1018,22 +1070,34 @@ def plot_softclips(
     "--reads",
     "-n",
     type=int,
-    default=300_000,
+    default=1_000_000,
     show_default=True,
     help="Reads in the bounded inference sample",
 )
 @click.option(
     "--sample-id", type=str, default=None, help="Report name (default: file name)"
 )
+@click.option(
+    "--star-index",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Check the emitted inserts against a reference (STAR index); a "
+    "disagreement with the pileup marks Q2/Q3 conflicting (spec §5.4)",
+)
 def infer_structure_command(
-    input_file: Path, output_dir: Path, reads: int, sample_id: Optional[str]
+    input_file: Path,
+    output_dir: Path,
+    reads: int,
+    sample_id: Optional[str],
+    star_index: Optional[Path],
 ) -> None:
     """Infer the read structure of a FASTQ.
 
     Implements docs/read_structure_inference_spec.md steps 0-3: observation,
-    3' anchor, library-as-reference pileup, UMI and transform decision. Writes
-    a JSON and a text report. Exit code 0 when a per-read transform can be
-    emitted; 3 when the architecture is reported but the transform is withheld.
+    3' anchor, library-as-reference pileup, UMI and transform decision, plus
+    the step 4 alignment check with --star-index. Writes a JSON and a text
+    report. Exit code 0 when a per-read transform can be emitted; 3 when the
+    architecture is reported but the transform is withheld.
     """
     from .core.structure.assemble import infer_structure
     from .core.structure.config import InferenceConfig
@@ -1044,7 +1108,12 @@ def infer_structure_command(
     if not sequences:
         raise click.ClickException(f"no reads in {input_file}")
     sample = sample_id or input_file.name.split(".")[0]
-    result = infer_structure(sequences, headers, InferenceConfig(sample_reads=reads))
+    config = InferenceConfig(sample_reads=reads)
+    result = infer_structure(sequences, headers, config)
+    if star_index is not None and result.architecture is not None:
+        from .core.structure.align import apply_alignment_check
+
+        result, _ = apply_alignment_check(result, sequences, star_index, config)
     _, text_path = write_report(result, output_dir, sample)
     click.echo(text_path.read_text(), nl=False)
     if not result.transform.emit:

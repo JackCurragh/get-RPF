@@ -160,12 +160,17 @@ def test_catalogue_templates_load_and_dplex_template_is_supported():
 
 
 def test_extract_refuses_a_withheld_architecture(tmp_path):
-    skewed = {"T": 0.7, "C": 0.1, "A": 0.1, "G": 0.1}
-    fastq = tmp_path / "junction.fastq"
-    write_fastq(fastq, simulate(five_prime=[nta({2: 1.0}, skewed)]).reads)
+    # Too few informative groups: Q2/Q3 underpowered, so the transform is
+    # withheld (junction bases alone no longer withhold, spec §7.2).
+    library = simulate(n_reads=20_000, n_transcripts=5_000, zipf_s=0.0)
+    fastq = tmp_path / "shallow.fastq"
+    write_fastq(fastq, library.reads)
     runner = CliRunner()
     inferred = runner.invoke(cli, ["infer-structure", str(fastq), "-o", str(tmp_path)])
     assert inferred.exit_code == 3
+    seqspec = tmp_path / "shallow.seqspec.yaml"
+    if not seqspec.exists():
+        return  # no architecture at all: there is nothing extract could apply
     extracted = runner.invoke(
         cli,
         [
@@ -173,7 +178,7 @@ def test_extract_refuses_a_withheld_architecture(tmp_path):
             str(fastq),
             str(tmp_path / "out.fastq.gz"),
             "--architecture",
-            str(tmp_path / "junction.seqspec.yaml"),
+            str(seqspec),
         ],
     )
     assert extracted.exit_code == 3

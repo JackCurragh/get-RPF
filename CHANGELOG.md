@@ -12,6 +12,18 @@ of them.
 ## [Unreleased]
 
 ### Added
+- `getRPF infer-structure` and `getRPF extract --architecture`: read-structure
+  inference from the library itself (library-as-reference pileup, 3' anchor,
+  UMI and junction calls), emitted as a seqspec and applied by one per-read
+  transform (`docs/read_structure_inference_spec.md`).
+- `getRPF extract --infer-structure`: inference and extraction in one call, the
+  pipeline entry point. Outputs share the legacy naming (`<prefix>.collapsed.fa`
+  with `--collapsed-only`, `<prefix>.seqspec.yaml`,
+  `<prefix>.extraction_report.json`) plus `<prefix>.structure.{json,txt}`. A
+  withheld transform writes the reports and no reads, and exits 0 unless
+  `--fail-on` asks otherwise. `--star-index` adds the alignment check.
+- Transform **flags**: findings a reviewer should see that never change the
+  emitted bases or withhold the transform.
 - `ci.yml`, the single definition of the project gate: ruff + black, mypy,
   tests on Python 3.10 and 3.12, and a build job that asserts both the
   normalised artefact filenames and the presence of the architecture YAMLs in

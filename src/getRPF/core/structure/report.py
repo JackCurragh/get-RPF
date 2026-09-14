@@ -73,6 +73,7 @@ def format_text(
     ]
     lines += [f"  withheld because {reason}" for reason in transform.reasons]
     lines += [f"  convention: {convention}" for convention in transform.conventions]
+    lines += [f"  flag: {flag}" for flag in transform.flags]
     considered = [t for t in templates if t.verdict != "rejected"]
     if templates:
         lines.append(

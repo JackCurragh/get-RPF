@@ -116,7 +116,8 @@ jobs:
           for sub in extract extract-rpf; do
             docker run --rm "$image" getRPF "$sub" --help > "/tmp/help_$sub.txt"
             for opt in --format --generate-seqspec --output-format \
-                       --star-index --star-threads --collapsed-only; do
+                       --star-index --star-threads --collapsed-only \
+                       --infer-structure --infer-reads; do
               grep -q -- "$opt" "/tmp/help_$sub.txt"
             done
           done

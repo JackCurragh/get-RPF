@@ -139,3 +139,8 @@ class TransformDecision:
     """Why the transform is withheld; empty when it is emitted."""
     conventions: Tuple[str, ...]
     """Named conventions the emitted transform relies on."""
+    flags: Tuple[str, ...] = ()
+    """Findings a reviewer should see that never withhold the transform: junction
+    bases kept in the insert although they look non-templated in most reads, an
+    alignment check that disagrees about one junction base, or a check that could
+    not run (spec §7.2)."""

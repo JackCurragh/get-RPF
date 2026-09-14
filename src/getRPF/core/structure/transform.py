@@ -232,8 +232,10 @@ def extract_reads(
     config: Optional[InferenceConfig] = None,
     skip: int = 0,
     limit: Optional[int] = None,
+    collect: Optional[Counter[str]] = None,
 ) -> ExtractionSummary:
-    """Apply the transform to a FASTQ. ``output_path=None`` is an audit."""
+    """Apply the transform to a FASTQ. ``output_path=None`` is an audit;
+    ``collect`` counts the accepted inserts (for collapsed output)."""
     transform = Transform(architecture, config)
     summary = ExtractionSummary(
         transform.hash, architecture.describe(), architecture.fragment_policy
@@ -263,6 +265,8 @@ def extract_reads(
             summary.lengths[len(outcome.insert)] += 1
             summary.candidate_lengths[len(outcome.insert)] += 1
             summary.boundaries[outcome.boundary] += 1
+            if collect is not None:
+                collect[outcome.insert] += 1
             if handle is not None:
                 handle.write(
                     f"{_named(header, outcome.umi)}\n{outcome.insert}\n+\n"

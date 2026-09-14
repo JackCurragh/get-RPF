@@ -109,18 +109,19 @@ def test_srr23242345_claimed_seven_nt_umi_and_last_base():
         ),
         (
             "SRR23242345",
-            False,
+            True,
             "[random 5 UMI][nta 0-2 kept][insert][adapter AGATCGGAAGAG...]",
         ),
     ],
 )
 def test_measured_architecture_and_transform_decision(accession, emit, architecture):
     """Regression guard on the measured architectures (2026-09-13), not a
-    validation claim. SRR23242345 is withheld because read positions 6-7 look
-    non-templated in most reads (spec §7.2)."""
+    validation claim. SRR23242345 is emitted with a flag: read positions 6-7
+    look non-templated in most reads and are kept in the insert (spec §7.2)."""
     result = run(accession)
     assert result.architecture.describe() == architecture
     assert result.transform.emit is emit
+    assert bool(result.transform.flags) is (accession == "SRR23242345")
 
 
 def test_srr23242345_measured_structure():

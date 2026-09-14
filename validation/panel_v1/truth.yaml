@@ -161,12 +161,12 @@ runs:
         interpretation: "the published 7 nt trim ends where biology starts, but positions 6-7 are not random, so the read start is 5 random bases + 2 biased bases rather than a 7 nt UMI. The quoted 'last base removed' is not visible as a 3' block in R1. Both need the OTTR methods text re-read before either is treated as settled"
         method: steps 0-3, 2026-09-13
     expected_structure: "claimed [7 nt UMI][insert][TruSeq adapter]; measured [5 random][2 biased][insert][TruSeq adapter]"
-    expected_rpf_output: "the insert from position 8 to the adapter; the 5 random bases kept as UMI. Whether positions 6-7 are removed is a transform-policy decision (spec §7.2)"
+    expected_rpf_output: "the insert from position 6 to the adapter, positions 6-7 kept and flagged (spec §7.2, revised 2026-09-14: junction bases never withhold); the 5 random bases kept as UMI"
     benchmark:
       layout: random:5|insert|adapter
       adapter: true
       tail: null
-      transform: withhold
+      transform: emit
       umi: {state: observed, five_prime: [5], three_prime: []}
     corrections: the WIP rewire guide excluded this run as paired-end; ENA lists it as single-end. The 7 nt UMI claim is contradicted by the base composition at positions 6-7 (see observed)
 

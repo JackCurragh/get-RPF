@@ -20,11 +20,14 @@ def test_umi_library_is_emitted_with_the_umi_kept():
     assert result.q4.value["inline"] == (("Q2", 5),)
 
 
-def test_common_junction_bases_withhold_the_transform():
+def test_common_junction_bases_are_kept_and_flagged():
     skewed = {"T": 0.7, "C": 0.1, "A": 0.1, "G": 0.1}
     result = infer_structure(simulate(five_prime=[nta({2: 1.0}, skewed)]).reads)
-    assert not result.transform.emit
-    assert any(reason.startswith("Q2:") for reason in result.transform.reasons)
+    assert result.transform.emit
+    assert not result.transform.reasons
+    assert any(flag.startswith("Q2:") for flag in result.transform.flags)
+    assert "[nta 0-" in result.architecture.describe()
+    assert "kept]" in result.architecture.describe()
 
 
 def test_trimmed_library_uses_the_read_end_as_anchor():

@@ -11,6 +11,8 @@ of them.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-14
+
 ### Added
 - `getRPF infer-structure` and `getRPF extract --architecture`: read-structure
   inference from the library itself (library-as-reference pileup, 3' anchor,

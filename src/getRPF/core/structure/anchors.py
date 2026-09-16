@@ -82,14 +82,27 @@ def probe_short_end(
     candidates = []
     for adapter in catalogue:
         best = None
-        for overlap in range(config.short_adapter_max_overlap, config.short_adapter_min_overlap - 1, -1):
-            if sum(read.endswith(adapter.sequence[:overlap]) for read in reads) / len(reads) >= config.short_adapter_min_support:
-                support = sum(read.endswith(adapter.sequence[:overlap]) for read in reads) / len(reads)
+        for overlap in range(
+            config.short_adapter_max_overlap, config.short_adapter_min_overlap - 1, -1
+        ):
+            if (
+                sum(read.endswith(adapter.sequence[:overlap]) for read in reads)
+                / len(reads)
+                >= config.short_adapter_min_support
+            ):
+                support = sum(
+                    read.endswith(adapter.sequence[:overlap]) for read in reads
+                ) / len(reads)
                 best = ShortAdapterProbe(adapter, overlap, support, 0)
                 break
         if best is not None:
             candidates.append(best)
-    return tuple(sorted(candidates, key=lambda item: (-item.support, -item.overlap, item.adapter.name)))
+    return tuple(
+        sorted(
+            candidates,
+            key=lambda item: (-item.support, -item.overlap, item.adapter.name),
+        )
+    )
 
 
 @dataclass(frozen=True)

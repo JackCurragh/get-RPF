@@ -137,10 +137,14 @@ def test_short_end_adapter_prefix_is_only_enabled_in_transform_application():
     adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
     architecture = Architecture(
         (
-            Block("insert", "read_start", (20, 40), None, False, False, Status.RESOLVED),
+            Block(
+                "insert", "read_start", (20, 40), None, False, False, Status.RESOLVED
+            ),
             Block("adapter", "anchor", (34, 34), adapter, False, True, Status.RESOLVED),
         ),
-        "template", Status.RESOLVED, "monosome_20_40",
+        "template",
+        Status.RESOLVED,
+        "monosome_20_40",
     )
     read = "C" * 28 + adapter[:7]
     outcome = Transform(architecture).apply(read, "I" * len(read))

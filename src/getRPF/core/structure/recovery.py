@@ -42,15 +42,23 @@ def audit_fixed_length_reads(
     candidates = []
     for left in range(13):
         for right in range(13):
-            retained = [read[left : len(read) - right if right else None] for read in reads if len(read) > left + right]
+            retained = [
+                read[left : len(read) - right if right else None]
+                for read in reads
+                if len(read) > left + right
+            ]
             candidates.append(
                 {
                     "left_trim": left,
                     "right_trim": right,
                     "n": len(retained),
                     "lengths": dict(sorted(Counter(map(len, retained)).items())),
-                    "terminal_5p_kmer": Counter(read[:5] for read in retained).most_common(3),
-                    "terminal_3p_kmer": Counter(read[-5:] for read in retained).most_common(3),
+                    "terminal_5p_kmer": Counter(
+                        read[:5] for read in retained
+                    ).most_common(3),
+                    "terminal_3p_kmer": Counter(
+                        read[-5:] for read in retained
+                    ).most_common(3),
                 }
             )
     quality_mean = None
@@ -61,8 +69,13 @@ def audit_fixed_length_reads(
         "reads": len(reads),
         "read_lengths": lengths,
         "max_read_length": max_len,
-        "base_composition_by_position": [dict(Counter(read[pos] for read in reads)) for pos in range(max_len)],
-        "entropy_by_position": [_entropy(read[pos] for read in reads if len(read) > pos) for pos in range(max_len)],
+        "base_composition_by_position": [
+            dict(Counter(read[pos] for read in reads)) for pos in range(max_len)
+        ],
+        "entropy_by_position": [
+            _entropy(read[pos] for read in reads if len(read) > pos)
+            for pos in range(max_len)
+        ],
         "quality_mean_phred": quality_mean,
         "short_adapter_candidates": [
             {

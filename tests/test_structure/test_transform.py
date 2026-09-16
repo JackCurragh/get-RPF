@@ -133,6 +133,21 @@ def test_audit_and_production_agree_and_keep_names(tmp_path):
     assert len(sequence) == len(quality)
 
 
+def test_short_end_adapter_prefix_is_only_enabled_in_transform_application():
+    adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
+    architecture = Architecture(
+        (
+            Block("insert", "read_start", (20, 40), None, False, False, Status.RESOLVED),
+            Block("adapter", "anchor", (34, 34), adapter, False, True, Status.RESOLVED),
+        ),
+        "template", Status.RESOLVED, "monosome_20_40",
+    )
+    read = "C" * 28 + adapter[:7]
+    outcome = Transform(architecture).apply(read, "I" * len(read))
+    assert isinstance(outcome, Accepted)
+    assert outcome.insert == "C" * 28
+
+
 def test_seqspec_round_trip_is_exact():
     architecture = infer_structure(
         simulate(five_prime=[random_bases(5)], three_prime=[random_bases(4)]).reads

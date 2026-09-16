@@ -11,6 +11,16 @@ of them.
 
 ## [Unreleased]
 
+### Added
+- Audit-only fixed-length recovery evidence, including a distinct 35-cycle
+  footprint-candidate state, short 3' adapter-prefix probes, and a complete
+  0–12 nt candidate grid. These reports never approve a production transform.
+
+### Fixed
+- Preserve the closed-fail result for unobservable reads while exposing
+  recovery evidence; short adapter thresholds remain out of ordinary anchor
+  inference.
+
 ## [0.4.0] - 2026-09-14
 
 ### Added

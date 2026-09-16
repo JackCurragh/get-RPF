@@ -169,6 +169,22 @@ class InferenceConfig:
     bases are rejected as anchor_not_found: their insert end is unknown."""
 
     fixed_max_mismatches: int = 1
+
+    # --- audit-only short-end probe ---------------------------------------
+
+    short_adapter_min_overlap: int = 5
+    """Shortest exact adapter prefix considered by the recovery audit.
+
+    This is deliberately separate from ``min_partial_overlap``: ordinary
+    anchor inference remains conservative while the audit records a short
+    suffix as candidate evidence.
+    """
+
+    short_adapter_max_overlap: int = 9
+    """Longest short adapter prefix included in the recovery probe."""
+
+    short_adapter_min_support: float = 0.3
+    """Support needed for a short-end prefix to be reported as a candidate."""
     """Mismatches tolerated in a fixed block before a read is rejected."""
 
     core_min: int = 26

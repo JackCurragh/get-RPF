@@ -28,7 +28,7 @@ class Observation:
     length_range: Tuple[int, int]
     """1st and 99th percentile read length."""
     input_state: str
-    """raw_fixed_length | trimmed | mixed"""
+    """fixed_length_footprint_candidate | raw_fixed_length | trimmed | mixed"""
     header_umi: Optional[str]
     """None, or the header convention carrying a UMI: colon_field | underscore_suffix."""
     terminal_poly_g: float
@@ -66,7 +66,14 @@ def observe(
     modal_fraction = modal_count / total
     length_range = (_percentile(lengths, 0.01), _percentile(lengths, 0.99))
     if modal_fraction >= config.raw_modal_fraction:
-        input_state = "raw_fixed_length"
+        # A 35-cycle library is short enough that a normal 20--40 nt
+        # footprint plus the conservative 10 nt inference overlap cannot be
+        # observed in most reads.  Keep this as an uncertainty state: length
+        # alone must never select zero trim or a UMI.
+        if modal_length < config.typical_footprint + config.min_partial_overlap:
+            input_state = "fixed_length_footprint_candidate"
+        else:
+            input_state = "raw_fixed_length"
     elif modal_fraction <= config.trimmed_modal_fraction:
         input_state = "trimmed"
     else:

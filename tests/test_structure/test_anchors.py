@@ -2,7 +2,7 @@
 15, 16 and tails). Real-library validation is in test_real_panel.py."""
 
 from getRPF.core.structure import Status
-from getRPF.core.structure.anchors import find_anchor
+from getRPF.core.structure.anchors import find_anchor, probe_short_end
 from getRPF.core.structure.observe import observe
 
 from .sim import nta, simulate
@@ -57,6 +57,18 @@ def test_reads_shorter_than_the_insert_have_no_anchor():
 def test_trimmed_reads_have_no_anchor():
     answer = anchor(simulate(read_length=None, n_reads=5_000).reads)
     assert answer.status is Status.NOT_OBSERVABLE
+
+
+def test_fixed_length_35nt_is_a_recovery_candidate_not_raw_structure():
+    reads = ["C" * 28 + "AGATCGG"] * 100
+    observed = observe(reads)
+    assert observed.input_state == "fixed_length_footprint_candidate"
+    # Five-to-nine bases are evidence for recovery only; Q1 remains closed.
+    assert find_anchor(reads, observed).status is Status.NOT_OBSERVABLE
+    candidates = probe_short_end(reads)
+    assert candidates[0].adapter.name == "truseq_3p"
+    assert candidates[0].overlap == 7
+    assert candidates[0].support == 1.0
 
 
 def test_poly_a_tail_places_the_insert_end_at_the_run_start():

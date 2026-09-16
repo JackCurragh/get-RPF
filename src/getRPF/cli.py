@@ -38,6 +38,7 @@ See Also:
     - Bug Reports: https://github.com/yourusername/getRPF/issues
 """
 
+import json
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -1084,12 +1085,19 @@ def plot_softclips(
     help="Check the emitted inserts against a reference (STAR index); a "
     "disagreement with the pileup marks Q2/Q3 conflicting (spec §5.4)",
 )
+@click.option(
+    "--audit-report",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write fixed-length recovery evidence and the 0-12 nt candidate grid",
+)
 def infer_structure_command(
     input_file: Path,
     output_dir: Path,
     reads: int,
     sample_id: Optional[str],
     star_index: Optional[Path],
+    audit_report: Optional[Path],
 ) -> None:
     """Infer the read structure of a FASTQ.
 
@@ -1104,11 +1112,19 @@ def infer_structure_command(
     from .core.structure.observe import read_fastq
     from .core.structure.report import write_report
 
-    headers, sequences, _ = read_fastq(input_file, reads)
+    headers, sequences, qualities = read_fastq(input_file, reads)
     if not sequences:
         raise click.ClickException(f"no reads in {input_file}")
     sample = sample_id or input_file.name.split(".")[0]
     config = InferenceConfig(sample_reads=reads)
+    if audit_report is not None:
+        from .core.structure.recovery import audit_fixed_length_reads
+
+        audit_report.parent.mkdir(parents=True, exist_ok=True)
+        audit_report.write_text(
+            json.dumps(audit_fixed_length_reads(sequences, qualities, config), indent=2)
+            + "\n"
+        )
     result = infer_structure(sequences, headers, config)
     if star_index is not None and result.architecture is not None:
         from .core.structure.align import apply_alignment_check

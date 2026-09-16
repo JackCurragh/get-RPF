@@ -15,6 +15,7 @@ from .pileup import (
     call_junction,
     infer_junctions,
 )
+from .recovery import audit_fixed_length_reads
 
 __all__ = [
     "Alternative",
@@ -31,4 +32,5 @@ __all__ = [
     "build_pileup",
     "call_junction",
     "infer_junctions",
+    "audit_fixed_length_reads",
 ]

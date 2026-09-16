@@ -54,6 +54,45 @@ class Hit:
 
 
 @dataclass(frozen=True)
+class ShortAdapterProbe:
+    """Audit-only evidence for an exact adapter prefix at the read end."""
+
+    adapter: Adapter
+    overlap: int
+    support: float
+    mismatches: int
+    competing: Tuple[Tuple[str, int, float], ...] = ()
+
+
+def probe_short_end(
+    reads: Sequence[str],
+    config: Optional[InferenceConfig] = None,
+    catalogue: Optional[Sequence[Adapter]] = None,
+) -> Tuple[ShortAdapterProbe, ...]:
+    """Record 5--9 nt end-anchored adapter candidates without resolving Q1.
+
+    The normal ``locate`` path intentionally keeps its 10 nt threshold.  This
+    probe is used by recovery reports only and requires an exact prefix at the
+    3' read end, so an internal biological motif cannot become a boundary.
+    """
+    config = config or InferenceConfig()
+    catalogue = catalogue or CATALOGUE
+    if not reads:
+        return ()
+    candidates = []
+    for adapter in catalogue:
+        best = None
+        for overlap in range(config.short_adapter_max_overlap, config.short_adapter_min_overlap - 1, -1):
+            if sum(read.endswith(adapter.sequence[:overlap]) for read in reads) / len(reads) >= config.short_adapter_min_support:
+                support = sum(read.endswith(adapter.sequence[:overlap]) for read in reads) / len(reads)
+                best = ShortAdapterProbe(adapter, overlap, support, 0)
+                break
+        if best is not None:
+            candidates.append(best)
+    return tuple(sorted(candidates, key=lambda item: (-item.support, -item.overlap, item.adapter.name)))
+
+
+@dataclass(frozen=True)
 class AnchorCall:
     """The value of Q1."""
 
@@ -144,6 +183,7 @@ def find_anchor(
         note=f"modal length {observation.modal_length} nt "
         f"({observation.modal_fraction:.0%} of reads)",
     )
+    short_candidates = probe_short_end(reads, config)
 
     best_adapter, best_source, best_hits = scans[0] if scans else (None, None, [])
     best_support = _support(best_hits, config)
@@ -191,7 +231,16 @@ def find_anchor(
                 observation_evidence,
                 Evidence("anchor", "best_support", round(best_support, 4), total),
             ),
-            other_alternatives + downstream_alternatives,
+            other_alternatives
+            + tuple(
+                Alternative(
+                    f"{item.adapter.name}:{item.overlap}nt",
+                    "untested",
+                    f"short exact 3' prefix in {item.support:.1%} of reads; audit evidence only",
+                )
+                for item in short_candidates
+            )
+            + downstream_alternatives,
             f"No 3' anchor: {reason} ({support_text}).",
         )
 
@@ -204,6 +253,16 @@ def find_anchor(
     assert best_source is not None
     call = _anchor_call(reads, best_adapter, best_source, best_hits, config)
     evidence = [observation_evidence, *_anchor_evidence(call, best_hits, config)]
+    evidence.extend(
+        Evidence(
+            "anchor_audit",
+            "short_end_adapter_candidate",
+            (item.adapter.name, item.overlap, round(item.support, 4)),
+            len(reads),
+            note="candidate only; not used to resolve ordinary Q1",
+        )
+        for item in short_candidates
+    )
     alternatives = list(other_alternatives + downstream_alternatives)
     for adapter, hits in competing:
         alternatives.append(

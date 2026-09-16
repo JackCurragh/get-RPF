@@ -9,7 +9,7 @@ Releases before 0.4.0 predate this file. Five tags (v0.2.1 through v0.3.1) were
 cut, none of which published to PyPI, and none of which had a test gate in front
 of them.
 
-## [Unreleased]
+## [0.4.1] - 2026-09-16
 
 ### Added
 - Audit-only fixed-length recovery evidence, including a distinct 35-cycle

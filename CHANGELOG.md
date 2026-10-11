@@ -9,6 +9,21 @@ Releases before 0.4.0 predate this file. Five tags (v0.2.1 through v0.3.1) were
 cut, none of which published to PyPI, and none of which had a test gate in front
 of them.
 
+## [0.5.0] - 2026-10-11
+
+### Added
+- Alignment-backed best-guess structure recovery for stable modal technical
+  clips, emitted as an interval result with an explicit review flag.
+- Observed 3' adapter catalogue discovery from the bundled architecture
+  definitions, including longer-overlap matching for legacy adapter detection.
+
+### Changed
+- Adapter and structure inference now covers the observed architecture set more
+  broadly while retaining conservative withholding for incompatible evidence.
+- Best-guess recovery is enabled by default; strict workflows should continue to
+  use the existing `--fail-on review` policy when review-flagged output is not
+  acceptable.
+
 ## [0.4.1] - 2026-09-16
 
 ### Added

@@ -17,7 +17,11 @@ from __future__ import annotations
 import statistics
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
+
+import yaml
 
 from .config import InferenceConfig
 from .model import Alternative, Answer, Evidence, Status
@@ -43,6 +47,65 @@ DOWNSTREAM: Tuple[Adapter, ...] = (
     Adapter("illumina_p7", "ATCTCGTATGCCGTCTTCTGCTTG", "downstream"),
 )
 """Platform sequence that follows the adapter and index. Never an anchor."""
+
+
+@lru_cache(maxsize=1)
+def observed_catalogue() -> Tuple[Adapter, ...]:
+    """Load validated observed 3' adapters shipped as architecture YAML.
+
+    Only adapters occurring after an RPF/CDNA region are eligible here. This
+    deliberately excludes 5' ligation adapters and ambiguous sequence
+    templates; the latter need a protocol-specific transform rather than an
+    exact anchor.
+    """
+    directory = Path(__file__).resolve().parents[2] / "architectures"
+    loaded: List[Adapter] = []
+    seen = {adapter.sequence for adapter in CATALOGUE}
+    for path in sorted((*directory.glob("*.yaml"), *directory.glob("*.yml"))):
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        # This file is a broad diagnostic list, not one observed library
+        # architecture. Treating every entry as a competing anchor creates
+        # false mixed-library calls when a longer adapter contains one of its
+        # short motifs.
+        if data.get("assay_id") == "comprehensive_adapter_check":
+            continue
+        after_rpf = False
+        for region in data.get("sequence_spec", ()):
+            if not isinstance(region, dict):
+                continue
+            region_type = str(region.get("region_type", "")).lower()
+            region_id = str(region.get("region_id", "")).lower()
+            if "rpf" in region_type or "rpf" in region_id or "cdna" in region_type:
+                after_rpf = True
+                continue
+            if not after_rpf or "adapter" not in f"{region_type} {region_id}":
+                continue
+            sequences = []
+            if region.get("sequence"):
+                sequences.append(region["sequence"])
+            sequences.extend(region.get("sequences", ()) or ())
+            for raw in sequences:
+                sequence = str(raw).upper().replace("U", "T")
+                if not sequence or "N" in sequence or set(sequence) - set("ACGT"):
+                    continue
+                if _low_complexity(sequence):
+                    continue
+                if sequence in seen or any(
+                    _related(sequence, downstream.sequence)
+                    for downstream in DOWNSTREAM
+                ):
+                    continue
+                seen.add(sequence)
+                loaded.append(
+                    Adapter(
+                        f"observed:{data.get('assay_id', path.stem)}:{region_id}",
+                        sequence,
+                    )
+                )
+    return tuple(CATALOGUE) + tuple(loaded)
 
 
 @dataclass(frozen=True)
@@ -76,7 +139,7 @@ def probe_short_end(
     3' read end, so an internal biological motif cannot become a boundary.
     """
     config = config or InferenceConfig()
-    catalogue = catalogue or CATALOGUE
+    catalogue = catalogue or observed_catalogue()
     if not reads:
         return ()
     candidates = []
@@ -100,7 +163,12 @@ def probe_short_end(
     return tuple(
         sorted(
             candidates,
-            key=lambda item: (-item.support, -item.overlap, item.adapter.name),
+            key=lambda item: (
+                -item.support,
+                -item.overlap,
+                item.adapter.name.startswith("observed:"),
+                item.adapter.name,
+            ),
         )
     )
 
@@ -162,10 +230,11 @@ def find_anchor(
     reads: Sequence[str],
     observation: Observation,
     config: Optional[InferenceConfig] = None,
-    catalogue: Sequence[Adapter] = CATALOGUE,
+    catalogue: Optional[Sequence[Adapter]] = None,
 ) -> Answer:
     """Answer Q1: which adapter anchors the reads, and where, per read."""
     config = config or InferenceConfig()
+    catalogue = tuple(catalogue or observed_catalogue())
     total = len(reads)
     scans: List[Tuple[Adapter, Literal["catalogue", "de_novo"], List[Optional[Hit]]]]
     scans = [(a, "catalogue", _scan(reads, a.sequence, config)) for a in catalogue]
@@ -175,7 +244,14 @@ def find_anchor(
         found = discover(reads, config)
         if found is not None:
             scans.append((found, "de_novo", _scan(reads, found.sequence, config)))
-    scans.sort(key=lambda scan: _support(scan[2], config), reverse=True)
+    scans.sort(
+        key=lambda scan: (
+            _support(scan[2], config),
+            _full_support(scan[2], config),
+            len(scan[0].sequence),
+        ),
+        reverse=True,
+    )
 
     downstream_alternatives = tuple(
         Alternative(
@@ -398,6 +474,22 @@ def _support(hits: Sequence[Optional[Hit]], config: InferenceConfig) -> float:
         1 for hit in hits if hit is not None and hit.start >= config.min_insert
     )
     return located / len(hits)
+
+
+def _full_support(hits: Sequence[Optional[Hit]], config: InferenceConfig) -> float:
+    """Fraction of reads with a full, non-dimer adapter match.
+
+    This tie-breaker matters for nested catalogue entries: a shorter known
+    adapter may be a suffix of a longer observed construct and otherwise win
+    solely because it appears earlier in the catalogue.
+    """
+    if not hits:
+        return 0.0
+    return sum(
+        1
+        for hit in hits
+        if hit is not None and hit.full and hit.start >= config.min_insert
+    ) / len(hits)
 
 
 def _related(a: str, b: str, k: int = 10) -> bool:

@@ -231,3 +231,13 @@ class InferenceConfig:
     align_missed_block_rate: float = 0.10
     """Clips of >=2 nt in this fraction of aligned inserts mean a technical
     block the pileup did not call."""
+
+    alignment_best_guess: bool = True
+    """Promote a stable modal alignment clip to a reviewable transform
+    candidate when the pileup found no technical block. The candidate removes
+    the clipped block as an anonymous technical segment; it is emitted with
+    interval status and remains visible in the report."""
+
+    alignment_best_guess_min_mode_fraction: float = 0.5
+    """Minimum fraction of aligned reads sharing the modal >=2 nt clip before
+    an alignment-derived technical block may become a best guess."""

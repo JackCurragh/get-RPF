@@ -11,7 +11,7 @@ import math
 from collections import Counter
 from typing import Any, Dict, Iterable, Sequence
 
-from .anchors import CATALOGUE, probe_short_end
+from .anchors import observed_catalogue, probe_short_end
 from .config import InferenceConfig
 
 
@@ -85,7 +85,7 @@ def audit_fixed_length_reads(
                 "support": round(item.support, 4),
                 "mismatches": item.mismatches,
             }
-            for item in probe_short_end(reads, config, CATALOGUE)
+            for item in probe_short_end(reads, config, observed_catalogue())
         ],
         "candidate_grid": candidates,
         "selection": "unresolved_audit_only",

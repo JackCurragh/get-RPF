@@ -117,10 +117,7 @@ class AdapterDetector:
         Returns:
             Tuple of (position, match_length, variant)
         """
-        best_pos = None
-        best_length = None
-        best_variant = None
-        min_mismatches = float("inf")
+        candidates = []
 
         seq_len = len(sequence)
         adapter_len = len(self.adapter)
@@ -134,13 +131,29 @@ class AdapterDetector:
 
                 mismatches = self._count_mismatches(seq_part, adapter_part)
 
-                if mismatches <= self.max_mismatches and mismatches < min_mismatches:
-                    min_mismatches = mismatches
-                    best_pos = pos
-                    best_length = length
-                    best_variant = seq_part
+                if mismatches <= self.max_mismatches:
+                    candidates.append(
+                        (
+                            length,
+                            mismatches / length,
+                            mismatches,
+                            pos,
+                            seq_part,
+                        )
+                    )
 
-        return best_pos, best_length, best_variant
+        if not candidates:
+            return None, None, None
+
+        # Longer overlaps carry more evidence than a shorter exact prefix.
+        # Mismatch rate then makes the choice stable when multiple candidate
+        # lengths are available, with the earliest occurrence as a final tie
+        # breaker for reproducibility.
+        length, _rate, _mismatches, pos, variant = max(
+            candidates,
+            key=lambda item: (item[0], -item[1], -item[2], -item[3]),
+        )
+        return pos, length, variant
 
     def analyze_file(self, input_path: Path) -> AdapterResults:
         """Analyze sequence file for adapter content.

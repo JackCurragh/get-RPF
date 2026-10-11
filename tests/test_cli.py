@@ -167,6 +167,21 @@ class TestAdapterDetection:
         assert "Adapter Contamination Summary" in content
         assert "contamination rate" in content.lower()
 
+    def test_detection_reports_the_longest_supported_overlap(self):
+        from getRPF.core.processors.adapter import AdapterDetector
+
+        detector = AdapterDetector(
+            "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC", "fastq"
+        )
+        position, length, variant = detector._find_best_match(
+            "C" * 30 + detector.adapter
+        )
+        assert (position, length, variant) == (
+            30,
+            len(detector.adapter),
+            detector.adapter,
+        )
+
     def test_gzipped_fastq_detection(self, runner, test_data, tmp_path):
         """Test adapter detection on gzipped FASTQ input."""
         gzipped_input = tmp_path / "test_data.fastq.gz"

@@ -68,17 +68,45 @@ def test_junction_base_disagreement_is_flagged_not_blocking():
     assert check.flag is not None and check.flag.startswith("Q2:")
 
 
-def test_missed_technical_block_is_a_conflict():
+def test_missed_technical_block_becomes_a_reviewable_best_guess():
     check = check_junction(
         answer(0, {}, Status.RESOLVED),
         "5",
         profile(0, 500, {"A": 500}),
         InferenceConfig(),
     )
+    assert check.verdict == "best_guess"
+    assert check.answer.status is Status.INTERVAL
+    assert check.best_guess
+    assert check.answer.value.technical_length == 3
+    assert check.answer.value.blocks == (("barcode", 3),)
+    assert check.flag is not None and check.flag.startswith("Q2:")
+    assert check.longer_clip_mode == 3
+
+
+def test_alignment_best_guess_can_be_disabled():
+    check = check_junction(
+        answer(0, {}, Status.RESOLVED),
+        "5",
+        profile(0, 500, {"A": 500}),
+        InferenceConfig(alignment_best_guess=False),
+    )
     assert check.verdict == "conflicting"
     assert check.answer.status is Status.CONFLICTING
-    assert check.flag is None
-    assert check.longer_clip_mode == 3
+    assert not check.best_guess
+
+
+def test_incompatible_nonzero_pileup_block_remains_conflicting():
+    pileup = JunctionCall("read_start", 2, (("barcode", 2),), 0, (), {})
+    check = check_junction(
+        Answer("Q2", pileup, Status.RESOLVED, (), (), "Pileup explanation."),
+        "5",
+        profile(0, 500, {"A": 500}),
+        InferenceConfig(),
+    )
+    assert check.verdict == "conflicting"
+    assert check.answer.status is Status.CONFLICTING
+    assert not check.best_guess
 
 
 def test_run_star_with_nothing_to_align_needs_no_star():

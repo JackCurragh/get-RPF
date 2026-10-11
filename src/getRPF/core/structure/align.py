@@ -10,10 +10,12 @@ answers against the genome:
 - a technical block the pileup missed shows as clips of 2 nt or more;
 - a real non-templated junction base shows as a 1 nt clip spike, well above
   the error rate, whose bases match the pileup's disagreeing bases.
-Alignment never silently overrides the pileup. A missed technical block makes
-the answer ``conflicting``: the structure itself is in doubt, so the transform
-is withheld. A disagreement about one junction base only flags the transform,
-because that base is kept in the insert either way (spec §7.2).
+Alignment never silently overrides the pileup. A missed technical block with
+no stable modal clip remains ``conflicting``. When the pileup found no block
+but at least half of aligned reads share one modal >=2 nt clip, the alignment
+adds a reviewable ``best_guess`` technical block and the transform is emitted
+with interval status. A disagreement about one junction base only flags the
+transform, because that base is kept in the insert either way (spec §7.2).
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .assemble import StructureInference, build_architecture, decide_transform
 from .config import InferenceConfig
-from .model import Answer, Architecture, Evidence, JunctionCall, Status
+from .model import Alternative, Answer, Architecture, Evidence, JunctionCall, Status
 from .transform import Accepted, Transform
 
 _CIGAR = re.compile(r"(\d+)([MIDNSHP=X])")
@@ -69,7 +71,7 @@ class AlignmentProfile:
 class JunctionCheck:
     question: str
     verdict: str
-    """confirmed | conflicting | inconclusive | clean"""
+    """confirmed | best_guess | conflicting | inconclusive | clean"""
     one_base_clip: float
     longer_clip: float
     longer_clip_mode: Optional[int]
@@ -78,8 +80,8 @@ class JunctionCheck:
     aligned: int = 0
     """Unique alignments behind the verdict."""
     flag: Optional[str] = None
-    """Set when the alignment disagrees about a junction base: reported on the
-    transform, never withholding it."""
+    """Review flag for a non-blocking alignment disagreement or best guess."""
+    best_guess: bool = False
 
 
 def parse_sam(lines: Iterable[str]) -> AlignmentProfile:
@@ -243,6 +245,11 @@ def check_junction(
         key=lambda length: clips[length],
         default=None,
     )
+    mode_fraction = (
+        clips[longer_mode] / profile.aligned
+        if longer_mode is not None and profile.aligned
+        else 0.0
+    )
     bases = profile.clipped5_bases if end == "5" else profile.clipped3_bases
     total = sum(bases.values())
     composition = {b: round(bases[b] / total, 3) for b in "ACGT"} if total else {}
@@ -258,6 +265,7 @@ def check_junction(
     error = profile.mismatch_rate
     side = "5'" if end == "5" else "3'"
 
+    best_guess = False
     if profile.aligned < config.align_min_aligned:
         # Too few alignments is missing evidence, never a contradiction.
         verdict = "underpowered"
@@ -266,12 +274,27 @@ def check_junction(
             f"uniquely (need {config.align_min_aligned}); no verdict"
         )
     elif longer >= config.align_missed_block_rate:
-        verdict = "conflicting"
-        text = (
-            f"alignment shows {side} clips of >=2 nt in {longer:.0%} of aligned "
-            f"inserts (mode {longer_mode} nt): a technical block the pileup did "
-            "not call"
-        )
+        call_has_block = call is not None and call.technical_length > 0
+        if (
+            config.alignment_best_guess
+            and not call_has_block
+            and longer_mode is not None
+            and mode_fraction >= config.alignment_best_guess_min_mode_fraction
+        ):
+            verdict = "best_guess"
+            best_guess = True
+            text = (
+                f"alignment supports a {longer_mode} nt {side} technical block: "
+                f"the modal >=2 nt clip is present in {mode_fraction:.0%} of "
+                "aligned inserts; the pileup did not call a block"
+            )
+        else:
+            verdict = "conflicting"
+            text = (
+                f"alignment shows {side} clips of >=2 nt in {longer:.0%} of aligned "
+                f"inserts (mode {longer_mode} nt): a technical block the pileup did "
+                "not call"
+            )
     elif call is not None and call.nta_length:
         if (
             one >= config.align_confirm_rate
@@ -322,6 +345,13 @@ def check_junction(
             profile.aligned,
             note=f"mode {longer_mode} nt" if longer_mode else "",
         ),
+        Evidence(
+            "alignment",
+            f"clip{end}_modal_fraction",
+            round(mode_fraction, 4),
+            profile.aligned,
+            note=f"mode {longer_mode} nt" if longer_mode else "",
+        ),
         Evidence("alignment", f"clipped{end}_bases", composition, total),
         Evidence(
             "alignment",
@@ -335,11 +365,37 @@ def check_junction(
     # Only a missed technical block puts the structure in doubt. A junction
     # base stays in the insert whichever method is right, so a disagreement
     # about it flags the transform instead of withholding it (spec §7.2).
+    if best_guess and call is not None and longer_mode is not None:
+        call = replace(
+            call,
+            technical_length=call.technical_length + longer_mode,
+            blocks=(("barcode", longer_mode),) + call.blocks,
+        )
+        answer = replace(
+            answer,
+            value=call,
+            status=Status.INTERVAL,
+            alternatives=answer.alternatives
+            + (
+                # Keep the pileup architecture visible as a competing option.
+                # The alignment-derived candidate is deliberately not marked
+                # resolved: it is a reviewable best guess.
+                Alternative(
+                    0,
+                    "weakly_compatible",
+                    f"pileup boundary retained without the modal {longer_mode} nt "
+                    "alignment block",
+                ),
+            ),
+            explanation=f"{answer.explanation} Alignment: {text}. "
+            f"Best guess adds an anonymous {longer_mode} nt technical block; "
+            "validate the emitted read lengths and mapping before release.",
+        )
     blocking = verdict == "conflicting" and longer >= config.align_missed_block_rate
     status = Status.CONFLICTING if blocking else answer.status
     flag = (
         f"{answer.question}: {text}"
-        if verdict == "conflicting" and not blocking
+        if (verdict == "conflicting" and not blocking) or best_guess
         else None
     )
     updated = replace(
@@ -358,6 +414,7 @@ def check_junction(
         updated,
         profile.aligned,
         flag,
+        best_guess,
     )
 
 

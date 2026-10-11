@@ -2,7 +2,7 @@
 15, 16 and tails). Real-library validation is in test_real_panel.py."""
 
 from getRPF.core.structure import Status
-from getRPF.core.structure.anchors import find_anchor, probe_short_end
+from getRPF.core.structure.anchors import find_anchor, observed_catalogue, probe_short_end
 from getRPF.core.structure.observe import observe
 
 from .sim import nta, simulate
@@ -39,6 +39,18 @@ def test_unknown_adapter_is_discovered_de_novo():
     assert answer.value.source == "de_novo"
     assert answer.value.adapter.sequence.startswith("TCGTACGGAG")
     assert truth_agreement(answer.value, library.anchors) >= 0.95
+
+
+def test_observed_architecture_adapters_are_available_to_anchor_inference():
+    assert any(
+        adapter.sequence == "ACTGTAGGCACCATCAATC"
+        and adapter.name.startswith("observed:")
+        for adapter in observed_catalogue()
+    )
+
+    reads = ["C" * 30 + "ACTGTAGGCACCATCAATC" for _ in range(300)]
+    answer = anchor(reads)
+    assert answer.value.adapter.sequence == "ACTGTAGGCACCATCAATC"
 
 
 def test_two_adapters_make_q1_ambiguous():

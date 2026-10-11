@@ -1083,7 +1083,8 @@ def plot_softclips(
     type=click.Path(exists=True, path_type=Path),
     default=None,
     help="Check the emitted inserts against a reference (STAR index); a "
-    "disagreement with the pileup marks Q2/Q3 conflicting (spec §5.4)",
+    "a stable modal technical clip can produce a reviewable best-guess "
+    "boundary; unresolved disagreement remains conflicting (spec §5.4)",
 )
 @click.option(
     "--audit-report",
@@ -1103,7 +1104,9 @@ def infer_structure_command(
 
     Implements docs/read_structure_inference_spec.md steps 0-3: observation,
     3' anchor, library-as-reference pileup, UMI and transform decision, plus
-    the step 4 alignment check with --star-index. Writes a JSON and a text
+    the step 4 alignment check with --star-index. Stable modal alignment clips
+    become reviewable best-guess technical blocks; unresolved conflicts remain
+    withheld. Writes a JSON and a text
     report. Exit code 0 when a per-read transform can be emitted; 3 when the
     architecture is reported but the transform is withheld.
     """

@@ -193,7 +193,7 @@ In the real reads, the disagreeing first bases are 60% T. That makes a 5′ NTA 
 - A discrete soft-clip mode at k supports a k-nt technical block.
 - A spike of 1-nt clips or mismatches with a skewed base mix supports an NTA.
 - Do not compare mapping rates across many candidate trims.
-- If alignment and pileup disagree about a technical block (clips of ≥2 nt), set `conflicting` and keep both answers; the transform is withheld. If they disagree only about a junction base, keep the pileup's answer and flag the transform (§7.2), since the base stays in the insert either way. Alignment never silently overrides the pileup.
+- If alignment and pileup disagree about a technical block (clips of ≥2 nt), retain both answers. When at least half of aligned inserts share one modal clip and the pileup found no block, use that clip as a reviewable `best_guess` technical block and validate the emitted output; otherwise set `conflicting` and withhold the transform. If they disagree only about a junction base, keep the pileup's answer and flag the transform (§7.2), since the base stays in the insert either way. Alignment never silently overrides the pileup.
 - `extract --infer-structure --star-index` runs this step as a check on the emitted inserts whenever a reference is supplied. A check that cannot run (for example a STAR build that reads no input) is recorded as a flag, not an error.
 
 ### 5.5 Assemble

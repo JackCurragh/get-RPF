@@ -1,0 +1,81 @@
+%% Current getRPF extraction flow (v0.5.0)
+%% The CLI dispatches to one of three extraction paths. The structure path is
+%% the evidence-first path; the legacy path remains the default when neither
+%% --infer-structure nor --architecture is supplied.
+flowchart TD
+    A[FASTQ + getRPF extract options] --> B{Input mode selected?}
+
+    B -->|--infer-structure| S0
+    B -->|--architecture| A0
+    B -->|neither flag| L0
+
+    subgraph STRUCTURE[Structure inference and extraction]
+        S0[Read first N FASTQ reads\n(default 1,000,000)] --> S1[Observe input\nlengths, state, header UMI, poly-G]
+        S1 --> S2[Q1: find 3' anchor\nknown/partial adapter or de novo anchor]
+        S2 --> S3{Raw input with no anchor?}
+        S3 -->|yes| S4[Q3 = not_observable\n3' boundary cannot be inferred]
+        S3 -->|no| S5[Use located adapter starts\n(or read end for trimmed input)]
+        S4 --> S6
+        S5 --> S6[Set bounded search window\nfrom anchor arithmetic + typical footprint]
+        S6 --> S7[Q2/Q3 pileup\nbase composition + entropy + grouped\nleave-one-out agreement in both frames]
+        S7 --> S8{Technical blocks found?}
+        S8 -->|yes| S9[Second pileup pass\nexclude inferred 5'/3' technical blocks]
+        S8 -->|no| S10[Keep first-pass pileup]
+        S9 --> S11
+        S10 --> S11[Classify junctions\nrandom/fixed/biological/NTA/tail]
+        S11 --> S12[Q4: locate UMI\ninline random blocks or read-name UMI]
+        S12 --> S13[Assemble ordered architecture\n5' technical -> insert -> 3' technical -> adapter]
+        S13 --> S14{Q1, Q2 and Q3\nresolved or interval?}
+        S14 -->|no| S15[Withhold transform\nwrite structure reports; no reads]
+        S14 -->|yes| S16{--star-index supplied?}
+        S16 -->|yes| S17[Optional STAR alignment check\nconflict/failure becomes a flag]
+        S16 -->|no| S18
+        S17 --> S18[Apply architecture transform\nto full FASTQ stream]
+        S18 --> S19{Per read: anchor found?}
+        S19 -->|no| S20[Reject: anchor_not_found]
+        S19 -->|yes| S21{Adapter dimer / fixed mismatch /\ninvalid insert length?}
+        S21 -->|yes| S20
+        S21 -->|no| S22[Trim only declared removable blocks\nkeep declared NTA; append UMI to name]
+        S22 --> S23{--audit-only or --collapsed-only?}
+        S23 -->|audit-only| S24[Count/report only\nno reads written]
+        S23 -->|collapsed-only| S25[Count accepted inserts\nwrite collapsed FASTA]
+        S23 -->|normal| S26[Write accepted FASTQ]
+        S24 --> S27
+        S25 --> S27
+        S26 --> S27[Write extraction report\nstructure JSON/TXT + seqspec]
+        S15 --> S27
+        S27 --> S28{Transform emitted?}
+        S28 -->|yes| S29[Q5 length-only validation\n(recorded in extraction report)]
+        S28 -->|no| S30[No Q5 transform validation\n(report remains withheld)]
+        S29 --> S31[CLI exit: 0 normally; 3 for withheld\nor flagged review/hold thresholds]
+        S30 --> S31
+    end
+
+    subgraph REPLAY[Resolved architecture replay]
+        A0[Read seqspec architecture] --> A1{Transform marked emit?}
+        A1 -->|no| A2[Stop: withheld; exit 3]
+        A1 -->|yes| A3[Apply same per-read transform\n(or audit without writing)]
+        A3 --> A4[Write summary JSON and reads if enabled]
+    end
+
+    subgraph LEGACY[Legacy/default extraction and release-QC pipeline]
+        L0[Load architecture DB / seqspec directory] --> L1[Optional --star-index\nlegacy alignment cross-check only]
+        L1 --> L2[Stage 0: bounded sketch\nlengths, anchored signals, quality]
+        L2 --> L3[Stage 1: per-length boundary plan\nknown-adapter evidence + terminal rules]
+        L3 --> L4{Explicit --rules supplied?}
+        L4 -->|yes| L5[Replace inferred trim rules\nwith frozen rules]
+        L4 -->|no| L6[Use inferred applied/proposed rules]
+        L5 --> L7
+        L6 --> L7{Production or --audit-only?}
+        L7 -->|production| L8[Apply selected trims while extracting]
+        L7 -->|audit-only| L9[Extract without applying trims\nreport all rules as proposed]
+        L8 --> L10
+        L9 --> L10[Rebuild weighted accepted population\nfrom collapsed output]
+        L10 --> L11[Identity screen\nlength shape, contamination/complexity/duplication]
+        L11 --> L12[Self-consistency + quality evidence]
+        L12 --> L13[Build release evidence\nbiological confirmation remains pending alignment]
+        L13 --> L14[Write evidence, release QC,\napplied/proposed trim rules, extraction output]
+    end
+
+    classDef decision fill:#fff3cd,stroke:#b58105,color:#222;
+    class S3,S8,S14,S16,S19,S21,S23,S28,A1,L4,L7 decision;

@@ -94,8 +94,7 @@ def observed_catalogue() -> Tuple[Adapter, ...]:
                 if _low_complexity(sequence):
                     continue
                 if sequence in seen or any(
-                    _related(sequence, downstream.sequence)
-                    for downstream in DOWNSTREAM
+                    _related(sequence, downstream.sequence) for downstream in DOWNSTREAM
                 ):
                     continue
                 seen.add(sequence)

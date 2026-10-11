@@ -257,11 +257,8 @@ def check_junction(
         max(composition, key=lambda b: composition[b]) if composition else None
     )
     call = answer.value if isinstance(answer.value, JunctionCall) else None
-    pileup_top = (
-        max(call.nta_bases, key=lambda b: call.nta_bases[b])
-        if call is not None and call.nta_bases
-        else None
-    )
+    nta_bases = call.nta_bases if call is not None else {}
+    pileup_top = max(nta_bases, key=lambda b: nta_bases[b]) if nta_bases else None
     error = profile.mismatch_rate
     side = "5'" if end == "5" else "3'"
 

@@ -2,7 +2,11 @@
 15, 16 and tails). Real-library validation is in test_real_panel.py."""
 
 from getRPF.core.structure import Status
-from getRPF.core.structure.anchors import find_anchor, observed_catalogue, probe_short_end
+from getRPF.core.structure.anchors import (
+    find_anchor,
+    observed_catalogue,
+    probe_short_end,
+)
 from getRPF.core.structure.observe import observe
 
 from .sim import nta, simulate

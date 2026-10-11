@@ -170,9 +170,7 @@ class TestAdapterDetection:
     def test_detection_reports_the_longest_supported_overlap(self):
         from getRPF.core.processors.adapter import AdapterDetector
 
-        detector = AdapterDetector(
-            "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC", "fastq"
-        )
+        detector = AdapterDetector("AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC", "fastq")
         position, length, variant = detector._find_best_match(
             "C" * 30 + detector.adapter
         )

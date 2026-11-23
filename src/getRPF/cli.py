@@ -250,7 +250,9 @@ def extract(
     """
     if infer_structure_flag or prepare_for_alignment:
         if architecture is not None:
-            raise click.ClickException("--architecture cannot be combined with inference")
+            raise click.ClickException(
+                "--architecture cannot be combined with inference"
+            )
         if format != "fastq":
             raise click.ClickException("--infer-structure needs FASTQ input")
         from .core.structure.config import InferenceConfig
@@ -265,13 +267,19 @@ def extract(
             try:
                 recipe = json.loads(trim_recipe.read_text())
             except (OSError, json.JSONDecodeError) as error:
-                raise click.ClickException(f"invalid trim recipe JSON: {error}") from error
+                raise click.ClickException(
+                    f"invalid trim recipe JSON: {error}"
+                ) from error
             if not isinstance(recipe, dict):
                 raise click.ClickException("trim recipe JSON must contain one object")
             for field in ("5p_barcode_length", "3p_barcode_length"):
                 value = recipe.get(field)
-                if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
-                    raise click.ClickException(f"trim recipe {field} must be a non-negative integer or null")
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or value < 0
+                ):
+                    raise click.ClickException(
+                        f"trim recipe {field} must be a non-negative integer or null"
+                    )
         try:
             outcome = infer_and_extract(
                 input_file,

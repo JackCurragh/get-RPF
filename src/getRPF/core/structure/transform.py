@@ -184,7 +184,9 @@ class Transform:
             hit = self._anchor(read)
             if hit is not None:
                 if hit < self.config.min_insert:
-                    return Prepared("", "", 0, 0, endpoint_5p, endpoint_3p, "adapter_dimer")
+                    return Prepared(
+                        "", "", 0, 0, endpoint_5p, endpoint_3p, "adapter_dimer"
+                    )
                 adapter_start = hit
                 end = hit
                 endpoint_3p = "adapter"
@@ -211,14 +213,26 @@ class Transform:
                 if not block.remove:
                     continue
                 begin = end - block.length[1]
-                segment = read[max(0, begin):end]
-                if begin < 0 or len(segment) != block.length[1] or not self._fixed_ok(block, segment):
+                segment = read[max(0, begin) : end]
+                if (
+                    begin < 0
+                    or len(segment) != block.length[1]
+                    or not self._fixed_ok(block, segment)
+                ):
                     break
                 end = begin
                 endpoint_3p = "supported_block"
 
         if start >= end:
-            return Prepared("", "", start, len(read) - end, endpoint_5p, endpoint_3p, "empty_interval")
+            return Prepared(
+                "",
+                "",
+                start,
+                len(read) - end,
+                endpoint_5p,
+                endpoint_3p,
+                "empty_interval",
+            )
         return Prepared(
             read[start:end],
             quality[start:end],
@@ -301,7 +315,9 @@ def iter_fastq(path: Path) -> Iterator[Tuple[str, str, str]]:
             if not header.startswith("@") or not plus.startswith("+"):
                 raise ValueError(f"Malformed FASTQ record near {header.rstrip()!r}")
             if len(sequence) != len(quality):
-                raise ValueError(f"Sequence/quality length mismatch for {header.rstrip()!r}")
+                raise ValueError(
+                    f"Sequence/quality length mismatch for {header.rstrip()!r}"
+                )
             yield header.rstrip("\n"), sequence, quality
 
 
@@ -367,7 +383,9 @@ def prepare_reads(
         summary.bases_cut_5p += prepared.cut_5p
         summary.bases_cut_3p += prepared.cut_3p
         summary.unmodified += int(prepared.cut_5p == 0 and prepared.cut_3p == 0)
-        summary.unmatched_adapter_reads += int(prepared.endpoint_3p == "adapter_unmatched")
+        summary.unmatched_adapter_reads += int(
+            prepared.endpoint_3p == "adapter_unmatched"
+        )
         summary.requires_local_alignment |= (
             prepared.endpoint_5p == "unresolved"
             or prepared.endpoint_3p in ("unresolved", "adapter_unmatched")

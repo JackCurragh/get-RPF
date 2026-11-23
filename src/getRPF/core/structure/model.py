@@ -97,7 +97,9 @@ class Architecture:
     """The ordered blocks of a read: the contract with extraction (spec §7.1)."""
 
     blocks: Tuple[Block, ...]
-    source: Literal["inferred", "template", "template_completed"]
+    source: Literal[
+        "inferred", "template", "template_completed", "alignment_preparation"
+    ]
     status: Status
     fragment_policy: str
 

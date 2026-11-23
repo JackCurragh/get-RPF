@@ -21,13 +21,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 from ..processors.collapsed import TwoStageCollapser
+from .anchors import locate
 from .assemble import (
     StructureInference,
     build_preparation_architecture,
     infer_structure,
 )
-from .anchors import locate
 from .config import InferenceConfig
+from .model import Alternative, Answer, Architecture, Block, Evidence, Status
 from .observe import read_fastq, reservoir_fastq_sample
 from .report import _plain, write_report
 from .transform import (
@@ -37,7 +38,6 @@ from .transform import (
     prepare_reads,
     validate_extraction,
 )
-from .model import Alternative, Answer, Architecture, Evidence, Status
 
 REPORT_SCHEMA = "getrpf.structure.extraction/1"
 
@@ -118,7 +118,11 @@ def infer_and_extract(
         if retry_reads:
             retry = infer_structure(retry_reads, retry_headers, config)
             result = _merge_retry(result, retry, config)
-    if not prepare_for_alignment and star_index is not None and result.architecture is not None:
+    if (
+        not prepare_for_alignment
+        and star_index is not None
+        and result.architecture is not None
+    ):
         result = _alignment_checked(result, sequences, star_index, config)
 
     prefix = output_prefix(output_file)
@@ -139,7 +143,9 @@ def infer_and_extract(
             recipe_adapter = str(recipe_adapter).upper().replace("U", "T")
             hits = [locate(read, recipe_adapter, config) for read in sequences]
             recipe_support = sum(hit is not None for hit in hits) / len(hits)
-            inferred_adapter = getattr(getattr(result.q1.value, "adapter", None), "sequence", None)
+            inferred_adapter = getattr(
+                getattr(result.q1.value, "adapter", None), "sequence", None
+            )
             inferred_mode = getattr(result.q1.value, "start_mode", None)
             recipe_starts = [hit.start for hit in hits if hit is not None]
             recipe_mode = None
@@ -147,60 +153,104 @@ def infer_and_extract(
                 from collections import Counter as _Counter
 
                 recipe_mode = _Counter(recipe_starts).most_common(1)[0][0]
-            same_boundary = inferred_mode is None or recipe_mode is None or abs(inferred_mode - recipe_mode) <= 2
+            same_boundary = (
+                inferred_mode is None
+                or recipe_mode is None
+                or abs(inferred_mode - recipe_mode) <= 2
+            )
             compatible_adapter = (
                 inferred_adapter is None
                 or inferred_adapter.startswith(recipe_adapter)
                 or recipe_adapter.startswith(inferred_adapter)
             )
-            longer_inferred = bool(inferred_adapter and inferred_adapter.startswith(recipe_adapter)
-                                   and len(inferred_adapter) > len(recipe_adapter))
-            if recipe_support >= config.min_anchor_support and same_boundary and compatible_adapter and not longer_inferred:
+            longer_inferred = bool(
+                inferred_adapter
+                and inferred_adapter.startswith(recipe_adapter)
+                and len(inferred_adapter) > len(recipe_adapter)
+            )
+            if (
+                recipe_support >= config.min_anchor_support
+                and same_boundary
+                and compatible_adapter
+                and not longer_inferred
+            ):
                 adapter_override = (
                     recipe_adapter
-                    if inferred_adapter is None or len(recipe_adapter) > len(inferred_adapter)
+                    if inferred_adapter is None
+                    or len(recipe_adapter) > len(inferred_adapter)
                     else None
                 )
                 recipe_decisions["adapter"] = {
-                    "status": "verified", "support": round(recipe_support, 4),
-                    "action": "supported longer supplied adapter used" if adapter_override and inferred_adapter
-                              else ("supplied adapter used" if adapter_override else "inferred adapter retained"),
+                    "status": "verified",
+                    "support": round(recipe_support, 4),
+                    "action": (
+                        "supported longer supplied adapter used"
+                        if adapter_override and inferred_adapter
+                        else (
+                            "supplied adapter used"
+                            if adapter_override
+                            else "inferred adapter retained"
+                        )
+                    ),
                 }
             else:
                 recipe_decisions["adapter"] = {
-                    "status": "declined", "support": round(recipe_support, 4),
-                    "reason": ("observed layout support below threshold" if recipe_support < config.min_anchor_support
-                               else "reported adapter boundary or sequence conflicts with observed layout"),
+                    "status": "declined",
+                    "support": round(recipe_support, 4),
+                    "reason": (
+                        "observed layout support below threshold"
+                        if recipe_support < config.min_anchor_support
+                        else "reported adapter boundary or sequence conflicts with observed layout"
+                    ),
                 }
             if longer_inferred and recipe_support >= config.min_anchor_support:
                 recipe_decisions["adapter"] = {
-                    "status": "verified", "support": round(recipe_support, 4),
+                    "status": "verified",
+                    "support": round(recipe_support, 4),
                     "action": "longer inferred adapter cut retained",
                     "reported_adapter_length": len(recipe_adapter),
-                    "inferred_adapter_length": len(inferred_adapter),
+                    "inferred_adapter_length": len(inferred_adapter or ""),
                 }
-        prep_architecture = build_preparation_architecture(result, config, adapter_override)
-        for field, answer in (("5p_barcode_length", result.q2), ("3p_barcode_length", result.q3)):
+        prep_architecture = build_preparation_architecture(
+            result, config, adapter_override
+        )
+        for field, answer in (
+            ("5p_barcode_length", result.q2),
+            ("3p_barcode_length", result.q3),
+        ):
             requested = (trim_recipe or {}).get(field)
             supported = getattr(answer.value, "technical_length", None)
             if requested is not None:
-                verified = (supported == 0 if requested == 0 else
-                            supported is not None and requested <= supported)
+                verified = (
+                    supported == 0
+                    if requested == 0
+                    else supported is not None and requested <= supported
+                )
                 recipe_decisions[field] = {
                     "requested": requested,
                     "supported_length": supported,
                     "status": "verified" if verified else "declined",
-                    "reason": None if verified else "the full reported span is not supported by read evidence",
-                    "action": "reported span used" if verified and requested else "evidence-supported inferred cuts used",
+                    "reason": (
+                        None
+                        if verified
+                        else "the full reported span is not supported by read evidence"
+                    ),
+                    "action": (
+                        "reported span used"
+                        if verified and requested
+                        else "evidence-supported inferred cuts used"
+                    ),
                 }
                 if verified and requested:
-                    prep_architecture = _limit_recipe_span(prep_architecture, answer.question, requested)
-        counts = Counter()
+                    prep_architecture = _limit_recipe_span(
+                        prep_architecture, answer.question, requested
+                    )
+        prep_counts: Counter[str] = Counter()
         preparation = prepare_reads(
             input_file,
             prep_architecture,
             config,
-            collect=counts,
+            collect=prep_counts,
             pretrimmed=(trim_recipe or {}).get("input_state") == "pretrimmed",
             five_prime_resolved=(
                 result.q2.status.value in ("resolved", "interval")
@@ -209,23 +259,38 @@ def infer_and_extract(
             three_prime_resolved=(
                 result.q3.status.value in ("resolved", "interval")
                 and result.q3.value is not None
-            ) or (trim_recipe or {}).get("input_state") == "pretrimmed",
+            )
+            or (trim_recipe or {}).get("input_state") == "pretrimmed",
         )
         summary = preparation
         target = prefix.with_name(f"{prefix.name}.collapsed.fa")
-        if counts and TwoStageCollapser().write_collapsed_fasta(counts, target)["output_path"]:
+        if (
+            prep_counts
+            and TwoStageCollapser().write_collapsed_fasta(prep_counts, target)[
+                "output_path"
+            ]
+        ):
             reads_path = target
     elif result.transform.emit and architecture is not None:
-        counts: Optional[Counter[str]] = Counter() if collapsed and not audit else None
+        extract_counts: Optional[Counter[str]] = (
+            Counter() if collapsed and not audit else None
+        )
         fastq = None if (collapsed or audit) else output_file
         summary = extract_reads(
-            input_file, fastq, architecture, config, limit=max_reads, collect=counts
+            input_file,
+            fastq,
+            architecture,
+            config,
+            limit=max_reads,
+            collect=extract_counts,
         )
         if fastq is not None:
             reads_path = fastq
-        elif counts is not None:
+        elif extract_counts is not None:
             target = prefix.with_name(f"{prefix.name}.collapsed.fa")
-            if TwoStageCollapser().write_collapsed_fasta(counts, target)["output_path"]:
+            if TwoStageCollapser().write_collapsed_fasta(extract_counts, target)[
+                "output_path"
+            ]:
                 reads_path = target
 
     report_path = prefix.with_name(f"{prefix.name}.extraction_report.json")
@@ -245,12 +310,17 @@ def infer_and_extract(
 def _pending_decision(result: StructureInference) -> bool:
     acceptable = {Status.RESOLVED, Status.INTERVAL}
     anchor_pending = result.q1.status not in acceptable and not (
-        result.q1.status is Status.NOT_OBSERVABLE and result.observation.input_state == "trimmed"
+        result.q1.status is Status.NOT_OBSERVABLE
+        and result.observation.input_state == "trimmed"
     )
-    return anchor_pending or any(answer.status not in acceptable for answer in (result.q2, result.q3))
+    return anchor_pending or any(
+        answer.status not in acceptable for answer in (result.q2, result.q3)
+    )
 
 
-def _limit_recipe_span(architecture: Architecture, question: str, length: int) -> Architecture:
+def _limit_recipe_span(
+    architecture: Architecture, question: str, length: int
+) -> Architecture:
     """Honor a reported span only inside the independently supported block run."""
     blocks = list(architecture.blocks)
     insert_at = next(i for i, block in enumerate(blocks) if block.type == "insert")
@@ -258,24 +328,32 @@ def _limit_recipe_span(architecture: Architecture, question: str, length: int) -
         indices = list(range(insert_at))
         reverse = False
     else:
-        indices = [i for i in range(insert_at + 1, len(blocks))
-                   if blocks[i].type not in ("tail", "adapter")]
+        indices = [
+            i
+            for i in range(insert_at + 1, len(blocks))
+            if blocks[i].type not in ("tail", "adapter")
+        ]
         reverse = True
     remaining = length
-    chosen = {}
+    chosen: Dict[int, Block] = {}
     walk = list(reversed(indices)) if reverse else indices
     for index in walk:
         block = blocks[index]
         take = min(block.length[1], remaining)
         remaining -= take
         if take:
-            chosen[index] = replace(block, length=(take, take),
-                                    sequence=(block.sequence[:take] if block.sequence else None))
+            chosen[index] = replace(
+                block,
+                length=(take, take),
+                sequence=(block.sequence[:take] if block.sequence else None),
+            )
         if remaining <= 0:
             break
-    for index in indices:
-        blocks[index] = chosen.get(index)
-    blocks = [block for block in blocks if block is not None]
+    blocks = [
+        chosen[index] if index in chosen else block
+        for index, block in enumerate(blocks)
+        if index not in indices or index in chosen
+    ]
     return replace(architecture, blocks=tuple(blocks))
 
 
@@ -292,7 +370,14 @@ def _merge_retry(
     q4 = answer_umi(retry.observation, q2, q3)
     transform = decide_transform(retry.observation, q1, q2, q3, config)
     architecture = build_architecture(q1, junctions, transform, config)
-    return replace(retry, q1=q1, junctions=junctions, q4=q4, transform=transform, architecture=architecture)
+    return replace(
+        retry,
+        q1=q1,
+        junctions=junctions,
+        q4=q4,
+        transform=transform,
+        architecture=architecture,
+    )
 
 
 def _merge_answer(first: Answer, retry: Answer) -> Answer:
@@ -309,10 +394,26 @@ def _merge_answer(first: Answer, retry: Answer) -> Answer:
         retry_adapter = getattr(getattr(retry.value, "adapter", None), "sequence", None)
         if first_adapter and retry_adapter and first_adapter != retry_adapter:
             return Answer(
-                "Q1", None, Status.AMBIGUOUS,
-                first.evidence + retry.evidence + (Evidence("retry", "contested_adapters", (first_adapter, retry_adapter), 2),),
-                (Alternative(first_adapter, "untested", "supported only in the prefix sample"),
-                 Alternative(retry_adapter, "untested", "supported only in the reservoir sample")),
+                "Q1",
+                None,
+                Status.AMBIGUOUS,
+                first.evidence
+                + retry.evidence
+                + (
+                    Evidence(
+                        "retry", "contested_adapters", (first_adapter, retry_adapter), 2
+                    ),
+                ),
+                (
+                    Alternative(
+                        first_adapter, "untested", "supported only in the prefix sample"
+                    ),
+                    Alternative(
+                        retry_adapter,
+                        "untested",
+                        "supported only in the reservoir sample",
+                    ),
+                ),
                 "The two supported samples call different adapter boundaries; the adapter cut is withheld.",
             )
         return first
@@ -330,11 +431,24 @@ def _merge_answer(first: Answer, retry: Answer) -> Answer:
         remaining -= take
     clipped = replace(call, technical_length=retained, blocks=tuple(blocks))
     return Answer(
-        first.question, clipped, Status.AMBIGUOUS,
-        first.evidence + retry.evidence + (Evidence(
-            "retry", "contested_trim_length", {"prefix": first_length, "reservoir": retry_length, "retained": retained}, 2,
-            note="only the common supported span is removed",
-        ),),
+        first.question,
+        clipped,
+        Status.AMBIGUOUS,
+        first.evidence
+        + retry.evidence
+        + (
+            Evidence(
+                "retry",
+                "contested_trim_length",
+                {
+                    "prefix": first_length,
+                    "reservoir": retry_length,
+                    "retained": retained,
+                },
+                2,
+                note="only the common supported span is removed",
+            ),
+        ),
         first.alternatives + retry.alternatives,
         f"Supported samples disagree on the technical span ({first_length} vs {retry_length} nt); retaining the contested span after {retained} nt.",
     )
@@ -374,7 +488,8 @@ def _report(
         "schema": REPORT_SCHEMA,
         "input": input_file.name,
         "status": (
-            "prepared" if isinstance(summary, PreparationSummary)
+            "prepared"
+            if isinstance(summary, PreparationSummary)
             else ("emitted" if summary is not None else "withheld")
         ),
         "inference_reads": inference_reads,

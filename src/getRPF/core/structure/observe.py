@@ -77,7 +77,9 @@ def reservoir_fastq_sample(
                 raise ValueError(f"Malformed FASTQ record near {header.rstrip()!r}")
             sequence = sequence.rstrip("\r\n")
             if len(sequence) != len(quality.rstrip("\r\n")):
-                raise ValueError(f"Sequence/quality length mismatch for {header.rstrip()!r}")
+                raise ValueError(
+                    f"Sequence/quality length mismatch for {header.rstrip()!r}"
+                )
             seen += 1
             if len(reads) < size:
                 headers.append(header.rstrip("\r\n"))

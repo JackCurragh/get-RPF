@@ -156,7 +156,9 @@ def call_junction(
     question: Literal["Q2", "Q3"] = "Q2" if frame == "read_start" else "Q3"
     where = _WHERE[frame]
     frame_groups = pileup.anchor_groups if frame == "anchor" else pileup.groups
-    frame_grouped = pileup.anchor_reads_grouped if frame == "anchor" else pileup.reads_grouped
+    frame_grouped = (
+        pileup.anchor_reads_grouped if frame == "anchor" else pileup.reads_grouped
+    )
     frame_used = pileup.anchor_reads_used if frame == "anchor" else pileup.reads_used
     evidence = [
         Evidence(
@@ -301,26 +303,38 @@ def _regions(
     """The part of each read upstream of its anchor, within the bounded sample."""
     if anchors is None:
         return list(reads[: config.sample_reads])
-    regions = [read if anchor is None else read[:anchor] for read, anchor in zip(reads, anchors)]
+    regions = [
+        read if anchor is None else read[:anchor]
+        for read, anchor in zip(reads, anchors)
+    ]
     return regions[: config.sample_reads]
 
 
 def _anchored_regions(
-    reads: Sequence[str], anchors: Optional[Sequence[Optional[int]]], config: InferenceConfig
+    reads: Sequence[str],
+    anchors: Optional[Sequence[Optional[int]]],
+    config: InferenceConfig,
 ) -> List[str]:
     if anchors is None:
         return list(reads[: config.sample_reads])
-    return [read[:anchor] for read, anchor in zip(reads, anchors) if anchor is not None][:config.sample_reads]
+    return [
+        read[:anchor] for read, anchor in zip(reads, anchors) if anchor is not None
+    ][: config.sample_reads]
 
 
 def _pileup_dual(
-    start_regions: Sequence[str], anchor_regions: Sequence[str], config: InferenceConfig,
-    trim5: int, trim3: int,
+    start_regions: Sequence[str],
+    anchor_regions: Sequence[str],
+    config: InferenceConfig,
+    trim5: int,
+    trim3: int,
 ) -> Pileup:
     start_groups, start_grouped = _group(start_regions, config)
     anchor_groups, anchor_grouped = _group(anchor_regions, config)
     start_pile = _pileup(start_regions, start_groups, start_grouped, config, trim5, 0)
-    anchor_pile = _pileup(anchor_regions, anchor_groups, anchor_grouped, config, 0, trim3)
+    anchor_pile = _pileup(
+        anchor_regions, anchor_groups, anchor_grouped, config, 0, trim3
+    )
     return Pileup(
         groups=start_pile.groups,
         reads_grouped=start_pile.reads_grouped,
@@ -391,8 +405,7 @@ def _score(
     if sum(column.values()) - own < min_others:
         return
     other_counts = {
-        other: count - (own if other == base else 0)
-        for other, count in column.items()
+        other: count - (own if other == base else 0) for other, count in column.items()
     }
     best_other = max(other_counts.values())
     winners = sum(count == best_other for count in other_counts.values())

@@ -265,39 +265,79 @@ def build_architecture(
 
 
 def build_preparation_architecture(
-    inference: StructureInference, config: InferenceConfig,
+    inference: StructureInference,
+    config: InferenceConfig,
     adapter_override: Optional[str] = None,
 ) -> Architecture:
     """Return only independently called blocks for permissive alignment prep."""
     blocks: List[Block] = []
     q2, q3 = inference.q2, inference.q3
     if isinstance(q2.value, JunctionCall):
-        blocks.extend(_frame_blocks(q2.value, inference.junctions.pileup.read_start, q2.status))
+        blocks.extend(
+            _frame_blocks(q2.value, inference.junctions.pileup.read_start, q2.status)
+        )
     blocks.append(
         Block(
-            "insert", "read_start", (config.fragment_min, config.fragment_max), None,
-            keep_as_umi=False, remove=False, status=Status.RESOLVED,
+            "insert",
+            "read_start",
+            (config.fragment_min, config.fragment_max),
+            None,
+            keep_as_umi=False,
+            remove=False,
+            status=Status.RESOLVED,
             note="length policy is applied after alignment during preparation",
         )
     )
     if isinstance(q3.value, JunctionCall):
-        blocks.extend(reversed(_frame_blocks(q3.value, inference.junctions.pileup.anchor, q3.status)))
+        blocks.extend(
+            reversed(
+                _frame_blocks(q3.value, inference.junctions.pileup.anchor, q3.status)
+            )
+        )
     call = inference.q1.value if isinstance(inference.q1.value, AnchorCall) else None
     adapter_sequence = call.adapter.sequence if call is not None else adapter_override
     if call is not None:
         if call.tail_base is not None:
-            runs = [start - end for start, end in zip(call.adapter_starts, call.insert_ends)
-                    if start is not None and end is not None]
-            blocks.append(Block("tail", "anchor", (0, max(runs, default=0)), call.tail_base,
-                                keep_as_umi=False, remove=True, status=Status.INTERVAL))
+            runs = [
+                start - end
+                for start, end in zip(call.adapter_starts, call.insert_ends)
+                if start is not None and end is not None
+            ]
+            blocks.append(
+                Block(
+                    "tail",
+                    "anchor",
+                    (0, max(runs, default=0)),
+                    call.tail_base,
+                    keep_as_umi=False,
+                    remove=True,
+                    status=Status.INTERVAL,
+                )
+            )
     if adapter_sequence:
         length = len(adapter_sequence)
-        blocks.append(Block("adapter", "anchor", (length, length), adapter_sequence,
-                            keep_as_umi=False, remove=True, status=inference.q1.status,
-                            note=(f"{call.adapter.name} ({call.source})" if call is not None
-                                  else "verified supplied adapter")))
-    return Architecture(tuple(blocks), "alignment_preparation", inference.transform.bound,
-                        config.fragment_policy)
+        blocks.append(
+            Block(
+                "adapter",
+                "anchor",
+                (length, length),
+                adapter_sequence,
+                keep_as_umi=False,
+                remove=True,
+                status=inference.q1.status,
+                note=(
+                    f"{call.adapter.name} ({call.source})"
+                    if call is not None
+                    else "verified supplied adapter"
+                ),
+            )
+        )
+    return Architecture(
+        tuple(blocks),
+        "alignment_preparation",
+        inference.transform.bound,
+        config.fragment_policy,
+    )
 
 
 def _frame_blocks(

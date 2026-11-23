@@ -115,7 +115,9 @@ def test_case13_low_duplication_is_underpowered_not_absent():
 
 def test_five_prime_profile_uses_reads_without_a_located_three_prime_anchor():
     library = simulate(five_prime=[random_bases(5)])
-    config = InferenceConfig(min_groups=3, min_group_distinct=2, min_scored_per_position=3)
+    config = InferenceConfig(
+        min_groups=3, min_group_distinct=2, min_scored_per_position=3
+    )
     result = infer_junctions(library.reads, [None] * len(library.reads), config)
     assert result.first_pass.reads_used == len(library.reads)
     assert result.first_pass.anchor_reads_used == 0

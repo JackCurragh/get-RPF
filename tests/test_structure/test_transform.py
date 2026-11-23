@@ -47,18 +47,33 @@ def test_alignment_preparation_applies_independent_supported_cuts(tmp_path):
     architecture = Architecture(
         (
             Block("fixed", "read_start", (2, 2), "AC", False, True, Status.RESOLVED),
-            Block("insert", "read_start", (20, 40), None, False, False, Status.RESOLVED),
-            Block("adapter", "anchor", (len(adapter), len(adapter)), adapter, False, True, Status.RESOLVED),
+            Block(
+                "insert", "read_start", (20, 40), None, False, False, Status.RESOLVED
+            ),
+            Block(
+                "adapter",
+                "anchor",
+                (len(adapter), len(adapter)),
+                adapter,
+                False,
+                True,
+                Status.RESOLVED,
+            ),
         ),
-        "test", Status.RESOLVED, "unused during preparation",
+        "test",
+        Status.RESOLVED,
+        "unused during preparation",
     )
     path = tmp_path / "input.fastq"
     read = "AC" + "G" * 27 + adapter
     path.write_text(f"@r1\n{read}\n+\n{'I' * len(read)}\n")
     counts = Counter()
     summary = prepare_reads(
-        path, architecture, collect=counts,
-        five_prime_resolved=True, three_prime_resolved=True,
+        path,
+        architecture,
+        collect=counts,
+        five_prime_resolved=True,
+        three_prime_resolved=True,
     )
     assert summary.input_reads == summary.emitted_reads == 1
     assert counts == Counter({"G" * 27: 1})
@@ -71,10 +86,22 @@ def test_alignment_preparation_keeps_read_when_adapter_is_unmatched(tmp_path):
     adapter = "AGATCGGAAGAG"
     architecture = Architecture(
         (
-            Block("insert", "read_start", (20, 40), None, False, False, Status.INTERVAL),
-            Block("adapter", "anchor", (len(adapter), len(adapter)), adapter, False, True, Status.UNDERPOWERED),
+            Block(
+                "insert", "read_start", (20, 40), None, False, False, Status.INTERVAL
+            ),
+            Block(
+                "adapter",
+                "anchor",
+                (len(adapter), len(adapter)),
+                adapter,
+                False,
+                True,
+                Status.UNDERPOWERED,
+            ),
         ),
-        "test", Status.UNDERPOWERED, "unused during preparation",
+        "test",
+        Status.UNDERPOWERED,
+        "unused during preparation",
     )
     path = tmp_path / "input.fastq"
     read = "C" * 30
@@ -94,7 +121,15 @@ def test_prepare_for_alignment_cli_emits_and_accounts_unresolved_reads(tmp_path)
     output = tmp_path / "prepared.fastq"
     result = CliRunner().invoke(
         cli,
-        ["extract", str(fastq), str(output), "--prepare-for-alignment", "--infer-reads", "2", "--collapsed-only"],
+        [
+            "extract",
+            str(fastq),
+            str(output),
+            "--prepare-for-alignment",
+            "--infer-reads",
+            "2",
+            "--collapsed-only",
+        ],
     )
     assert result.exit_code == 0, result.output
     report = json.loads((tmp_path / "prepared.extraction_report.json").read_text())

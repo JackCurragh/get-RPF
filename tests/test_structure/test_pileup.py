@@ -9,7 +9,7 @@ from collections import Counter
 
 from getRPF.core.structure import Status, infer_junctions
 from getRPF.core.structure.config import InferenceConfig
-from getRPF.core.structure.pileup import _Tally, _score
+from getRPF.core.structure.pileup import _score, _Tally
 
 from .sim import barcode, fixed, nta, random_bases, simulate
 

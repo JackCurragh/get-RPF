@@ -21,7 +21,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 from ..processors.collapsed import TwoStageCollapser
-from .assemble import StructureInference, build_preparation_architecture, infer_structure
+from .assemble import (
+    StructureInference,
+    build_preparation_architecture,
+    infer_structure,
+)
 from .anchors import locate
 from .config import InferenceConfig
 from .observe import read_fastq, reservoir_fastq_sample
@@ -33,7 +37,7 @@ from .transform import (
     prepare_reads,
     validate_extraction,
 )
-from .model import Alternative, Answer, Architecture, Block, Evidence, JunctionCall, Status
+from .model import Alternative, Answer, Architecture, Evidence, Status
 
 REPORT_SCHEMA = "getrpf.structure.extraction/1"
 

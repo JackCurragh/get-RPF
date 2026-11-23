@@ -203,6 +203,17 @@ def cli():
     "reports and no reads and exits 0, unless --fail-on hold (withheld) or "
     "review (withheld or flagged) asks for exit code 3",
 )
+@click.option(
+    "--prepare-for-alignment",
+    is_flag=True,
+    help="Emit supported independent terminal cuts for one production alignment, "
+    "retaining reads whose ends remain unresolved",
+)
+@click.option(
+    "--trim-recipe",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="JSON file containing one normalized run trim recipe",
+)
 def extract(
     input_file: Path,
     output_file: Path,
@@ -225,6 +236,8 @@ def extract(
     fail_on: str = "none",
     architecture: Optional[Path] = None,
     infer_structure_flag: bool = False,
+    prepare_for_alignment: bool = False,
+    trim_recipe: Optional[Path] = None,
 ):
     """Extract trimmed reads without applying the final RPF length gate.
 
@@ -235,11 +248,9 @@ def extract(
     appended to read names. Exit code 3 when infer-structure withheld the
     transform.
     """
-    if infer_structure_flag:
+    if infer_structure_flag or prepare_for_alignment:
         if architecture is not None:
-            raise click.ClickException(
-                "--infer-structure and --architecture are alternatives"
-            )
+            raise click.ClickException("--architecture cannot be combined with inference")
         if format != "fastq":
             raise click.ClickException("--infer-structure needs FASTQ input")
         from .core.structure.config import InferenceConfig
@@ -249,6 +260,18 @@ def extract(
             sample_reads=infer_reads if infer_reads is not None else 1_000_000,
             align_threads=star_threads if star_threads is not None else threads,
         )
+        recipe = None
+        if trim_recipe is not None:
+            try:
+                recipe = json.loads(trim_recipe.read_text())
+            except (OSError, json.JSONDecodeError) as error:
+                raise click.ClickException(f"invalid trim recipe JSON: {error}") from error
+            if not isinstance(recipe, dict):
+                raise click.ClickException("trim recipe JSON must contain one object")
+            for field in ("5p_barcode_length", "3p_barcode_length"):
+                value = recipe.get(field)
+                if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+                    raise click.ClickException(f"trim recipe {field} must be a non-negative integer or null")
         try:
             outcome = infer_and_extract(
                 input_file,
@@ -258,6 +281,8 @@ def extract(
                 collapsed=collapsed_only,
                 audit=audit_only,
                 max_reads=max_reads,
+                prepare_for_alignment=prepare_for_alignment,
+                trim_recipe=recipe,
             )
         except EOFError as error:
             # Click would report this as a bare "Aborted!".

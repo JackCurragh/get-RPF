@@ -7,6 +7,7 @@ channels exist and sets what later steps may assume.
 from __future__ import annotations
 
 import gzip
+import random
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -52,6 +53,41 @@ def read_fastq(path: Path, limit: int) -> Tuple[List[str], List[str], List[str]]
             quals.append(handle.readline().rstrip("\n"))
             headers.append(header.rstrip("\n"))
     return headers, reads, quals
+
+
+def reservoir_fastq_sample(
+    path: Path, size: int, seed: int = 1729
+) -> Tuple[List[str], List[str]]:
+    """Deterministic bounded sample drawn across a sequential FASTQ/gzip file."""
+    rng = random.Random(seed)
+    headers: List[str] = []
+    reads: List[str] = []
+    seen = 0
+    with _open_text(path) as handle:
+        while True:
+            header = handle.readline()
+            if not header:
+                break
+            sequence = handle.readline()
+            plus = handle.readline()
+            quality = handle.readline()
+            if not sequence or not plus or not quality:
+                raise EOFError("FASTQ ended mid-record")
+            if not header.startswith("@") or not plus.startswith("+"):
+                raise ValueError(f"Malformed FASTQ record near {header.rstrip()!r}")
+            sequence = sequence.rstrip("\r\n")
+            if len(sequence) != len(quality.rstrip("\r\n")):
+                raise ValueError(f"Sequence/quality length mismatch for {header.rstrip()!r}")
+            seen += 1
+            if len(reads) < size:
+                headers.append(header.rstrip("\r\n"))
+                reads.append(sequence)
+            else:
+                slot = rng.randrange(seen)
+                if slot < size:
+                    headers[slot] = header.rstrip("\r\n")
+                    reads[slot] = sequence
+    return headers, reads
 
 
 def observe(

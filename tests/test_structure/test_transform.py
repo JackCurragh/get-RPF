@@ -1,6 +1,8 @@
 """The per-read transform, extraction, seqspec round trip and templates."""
 
 import gzip
+import json
+from collections import Counter
 
 import yaml
 from click.testing import CliRunner
@@ -19,6 +21,7 @@ from getRPF.core.structure.transform import (
     Accepted,
     Transform,
     extract_reads,
+    prepare_reads,
 )
 
 from .sim import fixed, nta, random_bases, simulate
@@ -37,6 +40,69 @@ def test_transform_recovers_true_inserts_and_umis():
             correct += outcome.insert == read[start:end] and outcome.umi == umi
     assert accepted / len(library.reads) >= 0.95
     assert correct / accepted >= 0.99
+
+
+def test_alignment_preparation_applies_independent_supported_cuts(tmp_path):
+    adapter = "AGATCGGAAGAG"
+    architecture = Architecture(
+        (
+            Block("fixed", "read_start", (2, 2), "AC", False, True, Status.RESOLVED),
+            Block("insert", "read_start", (20, 40), None, False, False, Status.RESOLVED),
+            Block("adapter", "anchor", (len(adapter), len(adapter)), adapter, False, True, Status.RESOLVED),
+        ),
+        "test", Status.RESOLVED, "unused during preparation",
+    )
+    path = tmp_path / "input.fastq"
+    read = "AC" + "G" * 27 + adapter
+    path.write_text(f"@r1\n{read}\n+\n{'I' * len(read)}\n")
+    counts = Counter()
+    summary = prepare_reads(
+        path, architecture, collect=counts,
+        five_prime_resolved=True, three_prime_resolved=True,
+    )
+    assert summary.input_reads == summary.emitted_reads == 1
+    assert counts == Counter({"G" * 27: 1})
+    assert summary.bases_cut_5p == 2
+    assert summary.bases_cut_3p == len(adapter)
+    assert not summary.requires_local_alignment
+
+
+def test_alignment_preparation_keeps_read_when_adapter_is_unmatched(tmp_path):
+    adapter = "AGATCGGAAGAG"
+    architecture = Architecture(
+        (
+            Block("insert", "read_start", (20, 40), None, False, False, Status.INTERVAL),
+            Block("adapter", "anchor", (len(adapter), len(adapter)), adapter, False, True, Status.UNDERPOWERED),
+        ),
+        "test", Status.UNDERPOWERED, "unused during preparation",
+    )
+    path = tmp_path / "input.fastq"
+    read = "C" * 30
+    path.write_text(f"@r1\n{read}\n+\n{'I' * len(read)}\n")
+    counts = Counter()
+    summary = prepare_reads(path, architecture, collect=counts)
+    assert summary.input_reads == summary.emitted_reads == 1
+    assert counts == Counter({read: 1})
+    assert summary.unmatched_adapter_reads == 1
+    assert summary.requires_local_alignment
+
+
+def test_prepare_for_alignment_cli_emits_and_accounts_unresolved_reads(tmp_path):
+    fastq = tmp_path / "unresolved.fastq"
+    reads = ["ACGT" * 7 + "AC", "TGCA" * 7 + "TG"]
+    write_fastq(fastq, reads)
+    output = tmp_path / "prepared.fastq"
+    result = CliRunner().invoke(
+        cli,
+        ["extract", str(fastq), str(output), "--prepare-for-alignment", "--infer-reads", "2", "--collapsed-only"],
+    )
+    assert result.exit_code == 0, result.output
+    report = json.loads((tmp_path / "prepared.extraction_report.json").read_text())
+    assert report["status"] == "prepared"
+    assert report["preparation"]["requires_local_alignment"] is True
+    assert report["extraction"]["input_reads"] == 2
+    assert report["reads"] == "prepared.collapsed.fa"
+    assert (tmp_path / "prepared.collapsed.fa").exists()
 
 
 def test_tail_library_cuts_at_the_run_start():

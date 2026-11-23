@@ -50,6 +50,17 @@ class Rejected:
 Outcome = Union[Accepted, Rejected]
 
 
+@dataclass(frozen=True)
+class Prepared:
+    sequence: str
+    quality: str
+    cut_5p: int
+    cut_3p: int
+    endpoint_5p: str
+    endpoint_3p: str
+    rejection: Optional[str] = None
+
+
 def transform_hash(architecture: Architecture, config: InferenceConfig) -> str:
     """Identity of the per-read transform: architecture, policy and anchoring."""
     payload = {
@@ -156,6 +167,67 @@ class Transform:
             read[start:end], quality[start:end], "".join(umi5 + umi3), boundary
         )
 
+    def prepare(
+        self,
+        read: str,
+        quality: str,
+        pretrimmed: bool = False,
+        five_prime_resolved: bool = False,
+        three_prime_resolved: bool = False,
+    ) -> Prepared:
+        """Apply each independently supported terminal cut without a length gate."""
+        start, end = 0, len(read)
+        endpoint_5p = "resolved" if five_prime_resolved else "unresolved"
+        endpoint_3p = "resolved" if three_prime_resolved else "unresolved"
+        adapter_start = None
+        if self.adapter is not None:
+            hit = self._anchor(read)
+            if hit is not None:
+                if hit < self.config.min_insert:
+                    return Prepared("", "", 0, 0, endpoint_5p, endpoint_3p, "adapter_dimer")
+                adapter_start = hit
+                end = hit
+                endpoint_3p = "adapter"
+            else:
+                endpoint_3p = "adapter_unmatched"
+        elif pretrimmed:
+            endpoint_3p = "pretrimmed_end"
+
+        for block in self.five:
+            if not block.remove:
+                continue
+            stop = start + block.length[1]
+            segment = read[start:stop]
+            if len(segment) != block.length[1] or not self._fixed_ok(block, segment):
+                break
+            start = stop
+            endpoint_5p = "supported_block"
+
+        can_cut_three = adapter_start is not None or pretrimmed
+        if can_cut_three:
+            if adapter_start is not None and self.tail:
+                end -= _run_before(read, adapter_start, self.tail)
+            for block in reversed(self.three):
+                if not block.remove:
+                    continue
+                begin = end - block.length[1]
+                segment = read[max(0, begin):end]
+                if begin < 0 or len(segment) != block.length[1] or not self._fixed_ok(block, segment):
+                    break
+                end = begin
+                endpoint_3p = "supported_block"
+
+        if start >= end:
+            return Prepared("", "", start, len(read) - end, endpoint_5p, endpoint_3p, "empty_interval")
+        return Prepared(
+            read[start:end],
+            quality[start:end],
+            start,
+            len(read) - end,
+            endpoint_5p,
+            endpoint_3p,
+        )
+
     def _anchor(self, read: str) -> Optional[int]:
         """Adapter start: a full or long partial match, else a short exact
         adapter prefix at the read end (at least ``transform_min_overlap``)."""
@@ -219,10 +291,96 @@ def iter_fastq(path: Path) -> Iterator[Tuple[str, str, str]]:
             header = handle.readline()
             if not header:
                 return
-            sequence = handle.readline().rstrip("\n")
-            handle.readline()
-            quality = handle.readline().rstrip("\n")
+            sequence_line = handle.readline()
+            plus = handle.readline()
+            quality_line = handle.readline()
+            if not sequence_line or not plus or not quality_line:
+                raise EOFError("FASTQ ended mid-record")
+            sequence = sequence_line.rstrip("\r\n")
+            quality = quality_line.rstrip("\r\n")
+            if not header.startswith("@") or not plus.startswith("+"):
+                raise ValueError(f"Malformed FASTQ record near {header.rstrip()!r}")
+            if len(sequence) != len(quality):
+                raise ValueError(f"Sequence/quality length mismatch for {header.rstrip()!r}")
             yield header.rstrip("\n"), sequence, quality
+
+
+@dataclass
+class PreparationSummary:
+    input_reads: int = 0
+    emitted_reads: int = 0
+    rejected: Counter[str] = field(default_factory=Counter)
+    lengths: Counter[int] = field(default_factory=Counter)
+    endpoint_5p: Counter[str] = field(default_factory=Counter)
+    endpoint_3p: Counter[str] = field(default_factory=Counter)
+    unmodified: int = 0
+    bases_cut_5p: int = 0
+    bases_cut_3p: int = 0
+    unmatched_adapter_reads: int = 0
+    requires_local_alignment: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "input_reads": self.input_reads,
+            "emitted_reads": self.emitted_reads,
+            "endpoint_status": {
+                "5p": dict(sorted(self.endpoint_5p.items())),
+                "3p": dict(sorted(self.endpoint_3p.items())),
+            },
+            "unmodified_reads": self.unmodified,
+            "actual_bases_cut": {"5p": self.bases_cut_5p, "3p": self.bases_cut_3p},
+            "unmatched_adapter_reads": self.unmatched_adapter_reads,
+            "rejected_reads": dict(sorted(self.rejected.items())),
+            "insert_lengths": {str(k): v for k, v in sorted(self.lengths.items())},
+            "requires_local_alignment": self.requires_local_alignment,
+        }
+
+
+def prepare_reads(
+    input_path: Path,
+    architecture: Architecture,
+    config: Optional[InferenceConfig] = None,
+    collect: Optional[Counter[str]] = None,
+    pretrimmed: bool = False,
+    five_prime_resolved: bool = False,
+    three_prime_resolved: bool = False,
+) -> PreparationSummary:
+    """Prepare the complete FASTQ, preserving reads with unresolved ends."""
+    transform = Transform(architecture, config)
+    summary = PreparationSummary()
+    for _header, sequence, quality in iter_fastq(input_path):
+        summary.input_reads += 1
+        prepared = transform.prepare(
+            sequence,
+            quality,
+            pretrimmed=pretrimmed,
+            five_prime_resolved=five_prime_resolved,
+            three_prime_resolved=three_prime_resolved,
+        )
+        if prepared.rejection:
+            summary.rejected[prepared.rejection] += 1
+            continue
+        summary.emitted_reads += 1
+        summary.lengths[len(prepared.sequence)] += 1
+        summary.endpoint_5p[prepared.endpoint_5p] += 1
+        summary.endpoint_3p[prepared.endpoint_3p] += 1
+        summary.bases_cut_5p += prepared.cut_5p
+        summary.bases_cut_3p += prepared.cut_3p
+        summary.unmodified += int(prepared.cut_5p == 0 and prepared.cut_3p == 0)
+        summary.unmatched_adapter_reads += int(prepared.endpoint_3p == "adapter_unmatched")
+        summary.requires_local_alignment |= (
+            prepared.endpoint_5p == "unresolved"
+            or prepared.endpoint_3p in ("unresolved", "adapter_unmatched")
+            or not five_prime_resolved
+            or not three_prime_resolved
+        )
+        if len(prepared.sequence) != len(prepared.quality):
+            raise ValueError("prepared sequence and quality lengths differ")
+        if collect is not None:
+            collect[prepared.sequence] += 1
+    if summary.emitted_reads + sum(summary.rejected.values()) != summary.input_reads:
+        raise AssertionError("prepared-read accounting does not reconcile")
+    return summary
 
 
 def extract_reads(

@@ -24,4 +24,5 @@ usage
 rpf_checks
 file_formats
 api
+alignment_preparation_spec
 ```

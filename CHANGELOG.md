@@ -9,6 +9,19 @@ Releases before 0.4.0 predate this file. Five tags (v0.2.1 through v0.3.1) were
 cut, none of which published to PyPI, and none of which had a test gate in front
 of them.
 
+## [0.6.0] - 2026-11-23
+
+### Added
+- Alignment preparation that applies independently supported terminal cuts,
+  preserves unresolved reads, validates optional trim recipes, and reports
+  preparation and input-accounting metrics.
+- Deterministic streaming reservoir retries for unresolved structure calls.
+
+### Changed
+- Tied leave-one-out consensus bases receive fractional agreement credit.
+- Five-prime pileup evidence is retained when reads lack a located three-prime
+  anchor.
+
 ## [0.5.0] - 2026-10-11
 
 ### Added

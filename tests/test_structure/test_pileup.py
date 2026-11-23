@@ -5,7 +5,11 @@ alone (spec §11). A test fails if the answer is wrong *or* more certain than
 the truth allows.
 """
 
+from collections import Counter
+
 from getRPF.core.structure import Status, infer_junctions
+from getRPF.core.structure.config import InferenceConfig
+from getRPF.core.structure.pileup import _Tally, _score
 
 from .sim import barcode, fixed, nta, random_bases, simulate
 
@@ -109,6 +113,16 @@ def test_case13_low_duplication_is_underpowered_not_absent():
         assert "absent" not in answer.explanation
 
 
+def test_five_prime_profile_uses_reads_without_a_located_three_prime_anchor():
+    library = simulate(five_prime=[random_bases(5)])
+    config = InferenceConfig(min_groups=3, min_group_distinct=2, min_scored_per_position=3)
+    result = infer_junctions(library.reads, [None] * len(library.reads), config)
+    assert result.first_pass.reads_used == len(library.reads)
+    assert result.first_pass.anchor_reads_used == 0
+    assert result.q2.evidence[0].value > 0
+    assert result.q3.status is Status.NOT_OBSERVABLE
+
+
 def test_every_answer_carries_provenance():
     result = infer(simulate(five_prime=[random_bases(5)]))
     for answer in (result.q2, result.q3):
@@ -118,3 +132,17 @@ def test_every_answer_carries_provenance():
     assert (
         "5 technical bases from the read start (5 nt random)" in result.q2.explanation
     )
+
+
+def test_tied_leave_one_out_consensus_gets_fractional_credit():
+    tally = _Tally()
+    _score(Counter({"A": 2, "C": 2}), "A", False, tally, min_others=3)
+    assert tally.scored == 1
+    assert tally.agree == 0.5
+
+
+def test_four_way_tied_consensus_does_not_pass_random_cutoff():
+    tally = _Tally()
+    _score(Counter({"A": 1, "C": 1, "G": 1, "T": 1}), "A", False, tally, min_others=3)
+    assert tally.scored == 1
+    assert tally.agree == 0.25

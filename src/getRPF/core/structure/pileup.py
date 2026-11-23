@@ -70,6 +70,9 @@ class Pileup:
     consensus_trim: Tuple[int, int]
     read_start: FrameProfile
     anchor: FrameProfile
+    anchor_groups: int = 0
+    anchor_reads_grouped: int = 0
+    anchor_reads_used: int = 0
 
 
 @dataclass(frozen=True)
@@ -83,7 +86,7 @@ class JunctionInference:
 @dataclass
 class _Tally:
     scored: int = 0
-    agree: int = 0
+    agree: float = 0.0
     disagreeing: Counter[str] = field(default_factory=Counter)
 
 
@@ -108,21 +111,22 @@ def infer_junctions(
     config = config or InferenceConfig()
     if window is not None:
         config = replace(config, window=window)
-    regions = _regions(reads, anchors, config)
-    groups, grouped = _group(regions, config)
-    sample = regions[: config.few_values_sample]
+    start_regions = _regions(reads, anchors, config)
+    anchor_regions = _anchored_regions(reads, anchors, config)
+    start_sample = start_regions[: config.few_values_sample]
+    anchor_sample = anchor_regions[: config.few_values_sample]
 
-    first = _pileup(regions, groups, grouped, config, 0, 0)
-    q2 = call_junction(first.read_start, first, sample, config)
-    q3 = call_junction(first.anchor, first, sample, config)
+    first = _pileup_dual(start_regions, anchor_regions, config, 0, 0)
+    q2 = call_junction(first.read_start, first, start_sample, config)
+    q3 = call_junction(first.anchor, first, anchor_sample, config)
     trim5, trim3 = _technical_length(q2), _technical_length(q3)
     if not (trim5 or trim3):
         return JunctionInference(q2, q3, first, first)
 
-    final = _pileup(regions, groups, grouped, config, trim5, trim3)
+    final = _pileup_dual(start_regions, anchor_regions, config, trim5, trim3)
     return JunctionInference(
-        call_junction(final.read_start, final, sample, config),
-        call_junction(final.anchor, final, sample, config),
+        call_junction(final.read_start, final, start_sample, config),
+        call_junction(final.anchor, final, anchor_sample, config),
         final,
         first,
     )
@@ -137,8 +141,8 @@ def build_pileup(
     """Measure within-fragment agreement and library composition per position."""
     config = config or InferenceConfig()
     regions = _regions(reads, anchors, config)
-    groups, grouped = _group(regions, config)
-    return _pileup(regions, groups, grouped, config, *consensus_trim)
+    anchor_regions = _anchored_regions(reads, anchors, config)
+    return _pileup_dual(regions, anchor_regions, config, *consensus_trim)
 
 
 def call_junction(
@@ -151,13 +155,16 @@ def call_junction(
     frame = profile.frame
     question: Literal["Q2", "Q3"] = "Q2" if frame == "read_start" else "Q3"
     where = _WHERE[frame]
+    frame_groups = pileup.anchor_groups if frame == "anchor" else pileup.groups
+    frame_grouped = pileup.anchor_reads_grouped if frame == "anchor" else pileup.reads_grouped
+    frame_used = pileup.anchor_reads_used if frame == "anchor" else pileup.reads_used
     evidence = [
         Evidence(
             "pileup",
             "informative_groups",
-            pileup.groups,
-            pileup.reads_grouped,
-            note=f"{pileup.reads_grouped} of {pileup.reads_used} reads grouped",
+            frame_groups,
+            frame_grouped,
+            note=f"{frame_grouped} of {frame_used} reads grouped",
         )
     ]
     if pileup.consensus_trim != (0, 0):
@@ -172,7 +179,7 @@ def call_junction(
             )
         )
 
-    if pileup.reads_used == 0:
+    if frame_used == 0:
         return Answer(
             question,
             None,
@@ -183,7 +190,7 @@ def call_junction(
         )
 
     classes = [_classify(stats, config) for stats in profile.positions]
-    if pileup.groups < config.min_groups or classes[0] == "unscored":
+    if frame_groups < config.min_groups or classes[0] == "unscored":
         return Answer(
             question,
             None,
@@ -193,11 +200,11 @@ def call_junction(
                 Alternative(
                     None,
                     "untested",
-                    f"only {pileup.groups} informative groups "
+                    f"only {frame_groups} informative groups "
                     f"(need {config.min_groups})",
                 ),
             ),
-            f"Too few repeated-fragment groups ({pileup.groups}, need "
+            f"Too few repeated-fragment groups ({frame_groups}, need "
             f"{config.min_groups}) to tell technical from biological bases "
             f"{where}; not called.",
         )
@@ -282,7 +289,7 @@ def call_junction(
         status,
         tuple(evidence),
         _alternatives(profile, classes, tech_len, first_bio, config),
-        _explain(call, profile, first_bio, bio_level, pileup.groups, inside_bio, where),
+        _explain(call, profile, first_bio, bio_level, frame_groups, inside_bio, where),
     )
 
 
@@ -294,10 +301,37 @@ def _regions(
     """The part of each read upstream of its anchor, within the bounded sample."""
     if anchors is None:
         return list(reads[: config.sample_reads])
-    regions = [
-        read[:anchor] for read, anchor in zip(reads, anchors) if anchor is not None
-    ]
+    regions = [read if anchor is None else read[:anchor] for read, anchor in zip(reads, anchors)]
     return regions[: config.sample_reads]
+
+
+def _anchored_regions(
+    reads: Sequence[str], anchors: Optional[Sequence[Optional[int]]], config: InferenceConfig
+) -> List[str]:
+    if anchors is None:
+        return list(reads[: config.sample_reads])
+    return [read[:anchor] for read, anchor in zip(reads, anchors) if anchor is not None][:config.sample_reads]
+
+
+def _pileup_dual(
+    start_regions: Sequence[str], anchor_regions: Sequence[str], config: InferenceConfig,
+    trim5: int, trim3: int,
+) -> Pileup:
+    start_groups, start_grouped = _group(start_regions, config)
+    anchor_groups, anchor_grouped = _group(anchor_regions, config)
+    start_pile = _pileup(start_regions, start_groups, start_grouped, config, trim5, 0)
+    anchor_pile = _pileup(anchor_regions, anchor_groups, anchor_grouped, config, 0, trim3)
+    return Pileup(
+        groups=start_pile.groups,
+        reads_grouped=start_pile.reads_grouped,
+        reads_used=start_pile.reads_used,
+        consensus_trim=(trim5, trim3),
+        read_start=start_pile.read_start,
+        anchor=anchor_pile.anchor,
+        anchor_groups=anchor_pile.groups,
+        anchor_reads_grouped=anchor_pile.reads_grouped,
+        anchor_reads_used=anchor_pile.reads_used,
+    )
 
 
 def _is_low_complexity(kmer: str, config: InferenceConfig) -> bool:
@@ -356,12 +390,18 @@ def _score(
     own = 1 if own_counted else 0
     if sum(column.values()) - own < min_others:
         return
-    best_other = max(
-        count - (own if other == base else 0) for other, count in column.items()
-    )
+    other_counts = {
+        other: count - (own if other == base else 0)
+        for other, count in column.items()
+    }
+    best_other = max(other_counts.values())
+    winners = sum(count == best_other for count in other_counts.values())
     tally.scored += 1
-    if column[base] - own == best_other:
-        tally.agree += 1
+    if other_counts.get(base, 0) == best_other:
+        # A tied leave-one-out consensus carries fractional evidence. Giving
+        # every tied base full credit makes a uniform random column look
+        # highly conserved at the minimum scoring depth.
+        tally.agree += 1.0 / winners
     else:
         tally.disagreeing[base] += 1
 
